@@ -1,4 +1,8 @@
-"""py.test based unit tests for typy core"""
+"""py.test based unit tests for typy core
+
+To run:
+  $ py.test test_core.py
+"""
 import pytest
 import ast
 
@@ -117,4 +121,4 @@ def test_incfnty_decorator():
     assert isinstance(test, Fn)
     assert test.ascription is incfnty
 
-# see atlib tests for remaining functionality
+# see standard library tests for remaining functionality
