@@ -6,15 +6,17 @@ To run:
 import pytest
 import ast
 
+import typy
 from typy import Type, TypeFormationError, tycon, is_tycon, IncompleteType, FnType, Fn, StaticEnv
 
 # Test type construction and index validation
 
 class unit_(Type):
     @classmethod
-    def validate_idx(cls, idx):
+    def init_idx(cls, idx):
         if idx != ():
             raise TypeFormationError("Index of unit type must be ().")
+        return idx
 
 unit = unit_[()]
 
@@ -39,9 +41,10 @@ def test_unit_eq():
 
 class ty2_(Type):
     @classmethod
-    def validate_inc_idx(cls, inc_idx):
+    def init_inc_idx(cls, inc_idx):
         if inc_idx is not Ellipsis and inc_idx != (0, Ellipsis):
             raise TypeFormationError("Bad incomplete index.")
+        return inc_idx
         
 ty2 = ty2_[()]
 
@@ -80,11 +83,11 @@ def test_incty_bad_construction():
 # Test function type construction
 
 class fn(FnType):
-    def ana_FunctionDef_TopLevel(self, ctx, tree, static_env): 
+    def ana_FunctionDef_toplevel(self, ctx, tree): 
         pass
     
     @classmethod
-    def syn_idx_FunctionDef_TopLevel(self, ctx, tree, static_env):
+    def syn_idx_FunctionDef_toplevel(self, ctx, tree, inc_ty):
         return (unit, unit)
 fnty = fn[unit, unit]
 
@@ -120,5 +123,12 @@ def test_incfnty_decorator():
         pass
     assert isinstance(test, Fn)
     assert test.ascription is incfnty
+
+def test_incfnty_direct_decorator():
+    @fn
+    def test():
+        pass
+    assert isinstance(test, Fn)
+    assert test.ascription == fn[...]
 
 # see standard library tests for remaining functionality
