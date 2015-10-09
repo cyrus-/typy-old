@@ -36,8 +36,14 @@ class NotSupportedError(TypeError):
 class TypeFormationError(Exception):
     pass
 
+class TypeInvariantError(Exception):
+    def __init__(self, message, tree):
+        Exception.__init__(self, message)
+        self.tree = tree 
+
 def warn(message, tree=None):
     # TODO: better warning handling
+    print "WARNING: "
     print message
 
 class _TypeMetaclass(type): # here, type is Python's "type" builtin
@@ -170,101 +176,109 @@ class FnType(Type):
     def syn_idx_FunctionDef_toplevel(self, ctx, tree, inc_ty):
         raise NotSupportedError(self, "class method", "ana_FunctionDef_toplevel", tree)
 
+    @classmethod 
+    def syn_Name(self, ctx, e):
+        raise NotSupportedError(self, "class method", "syn_Name", e)
+
     ################################################################################
     # The following stubs are pasted from the result of running _generate_FnType.py.
     ################################################################################
 
     @classmethod
     def check_FunctionDef(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_FunctionDef", tree)
+      raise NotSupportedError(cls, "class method", "check_FunctionDef", tree)
 
     @classmethod
     def check_ClassDef(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_ClassDef", tree)
+      raise NotSupportedError(cls, "class method", "check_ClassDef", tree)
 
     @classmethod
     def check_Return(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Return", tree)
+      raise NotSupportedError(cls, "class method", "check_Return", tree)
 
     @classmethod
     def check_Delete(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Delete", tree)
+      raise NotSupportedError(cls, "class method", "check_Delete", tree)
 
     @classmethod
-    def check_Assign(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Assign", tree)
+    def check_Assign_Name(cls, ctx, tree):
+      raise NotSupportedError(cls, "class method", "check_Assign_Name", tree)
+    
+    @classmethod
+    def check_Assign_Subscript(cls, ctx, tree):
+      raise NotSupportedError(cls, "class method", "check_Assign_Subscript", tree)
 
     @classmethod
-    def check_AugAssign(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_AugAssign", tree)
+    def check_AugAssign_Name(cls, ctx, tree):
+      raise NotSupportedError(cls, "class method", "check_AugAssign_Name", tree)
 
     @classmethod
     def check_Print(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Print", tree)
+      raise NotSupportedError(cls, "class method", "check_Print", tree)
 
     @classmethod
     def check_For(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_For", tree)
+      raise NotSupportedError(cls, "class method", "check_For", tree)
 
     @classmethod
     def check_While(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_While", tree)
+      raise NotSupportedError(cls, "class method", "check_While", tree)
 
     @classmethod
     def check_If(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_If", tree)
+      raise NotSupportedError(cls, "class method", "check_If", tree)
 
     @classmethod
     def check_With(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_With", tree)
+      raise NotSupportedError(cls, "class method", "check_With", tree)
 
     @classmethod
     def check_Raise(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Raise", tree)
+      raise NotSupportedError(cls, "class method", "check_Raise", tree)
 
     @classmethod
     def check_TryExcept(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_TryExcept", tree)
+      raise NotSupportedError(cls, "class method", "check_TryExcept", tree)
 
     @classmethod
     def check_TryFinally(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_TryFinally", tree)
+      raise NotSupportedError(cls, "class method", "check_TryFinally", tree)
 
     @classmethod
     def check_Assert(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Assert", tree)
+      raise NotSupportedError(cls, "class method", "check_Assert", tree)
 
     @classmethod
     def check_Import(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Import", tree)
+      raise NotSupportedError(cls, "class method", "check_Import", tree)
 
     @classmethod
     def check_ImportFrom(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_ImportFrom", tree)
+      raise NotSupportedError(cls, "class method", "check_ImportFrom", tree)
 
     @classmethod
     def check_Exec(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Exec", tree)
+      raise NotSupportedError(cls, "class method", "check_Exec", tree)
 
     @classmethod
     def check_Global(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Global", tree)
+      raise NotSupportedError(cls, "class method", "check_Global", tree)
 
     @classmethod
     def check_Expr(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Expr", tree)
+      raise NotSupportedError(cls, "class method", "check_Expr", tree)
 
     @classmethod
     def check_Pass(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Pass", tree)
+      raise NotSupportedError(cls, "class method", "check_Pass", tree)
 
     @classmethod
     def check_Break(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Break", tree)
+      raise NotSupportedError(cls, "class method", "check_Break", tree)
 
     @classmethod
     def check_Continue(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Continue", tree)
+      raise NotSupportedError(cls, "class method", "check_Continue", tree)
 
 
     ################################################################################
@@ -351,6 +365,19 @@ class Context(object):
         if not isinstance(stmt, ast.stmt):
             raise UsageError("Cannot check a non-statement.")
         classname = stmt.__class__.__name__
+        if classname == "Assign":
+            # TODO: refactor this
+            targets = stmt.targets
+            if len(targets) != 1:
+                raise TypeError("Multiple assignment not supported.", stmt)
+            target = targets[0]
+            if isinstance(target, ast.Name):
+                classname = "Assign_Name"
+            elif isinstance(target, ast.Subscript):
+                classname = "Assign_Subscript"
+            else:
+                raise TypeError("Assignment to non-name not supported.", stmt)
+
         check_method = 'check_%s' % classname
         delegate = tycon(self.fn.ascription)
         method = getattr(delegate, check_method)
@@ -387,10 +414,22 @@ class Context(object):
                 if classname == "Name":
                     classname = "Name_constructor"
                 syn_idx_methodname = 'syn_idx_%s' % classname
-                tycon = ty.tycon
-                method = getattr(tycon, syn_idx_methodname)
+                delegate = ty.tycon
+                method = getattr(delegate, syn_idx_methodname)
                 syn_idx = method(self, value, ty.inc_idx)
-                return _construct_ty(tycon, syn_idx)
+                ty = _construct_ty(delegate, syn_idx)
+                e.delegate, e.ty = delegate, ty
+                return ty
+        if isinstance(e, ast.Name):
+            id = e.id
+            delegate = tycon(self.fn.ascription)
+            ty = delegate.syn_Name(self, e)
+            if isinstance(ty, Type):
+                e.delegate, e.ty = delegate, ty
+                return ty
+            else:
+                raise typy.TypeInvariantError(
+                    "syn_Name did not return a type.", e)
 
     def translate(self, tree):
         pass # TODO

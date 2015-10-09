@@ -100,7 +100,8 @@ class fn(typy.FnType):
 
     @classmethod
     def init_ctx(cls, ctx):
-        ctx.variables = [{}]
+        ctx.variables = DictStack()
+        ctx.variables.push({})
         ctx.return_type = None
 
     def ana_FunctionDef_toplevel(self, ctx, tree):
@@ -195,7 +196,6 @@ class fn(typy.FnType):
             elif isinstance(last_stmt, ast.Expr):
                 if ctx.return_type == Ellipsis:
                     ty = ctx.syn(last_stmt.value)
-                    print ty
                     ctx.return_type = ty
                 else:
                     ctx.ana(last_stmt.value, ctx.return_type)
@@ -209,7 +209,54 @@ class fn(typy.FnType):
     def check_Pass(cls, ctx, tree):
         return
 
-    # TODO: rest of the methods
+    @classmethod
+    def syn_Name(cls, ctx, e):
+        id = e.id
+        variables = ctx.variables
+        try:
+            return variables[id]
+        except KeyError:
+            raise typy.TypeError(
+                "Variable not found in context.", e)
+
+    @classmethod
+    def check_Assign_Name(cls, ctx, stmt):
+        target = stmt.targets[0]
+        id = target.id 
+        value = stmt.value
+        variables = ctx.variables
+        try:
+            ty = variables[id]
+            ctx.ana(value, ty)
+        except KeyError:
+            ty = ctx.syn(value)
+            variables[id] = ty
+
+    @classmethod
+    def check_Assign_Subscript(cls, ctx, stmt):
+        target = stmt.targets[0]
+        target_value, slice = target.value, target.slice
+        if isinstance(target_value, ast.Name):
+            if isinstance(slice, ast.Slice):
+                lower, upper, step = slice.lower, slice.upper, slice.step
+                if lower == None and upper is not None and step is None:
+                    ty = ctx.fn.static_env.eval_expr_ast(upper)
+                    if isinstance(ty, typy.Type):
+                        id = target_value.id
+                        variables = ctx.variables
+                        try:
+                            existing_ty = variables[id]
+                        except KeyError: pass
+                        else: 
+                            if ty != existing_ty:
+                                raise typy.TypeError("Inconsistent type annotations.", target_value)
+                        ctx.ana(stmt.value, ty)
+                        ctx.variables[id] = ty
+                        return 
+                    else:
+                        raise typy.TypeError(
+                            "Type ascription is not a type.", upper)
+        raise typy.TypeError("Form not supported.", stmt)
 
 def _normalize_fn_idx(idx):
     len_idx = len(idx)
@@ -303,22 +350,50 @@ def _setup_args(ctx, args, arg_types, tree):
         raise typy.TypeError("Kwargs are not supported.", args.kwarg)
 
     # set up arguments in context
-    cur_variables = ctx.variables[-1]
+    variables = ctx.variables
     arguments = args.args
     n_args, n_arg_types = len(arguments), len(arg_types)
     if n_args != n_arg_types:
         raise typy.TypeError(
             "Type specifies {0} arguments but function has {1}.".format(n_arg_types, n_args), 
             tree)
-    for arg, arg_type, default in zip(arguments, arg_types, args.defaults):
-        if default:
-            raise typy.TypeError("Defaults are not supported.", arg)
+    if len(args.defaults) != 0:
+        raise typy.TypeError("Defaults are not supported.", tree)
+    for arg, arg_type in zip(arguments, arg_types):
         if not isinstance(arg, ast.Name):
             raise typy.TypeError("Argument must be an identifier.", arg)
         arg_id = arg.id
-        cur_variables[arg_id] = arg_type
+        variables[arg_id] = arg_type
 
-# TODO: tuples and ltuples
-# TODO: casetypes
-# TODO: string
-# TODO: number
+class DictStack(object):
+    # TODO: move to cypy
+    def __init__(self, stack=None):
+        if stack is None:
+            stack = [ ]
+        self.stack = stack 
+
+    def push(self, d):
+        self.stack.append(d)
+        return self
+
+    def pop(self):
+        return self.stack.pop()
+
+    def peek(self):
+        return self.stack[-1]
+
+    def __getitem__(self, key):
+        for d in reversed(self.stack):
+            try:
+                return d[key]
+            except KeyError:
+                pass
+        raise KeyError(key)
+
+    def __setitem__(self, key, value):
+        self.peek()[key] = value
+
+    def __contains__(self, key):
+        for d in reversed(self.stack):
+            if key in d: return True
+        return False 
