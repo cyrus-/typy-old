@@ -486,3 +486,40 @@ def test_assign_ascription_dbl_inconsistent():
         x
     with pytest.raises(typy.TypeError):
         test.typecheck()
+
+def test_assign_multiple():
+    @fp.fn
+    def test():
+        x [: boolean] = y = True
+        y
+    assert test.typecheck() == fp.fn[(), boolean]
+
+def test_assign_multiple_ascription():
+    @fp.fn
+    def test():
+        x [: boolean] = y [: boolean] = True
+        y
+    assert test.typecheck() == fp.fn[(), boolean]
+
+def test_assign_multiple_ascription_bad():
+    @fp.fn
+    def test():
+        x [: boolean] = y [: unit] = True
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_assign_multiple_ascription_bad_2():
+    @fp.fn
+    def test(x):
+        {x : boolean}
+        x [: boolean] = y [: unit] = True
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_assign_multiple_ascription_bad_3():
+    @fp.fn
+    def test(x):
+        {x : unit}
+        x [: boolean] = y [: boolean] = True
+    with pytest.raises(typy.TypeError):
+        test.typecheck()

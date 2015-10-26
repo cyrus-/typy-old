@@ -201,16 +201,12 @@ class FnType(Type):
       raise NotSupportedError(cls, "class method", "check_Delete", tree)
 
     @classmethod
-    def check_Assign_Name(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Assign_Name", tree)
+    def check_Assign(cls, ctx, tree):
+      raise NotSupportedError(cls, "class method", "check_Assign", tree)
     
     @classmethod
-    def check_Assign_Subscript(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Assign_Subscript", tree)
-
-    @classmethod
-    def check_AugAssign_Name(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_AugAssign_Name", tree)
+    def check_AugAssign(cls, ctx, tree):
+      raise NotSupportedError(cls, "class method", "check_AugAssign", tree)
 
     @classmethod
     def check_Print(cls, ctx, tree):
@@ -365,19 +361,6 @@ class Context(object):
         if not isinstance(stmt, ast.stmt):
             raise UsageError("Cannot check a non-statement.")
         classname = stmt.__class__.__name__
-        if classname == "Assign":
-            # TODO: refactor this
-            targets = stmt.targets
-            if len(targets) != 1:
-                raise TypeError("Multiple assignment not supported.", stmt)
-            target = targets[0]
-            if isinstance(target, ast.Name):
-                classname = "Assign_Name"
-            elif isinstance(target, ast.Subscript):
-                classname = "Assign_Subscript"
-            else:
-                raise TypeError("Assignment to non-name not supported.", stmt)
-
         check_method = 'check_%s' % classname
         delegate = tycon(self.fn.ascription)
         method = getattr(delegate, check_method)
@@ -409,18 +392,29 @@ class Context(object):
             if isinstance(ty, Type):
                 self.ana(value, ty)
                 return ty
-            elif isinstance(ty, IncompleteType) and _is_intro_form(value):
-                classname = value.__class__.__name__
-                if classname == "Name":
-                    classname = "Name_constructor"
-                syn_idx_methodname = 'syn_idx_%s' % classname
-                delegate = ty.tycon
-                method = getattr(delegate, syn_idx_methodname)
-                syn_idx = method(self, value, ty.inc_idx)
-                ty = _construct_ty(delegate, syn_idx)
-                e.delegate, e.ty = delegate, ty
+            elif isinstance(ty, IncompleteType):
+                if _is_intro_form(value):
+                    classname = value.__class__.__name__
+                    if classname == "Name":
+                        classname = "Name_constructor"
+                    syn_idx_methodname = 'syn_idx_%s' % classname
+                    delegate = ty.tycon
+                    method = getattr(delegate, syn_idx_methodname)
+                    syn_idx = method(self, value, ty.inc_idx)
+                    ty = _construct_ty(delegate, syn_idx)
+                    e.delegate, e.ty = delegate, ty
+                    return ty
+                else:
+                    raise TypeError(
+                        "Incomplete type ascriptions can only appear on introductory forms.", 
+                        value)
+            else:
+                # not an ascription
+                value_ty = self.syn(value)
+                ty = value_ty.syn_Subscript(self, e)
+                e.delegate, e.ty = value_ty, ty
                 return ty
-        if isinstance(e, ast.Name):
+        elif isinstance(e, ast.Name):
             id = e.id
             delegate = tycon(self.fn.ascription)
             ty = delegate.syn_Name(self, e)
@@ -430,6 +424,8 @@ class Context(object):
             else:
                 raise typy.TypeInvariantError(
                     "syn_Name did not return a type.", e)
+        else:
+            raise TypeError("Unsupported form", e)
 
     def translate(self, tree):
         pass # TODO

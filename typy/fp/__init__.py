@@ -220,43 +220,15 @@ class fn(typy.FnType):
                 "Variable not found in context.", e)
 
     @classmethod
-    def check_Assign_Name(cls, ctx, stmt):
-        target = stmt.targets[0]
-        id = target.id 
-        value = stmt.value
-        variables = ctx.variables
-        try:
-            ty = variables[id]
-            ctx.ana(value, ty)
-        except KeyError:
+    def check_Assign(cls, ctx, stmt):
+        targets, value = stmt.targets, stmt.value
+        asc_ty = _process_targets(ctx, targets)
+        if asc_ty == None:
             ty = ctx.syn(value)
-            variables[id] = ty
-
-    @classmethod
-    def check_Assign_Subscript(cls, ctx, stmt):
-        target = stmt.targets[0]
-        target_value, slice = target.value, target.slice
-        if isinstance(target_value, ast.Name):
-            if isinstance(slice, ast.Slice):
-                lower, upper, step = slice.lower, slice.upper, slice.step
-                if lower == None and upper is not None and step is None:
-                    ty = ctx.fn.static_env.eval_expr_ast(upper)
-                    if isinstance(ty, typy.Type):
-                        id = target_value.id
-                        variables = ctx.variables
-                        try:
-                            existing_ty = variables[id]
-                        except KeyError: pass
-                        else: 
-                            if ty != existing_ty:
-                                raise typy.TypeError("Inconsistent type annotations.", target_value)
-                        ctx.ana(stmt.value, ty)
-                        ctx.variables[id] = ty
-                        return 
-                    else:
-                        raise typy.TypeError(
-                            "Type ascription is not a type.", upper)
-        raise typy.TypeError("Form not supported.", stmt)
+        else:
+            ty = asc_ty 
+            ctx.ana(value, ty)
+        _update_targets(ctx, targets, ty)
 
 def _normalize_fn_idx(idx):
     len_idx = len(idx)
@@ -364,6 +336,57 @@ def _setup_args(ctx, args, arg_types, tree):
             raise typy.TypeError("Argument must be an identifier.", arg)
         arg_id = arg.id
         variables[arg_id] = arg_type
+
+def _process_targets(ctx, targets):
+    asc_ty = None
+    for target in targets:
+        if isinstance(target, ast.Name):
+            id = target.id
+            variables = ctx.variables
+            try:
+                ctx_ty = variables[id]
+            except KeyError: pass
+            else:
+                if asc_ty is None:
+                    asc_ty = ctx_ty
+                elif asc_ty != ctx_ty:
+                    raise typy.TypeError(
+                        "Variable {0} has conflicting types.".format(id), target)
+        elif isinstance(target, ast.Subscript):
+            target_value, slice_ = target.value, target.slice
+            if isinstance(target_value, ast.Name):
+                if isinstance(slice_, ast.Slice):
+                    lower, upper, step = slice_.lower, slice_.upper, slice_.step
+                    if lower is None and upper is not None and step is None:
+                        id = target_value.id
+                        variables = ctx.variables
+                        cur_asc_ty = ctx.fn.static_env.eval_expr_ast(upper)
+                        if isinstance(cur_asc_ty, typy.Type):
+                            try:
+                                ctx_ty = variables[id]
+                            except KeyError: pass
+                            else:
+                                if cur_asc_ty != ctx_ty:
+                                    raise typy.TypeError(
+                                        "Variable {0} has conflicting types.".format(target_value.id), target)
+                            if asc_ty is None: asc_ty = cur_asc_ty
+                            elif asc_ty != cur_asc_ty:
+                                raise typy.TypeError(
+                                    "Variable {0} has conflicting types.".format(target_value.id), target)
+                        else:
+                            raise typy.TypeError(
+                                "Variable type ascription is not a type.", upper)
+        else:
+            raise typy.TypeError(
+                "Form not supported for assignment.", target)
+    return asc_ty 
+
+def _update_targets(ctx, targets, ty):
+    for target in targets:
+        if isinstance(target, ast.Name):
+            ctx.variables[target.id] = ty
+        elif isinstance(target, ast.Subscript):
+            ctx.variables[target.value.id] = ty
 
 class DictStack(object):
     # TODO: move to cypy
