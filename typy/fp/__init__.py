@@ -2,6 +2,7 @@
 import ast
 
 import typy
+import typy.util
 
 class unit_(typy.Type):
     @classmethod
@@ -100,7 +101,7 @@ class fn(typy.FnType):
 
     @classmethod
     def init_ctx(cls, ctx):
-        ctx.variables = DictStack()
+        ctx.variables = typy.util.DictStack()
         ctx.variables.push({})
         ctx.return_type = None
 
@@ -204,6 +205,9 @@ class fn(typy.FnType):
                     last_stmt)
 
         return (arg_types, ctx.return_type)
+
+    def translate_FunctionDef_toplevel(self, ctx, tree):
+        ast.FunctionDef()
 
     @classmethod
     def check_Pass(cls, ctx, tree):
@@ -387,36 +391,3 @@ def _update_targets(ctx, targets, ty):
             ctx.variables[target.id] = ty
         elif isinstance(target, ast.Subscript):
             ctx.variables[target.value.id] = ty
-
-class DictStack(object):
-    # TODO: move to cypy
-    def __init__(self, stack=None):
-        if stack is None:
-            stack = [ ]
-        self.stack = stack 
-
-    def push(self, d):
-        self.stack.append(d)
-        return self
-
-    def pop(self):
-        return self.stack.pop()
-
-    def peek(self):
-        return self.stack[-1]
-
-    def __getitem__(self, key):
-        for d in reversed(self.stack):
-            try:
-                return d[key]
-            except KeyError:
-                pass
-        raise KeyError(key)
-
-    def __setitem__(self, key, value):
-        self.peek()[key] = value
-
-    def __contains__(self, key):
-        for d in reversed(self.stack):
-            if key in d: return True
-        return False 

@@ -3,7 +3,6 @@ import ast # Python standard library's abstract syntax module
 import inspect # for accessing source code for functions
 import textwrap # for stripping leading spaces
 
-import cypy # helper functions
 import six # Python 2-3 compatibility, e.g. metaclasses
 # TODO: semver
 # TODO: fix indentation
@@ -176,6 +175,9 @@ class FnType(Type):
     def syn_idx_FunctionDef_toplevel(self, ctx, tree, inc_ty):
         raise NotSupportedError(self, "class method", "ana_FunctionDef_toplevel", tree)
 
+    def translate_FunctionDef_toplevel(self, ctx, tree):
+        raise NotSupportedError(self, "method", "translate_FunctionDef_toplevel", tree)
+
     @classmethod 
     def syn_Name(self, ctx, e):
         raise NotSupportedError(self, "class method", "syn_Name", e)
@@ -332,7 +334,7 @@ class Fn(object):
     def typecheck(self):
         if self.typechecked: return
         tree, ascription = self.tree, self.ascription
-        ctx = Context(self)
+        ctx = self.ctx = Context(self)
         tycon(ascription).init_ctx(ctx)
         if isinstance(ascription, Type):
             delegate = ty = ascription
@@ -348,8 +350,16 @@ class Fn(object):
     def compile(self):
         self.typecheck()
         if self.compiled: return
-        # TODO: translation
+        tree, ascription, ctx = self.tree, self.ascription, self.ctx
+        ty = tree.ty
+        translation = ty.translate_FunctionDef_toplevel(ctx, tree)
+        self.translation = translation
         self.compiled = True
+        return translation
+
+    def __call__(self, *args):
+        # TODO: implement thisv
+        raise NotImplemented()
 
 class Context(object):
     def __init__(self, fn):

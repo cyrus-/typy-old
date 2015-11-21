@@ -523,3 +523,4 @@ def test_assign_multiple_ascription_bad_3():
         x [: boolean] = y [: boolean] = True
     with pytest.raises(typy.TypeError):
         test.typecheck()
+
