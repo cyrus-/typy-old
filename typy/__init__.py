@@ -390,6 +390,8 @@ class Context(object):
             method(self, e)
             e.ty = ty
             e.delegate = ty
+            print "SETTING TMN TO ", classname
+            e.translation_method_name = 'translate_%s' % classname
         else:
             syn_ty = self.syn(e)
             if ty != syn_ty:
@@ -401,6 +403,9 @@ class Context(object):
             ty = _process_ascription_slice(slice_, self.fn.static_env)
             if isinstance(ty, Type):
                 self.ana(value, ty)
+                e.ty = ty
+                e.delegate = value.delegate
+                e.is_ascription = True 
                 return ty
             elif isinstance(ty, IncompleteType):
                 if _is_intro_form(value):
@@ -413,6 +418,9 @@ class Context(object):
                     syn_idx = method(self, value, ty.inc_idx)
                     ty = _construct_ty(delegate, syn_idx)
                     e.delegate, e.ty = delegate, ty
+                    e.is_ascription = True 
+                    value.translation_method_name = "translate_%s" % classname
+                    value.delegate, value.ty = delegate, ty
                     return ty
                 else:
                     raise TypeError(
@@ -423,6 +431,7 @@ class Context(object):
                 value_ty = self.syn(value)
                 ty = value_ty.syn_Subscript(self, e)
                 e.delegate, e.ty = value_ty, ty
+                e.translation_method_name = 'translate_Subscript'
                 return ty
         elif isinstance(e, ast.Name):
             id = e.id
@@ -430,6 +439,7 @@ class Context(object):
             ty = delegate.syn_Name(self, e)
             if isinstance(ty, Type):
                 e.delegate, e.ty = delegate, ty
+                e.translation_method_name = 'translate_Name'
                 return ty
             else:
                 raise typy.TypeInvariantError(
@@ -438,7 +448,25 @@ class Context(object):
             raise TypeError("Unsupported form", e)
 
     def translate(self, tree):
-        pass # TODO
+        if isinstance(tree, ast.stmt):
+            classname = tree.__class__.__name__
+            method_name = 'translate_' + classname
+            delegate = self.fn.tree.ty
+            method = getattr(delegate, method_name)
+            return method(self, tree)
+        elif isinstance(tree, ast.expr):
+            if hasattr(tree, "is_ascription"):
+                return self.translate(tree.value)
+            elif isinstance(tree, ast.Name):
+                delegate = self.fn.tree.ty
+                return delegate.translate_Name(self, tree)
+            else:
+                method_name = tree.translation_method_name
+                delegate = tree.ty
+                method = getattr(delegate, method_name)
+                return method(self, tree)
+        else:
+            raise NotImplementedError("cannot translate this...")
 
 _intro_forms = (ast.Lambda, ast.Dict, ast.Set, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp, ast.Num, ast.Str, ast.List, ast.Tuple)
 def _is_intro_form(e):

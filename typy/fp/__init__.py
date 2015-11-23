@@ -27,7 +27,10 @@ class unit_(typy.Type):
                 "Non-empty tuple forms cannot be used to introduce values of type unit.",
                 e)
         return ()
-        
+
+    def translate_Tuple(self, ctx, e):
+        return ast.Name("None", ast.Load())
+
 unit = unit_[()]
 
 class boolean_(typy.Type):
@@ -51,6 +54,9 @@ class boolean_(typy.Type):
             raise typy.TypeError(
                 "Must introduce a value of boolean type with either True or False.",
                 e)
+
+    def translate_Name_constructor(self, ctx, e):
+        return astx.copy_node(e)
 
     # TODO: case/if operators
 boolean = boolean_[()]
@@ -235,6 +241,9 @@ class fn(typy.FnType):
     def check_Pass(cls, ctx, tree):
         return
 
+    def translate_Pass(self, ctx, tree):
+        return astx.copy_node(tree)
+
     @classmethod
     def syn_Name(cls, ctx, e):
         id = e.id
@@ -244,6 +253,9 @@ class fn(typy.FnType):
         except KeyError:
             raise typy.TypeError(
                 "Variable not found in context.", e)
+
+    def translate_Name(cls, ctx, e):
+        return astx.copy_node(e)
 
     @classmethod
     def check_Assign(cls, ctx, stmt):
@@ -255,6 +267,13 @@ class fn(typy.FnType):
             ty = asc_ty 
             ctx.ana(value, ty)
         _update_targets(ctx, targets, ty)
+
+    @classmethod
+    def check_Expr(cls, ctx, stmt):
+        ctx.syn(value)
+
+    def translate_Expr(self, ctx, stmt):
+        return ast.Expr(ctx.translate(stmt.value))
 
 def _normalize_fn_idx(idx):
     len_idx = len(idx)
