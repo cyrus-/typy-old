@@ -2,7 +2,8 @@
 import ast
 
 import typy
-import typy.util
+import typy.util 
+import typy.util.astx as astx
 
 class unit_(typy.Type):
     @classmethod
@@ -97,7 +98,7 @@ class fn(typy.FnType):
         body = tree.body
         (docstring, post_docstring_body) = _extract_docstring(body)
         fn.__doc__ = fn.func_doc = docstring
-        fn._post_docstring_body = post_docstring_body
+        tree._post_docstring_body = post_docstring_body
 
     @classmethod
     def init_ctx(cls, ctx):
@@ -107,7 +108,8 @@ class fn(typy.FnType):
 
     def ana_FunctionDef_toplevel(self, ctx, tree):
         name, args = tree.name, tree.args
-        body = ctx.fn._post_docstring_body
+        body = tree._post_docstring_body
+        tree._post_sig_body = body # will update below if needed
         (arg_types, return_type) = self.idx
         ctx.return_type = return_type
 
@@ -121,7 +123,7 @@ class fn(typy.FnType):
                     raise typy.TypeError(
                         "Function signature and function ascription do not match.", 
                         body[0])
-                body = body[1:]
+                body = tree._post_sig_body = body[1:]
 
         if len(body) == 0:
             if return_type != unit:
@@ -145,7 +147,8 @@ class fn(typy.FnType):
     @classmethod
     def syn_idx_FunctionDef_toplevel(cls, ctx, tree, inc_ty):
         name, args = tree.name, tree.args 
-        body = ctx.fn._post_docstring_body
+        body = tree._post_docstring_body
+        tree._post_sig_body = body # will update below if needed
         inc_idx = inc_ty.inc_idx
 
         arg_names = _get_arg_names(args)
@@ -162,7 +165,7 @@ class fn(typy.FnType):
                         raise typy.TypeError("Expected function signature.", tree)
                 else:
                     inc_idx = sig_idx
-                    body = body[1:]
+                    body = tree._post_sig_body = body[1:]
             else:
                 if sig_idx != None:
                     if inc_idx[0] != sig_idx[0]:
@@ -170,7 +173,7 @@ class fn(typy.FnType):
                             "Argument signature and argument ascription do not match.", 
                             body[0])
                     inc_idx = sig_idx
-                    body = body[1:]
+                    body = tree._post_sig_body = body[1:]
 
         (arg_types, ctx.return_type) = inc_idx
 
@@ -207,7 +210,26 @@ class fn(typy.FnType):
         return (arg_types, ctx.return_type)
 
     def translate_FunctionDef_toplevel(self, ctx, tree):
-        ast.FunctionDef()
+        body_translation = [ ]
+        body = tree._post_sig_body
+            
+        if len(body) == 0:
+            body_translation.append(ast.Pass())
+        else:
+            all_but_last_stmt = body[0:-1]
+            last_stmt = body[-1]
+            for stmt in all_but_last_stmt:
+                body_translation.append(ctx.translate(stmt))
+            if isinstance(last_stmt, ast.Pass):
+                body_translation.append(ast.Pass())
+            elif isinstance(last_stmt, ast.Expr):
+                body_translation.append(ast.Return(ctx.translate(last_stmt.value)))
+
+        return ast.FunctionDef(
+            name=tree.name,
+            args=astx.deep_copy_node(tree.args),
+            body=body_translation,
+            decorator_list=[])
 
     @classmethod
     def check_Pass(cls, ctx, tree):

@@ -4,124 +4,163 @@ To run:
   $ py.test test_fp.py
 """
 import ast
+import textwrap
+
+import astunparse
 
 import pytest
 import typy
 import typy.fp as fp
-
 unit = fp.unit
-def test_unit_index():
-    with pytest.raises(typy.TypeFormationError):
-        fp.unit_[0]
-
 boolean = fp.boolean
-def test_boolean_index():
-    with pytest.raises(typy.TypeFormationError):
-        fp.boolean_[0]
 
-def test_stdfn_noargs():
-    fn_ty = fp.fn[(), unit]
-    assert isinstance(fn_ty, typy.Type)
-    assert fn_ty.idx == ((), unit)
+# Type Formation
+class TestTypeFormation:
+    def test_unit_index(self):
+        with pytest.raises(typy.TypeFormationError):
+            fp.unit_[0]
 
-def test_stdfn_onearg():
-    fn_ty = fp.fn[unit, unit]
-    assert isinstance(fn_ty, typy.Type)
-    assert fn_ty.idx == ((unit,), unit)
+    def test_boolean_index(self):
+        with pytest.raises(typy.TypeFormationError):
+            fp.boolean_[0]
 
-def test_stdfn_twoargs():
-    fn_ty = fp.fn[unit, unit, unit]
-    assert isinstance(fn_ty, typy.Type)
-    assert fn_ty.idx == ((unit, unit), unit)
+    def test_stdfn_noargs(self):
+        fn_ty = fp.fn[(), unit]
+        assert isinstance(fn_ty, typy.Type)
+        assert fn_ty.idx == ((), unit)
 
-def test_stdfn_tupled_args():
-    fn_ty = fp.fn[(unit, unit), unit]
-    assert isinstance(fn_ty, typy.Type)
-    assert fn_ty.idx == ((unit, unit), unit)
+    def test_stdfn_onearg(self):
+        fn_ty = fp.fn[unit, unit]
+        assert isinstance(fn_ty, typy.Type)
+        assert fn_ty.idx == ((unit,), unit)
 
-def test_stdfn_badidx_nottuple():
-    with pytest.raises(typy.TypeFormationError):
-        fp.fn[0]
+    def test_stdfn_twoargs(self):
+        fn_ty = fp.fn[unit, unit, unit]
+        assert isinstance(fn_ty, typy.Type)
+        assert fn_ty.idx == ((unit, unit), unit)
 
-def test_stdfn_badidx_nottype():
-    with pytest.raises(typy.TypeFormationError):
-        fp.fn[0, unit]
+    def test_stdfn_tupled_args(self):
+        fn_ty = fp.fn[(unit, unit), unit]
+        assert isinstance(fn_ty, typy.Type)
+        assert fn_ty.idx == ((unit, unit), unit)
 
-def test_stdfn_badidx_nottype2():
-    with pytest.raises(typy.TypeFormationError):
-        fp.fn[(unit, 0), unit]
+    def test_stdfn_badidx_nottuple(self):
+        with pytest.raises(typy.TypeFormationError):
+            fp.fn[0]
 
-def test_stdfn_badidx_rtnottype():
-    with pytest.raises(typy.TypeFormationError):
-        fp.fn[unit, 0]
+    def test_stdfn_badidx_nottype(self):
+        with pytest.raises(typy.TypeFormationError):
+            fp.fn[0, unit]
 
-def test_stdfn_badidx_too_short():
-    with pytest.raises(typy.TypeFormationError):
-        fp.fn[unit]
+    def test_stdfn_badidx_nottype2(self):
+        with pytest.raises(typy.TypeFormationError):
+            fp.fn[(unit, 0), unit]
 
-def test_stdfn_incty_construction_all_elided():
-    fn_incty = fp.fn[...]
-    assert isinstance(fn_incty, typy.IncompleteType)
-    assert fn_incty.inc_idx == Ellipsis 
+    def test_stdfn_badidx_rtnottype(self):
+        with pytest.raises(typy.TypeFormationError):
+            fp.fn[unit, 0]
 
-def test_stdfn_incty_construction_noargs_rty_elided():
-    fn_incty = fp.fn[(), ...]
-    assert isinstance(fn_incty, typy.IncompleteType)
-    assert fn_incty.inc_idx == ((), Ellipsis)
+    def test_stdfn_badidx_too_short(self):
+        with pytest.raises(typy.TypeFormationError):
+            fp.fn[unit]
 
-def test_stdfn_incty_construction_onearg_rty_elided():
-    fn_incty = fp.fn[unit, ...]
-    assert isinstance(fn_incty, typy.IncompleteType)
-    assert fn_incty.inc_idx == ((unit,), Ellipsis)
+    def test_stdfn_incty_construction_all_elided(self):
+        fn_incty = fp.fn[...]
+        assert isinstance(fn_incty, typy.IncompleteType)
+        assert fn_incty.inc_idx == Ellipsis 
 
-def test_stdfn_incty_construction_twoargs_rty_elided():
-    fn_incty = fp.fn[unit, unit, ...]
-    assert isinstance(fn_incty, typy.IncompleteType)
-    assert fn_incty.inc_idx == ((unit, unit), Ellipsis)
+    def test_stdfn_incty_construction_noargs_rty_elided(self):
+        fn_incty = fp.fn[(), ...]
+        assert isinstance(fn_incty, typy.IncompleteType)
+        assert fn_incty.inc_idx == ((), Ellipsis)
 
-def test_stdfn_incty_construction_tupled_args_rty_elided():
-    fn_incty = fp.fn[(unit, unit), ...]
-    assert isinstance(fn_incty, typy.IncompleteType)
-    assert fn_incty.inc_idx == ((unit, unit), Ellipsis)
+    def test_stdfn_incty_construction_onearg_rty_elided(self):
+        fn_incty = fp.fn[unit, ...]
+        assert isinstance(fn_incty, typy.IncompleteType)
+        assert fn_incty.inc_idx == ((unit,), Ellipsis)
 
-def test_stdfn_incty_badidx_arg_elided():
-    with pytest.raises(typy.TypeFormationError):
-        fp.fn[..., unit]
+    def test_stdfn_incty_construction_twoargs_rty_elided(self):
+        fn_incty = fp.fn[unit, unit, ...]
+        assert isinstance(fn_incty, typy.IncompleteType)
+        assert fn_incty.inc_idx == ((unit, unit), Ellipsis)
 
-def test_stdfn_incty_badidx_arg_nottuple():
-    with pytest.raises(typy.TypeFormationError):
-        fp.fn[0, ...]
+    def test_stdfn_incty_construction_tupled_args_rty_elided(self):
+        fn_incty = fp.fn[(unit, unit), ...]
+        assert isinstance(fn_incty, typy.IncompleteType)
+        assert fn_incty.inc_idx == ((unit, unit), Ellipsis)
 
-def test_stdfn_incty_badidx_arg_nottype():
-    with pytest.raises(typy.TypeFormationError):
-        fp.fn[(unit, 0), ...]
+    def test_stdfn_incty_badidx_arg_elided(self):
+        with pytest.raises(typy.TypeFormationError):
+            fp.fn[..., unit]
 
-def test_stdfn_direct_decorator():
-    @fp.fn
-    def test():
-        pass
-    assert isinstance(test, typy.Fn)
-    assert isinstance(test.tree, ast.FunctionDef)
+    def test_stdfn_incty_badidx_arg_nottuple(self):
+        with pytest.raises(typy.TypeFormationError):
+            fp.fn[0, ...]
+
+    def test_stdfn_incty_badidx_arg_nottype(self):
+        with pytest.raises(typy.TypeFormationError):
+            fp.fn[(unit, 0), ...]
+
+# fn
+
+class TestStdFnDirectDecorator:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            pass
+        return f
+
+    def test_is_fn(self, f):
+        assert isinstance(f, typy.Fn)
+
+    def test_tree(self, f):
+        assert isinstance(f.tree, ast.FunctionDef)
 
 def test_stdfn_docstring():
     fnty = fp.fn[unit, unit]
     @fnty
-    def test():
+    def f():
         """This is a docstring."""
-    assert test.__doc__ == test.func_doc == """This is a docstring."""
+    assert f.__doc__ == f.func_doc == """This is a docstring."""
 
 def test_stdfn_incty_docstring():
     @fp.fn
-    def test():
+    def f():
         """This is a docstring."""
-    assert test.__doc__ == test.func_doc == """This is a docstring."""
+    assert f.__doc__ == f.func_doc == """This is a docstring."""
 
-def test_stdfn_arg_count_correct():
-    fn_ty = fp.fn[unit, unit]
-    @fn_ty
-    def test(x):
-        """This is a docstring."""
-    assert test.typecheck() == fn_ty
+def translation_eq(f, truth):
+    """helper function for test_translate functions below
+
+    compares an AST to the string truth, which should contain Python code.
+    truth is first dedented.
+    """
+    f.compile()
+    translation = f.translation
+    translation_s = astunparse.unparse(translation)
+    truth_s = "\n" + textwrap.dedent(truth) + "\n"
+    assert translation_s == truth_s
+
+class TestStdFnArgCountCorrect:
+    @pytest.fixture
+    def fn_ty(self):
+        return fp.fn[unit, unit]
+
+    @pytest.fixture
+    def f(self, fn_ty):
+        @fn_ty
+        def f(x):
+            """This is a docstring."""
+        return f
+
+    def test_type(self, f, fn_ty):
+        assert f.typecheck() == fn_ty
+
+    def test_translate(self, f):
+        translation_eq(f, """
+            def f(x):
+                pass""")
 
 def test_stdfn_arg_count_incorrect():
     fn_ty = fp.fn[unit, unit]
@@ -131,111 +170,205 @@ def test_stdfn_arg_count_incorrect():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_stdfn_arg_count_zero():
-    fn_ty = fp.fn[(), unit]
-    @fn_ty
-    def test():
-        """This is a docstring."""
-    assert test.typecheck() == fn_ty
+class TestStdFnArgCountZero:
+    @pytest.fixture
+    def fn_ty(self): return fp.fn[(), unit]
+
+    @pytest.fixture
+    def f(self, fn_ty):
+        @fn_ty
+        def f():
+            """This is a docstring."""
+        return f
+
+    def test_type(self, f, fn_ty):
+        assert f.typecheck() == fn_ty
+
+    def test_translate(self, f):
+        translation_eq(f, """
+            def f():
+                pass""")
 
 def test_stdfn_arg_count_zero_incorrect():
     fn_ty = fp.fn[(), unit]
     @fn_ty
-    def test(x):
+    def f(x):
         """This is a docstring."""
     with pytest.raises(typy.TypeError):
-        test.typecheck()
+        f.typecheck()
 
 def test_stdfn_varargs_unsupported():
     fn_ty = fp.fn[unit, unit]
     @fn_ty 
-    def test(*x):
+    def f(*x):
         """This is a docstring."""
     with pytest.raises(typy.TypeError):
-        test.typecheck()
+        f.typecheck()
 
 def test_stdfn_kwargs_unsupported():
     fn_ty = fp.fn[unit, unit]
     @fn_ty 
-    def test(**x):
+    def f(**x):
         """This is a docstring."""
     with pytest.raises(typy.TypeError):
-        test.typecheck()
+        f.typecheck()
 
 def test_stdfn_defaults_unsupported():
     fn_ty = fp.fn[unit, unit]
     @fn_ty 
-    def test(x=()):
+    def f(x=()):
         """This is a docstring."""
     with pytest.raises(typy.TypeError):
-        test.typecheck()
+        f.typecheck()
 
-def test_stdfn_Pass():
-    fn_ty = fp.fn[(), unit]
-    @fn_ty
-    def test():
-        """This is a docstring."""
-        pass
-    assert test.typecheck() == fn_ty
+class TestStdFnPass:
+    @pytest.fixture
+    def fn_ty(self): return fp.fn[(), unit]
+
+    @pytest.fixture
+    def f(self, fn_ty):
+        @fn_ty
+        def f():
+            """This is a docstring."""
+            pass
+        return f
+
+    def test_type(self, fn_ty, f):
+        assert f.typecheck() == fn_ty
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                pass""")
 
 def test_stdfn_Pass_type():
     fn_ty = fp.fn[(), boolean]
     @fn_ty
-    def test():
+    def f():
         pass
     with pytest.raises(typy.TypeMismatchError):
-        test.typecheck()
+        f.typecheck()
 
-def test_stdfn_incty_empty():
-    fn_ty = fp.fn[(), ...]
-    @fn_ty
-    def test():
-        """This is a docstring."""
-    assert test.typecheck() == fp.fn[(), unit]
+class TestStdFnIncTyEmpty:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fp.fn[(), ...]
+        @fn_ty
+        def f():
+            """This is a docstring."""
+        return f 
 
-def test_stdfn_incty_Pass():
-    fn_ty = fp.fn[(), ...]
-    @fn_ty
-    def test():
-        pass
-    assert test.typecheck() == fp.fn[(), unit]
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
 
-def test_stdfn_sig():
-    @fp.fn
-    def test():
-        """This is a docstring."""
-        {}
-    assert test.typecheck() == fp.fn[(), unit]
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                pass""")
 
-def test_stdfn_sig_r():
-    @fp.fn
-    def test():
-        """This is a docstring."""
-        {} >> unit
-    assert test.typecheck() == fp.fn[(), unit]
+class TestStdFnIncTyPass:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fp.fn[(), ...]
+        @fn_ty
+        def f():
+            pass
+        return f
 
-def test_stdfn_sig_Pass():
-    @fp.fn
-    def test():
-        """This is a docstring."""
-        {}
-        pass
-    assert test.typecheck() == fp.fn[(), unit]
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
 
-def test_stdfn_sig_r_Pass():
-    @fp.fn
-    def test():
-        """This is a docstring."""
-        {} >> unit
-        pass
-    assert test.typecheck() == fp.fn[(), unit]
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                pass""")
 
-def test_stdfn_sig_args():
-    @fp.fn
-    def test(x):
-        {unit}
-        pass
-    assert test.typecheck() == fp.fn[(unit,), unit]
+class TestStdFnSig:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            """This is a docstring."""
+            {}
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                pass""")
+
+class TestStdFnSigR():
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            """This is a docstring."""
+            {} >> unit
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                pass""")
+
+class TestStdFnSigPass:
+    @pytest.fixture
+    def f(self):    
+        @fp.fn
+        def f():
+            """This is a docstring."""
+            {}
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                pass""")
+
+class TestStdFnSigRPass:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            """This is a docstring."""
+            {} >> unit
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                pass""")
+
+class TestStdFnSigArgs:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f(x):
+            {unit}
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(unit,), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                pass""")
 
 def test_stdfn_sig_args_too_many():
     @fp.fn
@@ -253,12 +386,22 @@ def test_stdfn_sig_args_too_few():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_stdfn_sig_named_args():
-    @fp.fn
-    def test(x):
-        {x : unit}
-        pass
-    assert test.typecheck() == fp.fn[unit, unit]
+class TestStdFnSigNamedArgs:
+    @pytest.fixture 
+    def f(self):
+        @fp.fn
+        def f(x):
+            {x : unit}
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[unit, unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                pass""")
 
 def test_stdfn_sig_named_args_too_many():
     @fp.fn
@@ -288,48 +431,98 @@ def test_stdfn_sig_named_args_wrong_names2():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_stdfn_sig_complex_types():
-    q = [unit, boolean]
-    @fp.fn
-    def test(x, y):
-        {x : q[1], y : q[0]} >> q[0]
-    assert test.typecheck() == fp.fn[boolean, unit, unit]
+class TestStdFnSigComplexTypes:
+    @pytest.fixture
+    def f(self):
+        q = [unit, boolean]
+        @fp.fn
+        def f(x, y):
+            {x : q[1], y : q[0]} >> q[0]
+        return f
 
-def test_redundant_sigs():
-    fn_ty = fp.fn[(), ...]
-    @fn_ty 
-    def test():
-        {}
-    assert test.typecheck() == fp.fn[(), unit]
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[boolean, unit, unit]
 
-def test_redundant_sigs_2():
-    fn_ty = fp.fn[(unit, unit), unit]
-    @fn_ty
-    def test(x, y):
-        {unit, unit} >> unit
-    assert test.typecheck() == fp.fn[(unit, unit), unit]
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x, y):
+                pass""")
 
-def test_redundant_sigs_3():
-    fn_ty = fp.fn[(), ...]
-    @fn_ty
-    def test():
-        {} >> unit
-    assert test.typecheck() == fp.fn[(), unit]
+class TestRedundantSigs:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fp.fn[(), ...]
+        @fn_ty 
+        def f():
+            {}
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                pass""")
+
+class TestRedundantSigs2:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fp.fn[(unit, unit), unit]
+        @fn_ty
+        def f(x, y):
+            {unit, unit} >> unit
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(unit, unit), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x, y):
+                pass""")
+
+class TestRedundantSigs3:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fp.fn[(), ...]
+        @fn_ty
+        def f():
+            {} >> unit
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                pass""")
 
 def test_redundant_sigs_4():
     fn_ty = fp.fn[(unit, unit), unit]
     @fn_ty
-    def test(x, y):
+    def f(x, y):
         {boolean, boolean}
     with pytest.raises(typy.TypeError):
-        test.typecheck()
+        f.typecheck()
 
-def test_redundant_sigs_5():
-    fn_ty = fp.fn[(boolean, boolean), unit]
-    @fn_ty
-    def test(x, y):
-        {boolean, boolean}
-    assert test.typecheck() == fp.fn[(boolean, boolean), unit]
+class TestRedundantSigs5:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fp.fn[(boolean, boolean), unit]
+        @fn_ty
+        def f(x, y):
+            {boolean, boolean}
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(boolean, boolean), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x, y):
+                pass""")
 
 def test_redundant_sigs_6():
     fn_ty = fp.fn[(unit, unit), ...]
@@ -339,31 +532,63 @@ def test_redundant_sigs_6():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_unit_intro():
-    @fp.fn
-    def test():
-        {} >> unit
-        ()
-    assert test.typecheck() == fp.fn[(), unit]
+# unit
 
-def test_unit_ascription():
-    @fp.fn
-    def test():
-        () [: unit]
-    assert test.typecheck() == fp.fn[(), unit]
+class TestUnitIntro:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            {} >> unit
+            ()
+        return f
 
-def test_unit_ascription_toomany():
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return None""")
+
+class TestUnitAscription:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            () [: unit]
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return None""")   
+
+class test_unit_ascription_toomany():
     @fp.fn
     def test():
         (1, 2) [: unit]
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_unit_inc_ascription():
-    @fp.fn 
-    def test():
-        () [: fp.unit_[...]]
-    assert test.typecheck() == fp.fn[(), unit]
+class TestUnitIncAscription:
+    @pytest.fixture
+    def f(self):
+        @fp.fn 
+        def f():
+            () [: fp.unit_[...]]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return None""")
 
 def test_unit_inc_ascription_toomany():
     @fp.fn
@@ -372,11 +597,21 @@ def test_unit_inc_ascription_toomany():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_unit_omitted_inc_ascription():
-    @fp.fn
-    def test():
-        () [: fp.unit_]
-    assert test.typecheck() == fp.fn[(), unit]
+class TestUnitOmittedIncAscription:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            () [: fp.unit_]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return None""")
 
 def test_unit_bad_ascription():
     @fp.fn
@@ -399,17 +634,39 @@ def test_unit_bad_omitted_inc_ascription():
     with pytest.raises(typy.NotSupportedError):
         test.typecheck()
 
-def test_boolean_ascription_True():
-    @fp.fn
-    def test():
-        True [: boolean]
-    assert test.typecheck() == fp.fn[(), boolean]
+# boolean
 
-def test_boolean_ascription_False():
-    @fp.fn
-    def test():
-        False [: boolean]
-    assert test.typecheck() == fp.fn[(), boolean]
+class TestBooleanAscriptionTrue:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            True [: boolean]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return True""")
+
+class TestBooleanAscriptionFalse:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            False [: boolean]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return False""")
 
 def test_boolean_ascription_bad():
     @fp.fn
@@ -418,19 +675,41 @@ def test_boolean_ascription_bad():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_variable_lookup():
-    @fp.fn
-    def test(x):
-        {x : boolean}
-        x
-    assert test.typecheck() == fp.fn[boolean, boolean]
+# Variables
 
-def test_variable_lookup_ana():
-    @fp.fn
-    def test(x):
-        {x : boolean} >> boolean
-        x
-    assert test.typecheck() == fp.fn[boolean, boolean]
+class TestVariableLookup:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f(x):
+            {x : boolean}
+            x
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[boolean, boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return x""")
+
+class TestVariableLookupAna:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f(x):
+            {x : boolean} >> boolean
+            x
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[boolean, boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return x""")
 
 def test_variable_lookup_notfound():
     @fp.fn 
@@ -440,20 +719,43 @@ def test_variable_lookup_notfound():
     with pytest.raises(typy.TypeError):
         test.typecheck()
     
-def test_assign_syn():
-    @fp.fn
-    def test():
-        x = () [: unit]
-        x
-    assert test.typecheck() == fp.fn[(), unit]
+class TestAssignSyn:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x = () [: unit]
+            x
+        return f
 
-def test_assign_ana():
-    @fp.fn
-    def test():
-        x = () [: unit]
-        x = ()
-        x
-    assert test.typecheck() == fp.fn[(), unit]
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = None
+                return x""")
+
+class TestAssignAna:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x = () [: unit]
+            x = ()
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = None
+                x = None
+                return x""")
 
 def test_assign_bad():
     @fp.fn
@@ -463,20 +765,43 @@ def test_assign_bad():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_assign_ascription():
-    @fp.fn
-    def test():
-        x [: boolean] = True
-        x
-    assert test.typecheck() == fp.fn[(), boolean]
+class TestAssignAscription:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: boolean] = True
+            x
+        return f
 
-def test_assign_ascription_dbl():
-    @fp.fn
-    def test():
-        x [: boolean] = True
-        x [: boolean] = True
-        x
-    assert test.typecheck() == fp.fn[(), boolean]
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = True
+                return x""")
+
+class TestAssignAscriptionDbl:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: boolean] = True
+            x [: boolean] = True
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = True
+                x = True
+                return x""")
 
 def test_assign_ascription_dbl_inconsistent():
     @fp.fn
@@ -487,19 +812,41 @@ def test_assign_ascription_dbl_inconsistent():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_assign_multiple():
-    @fp.fn
-    def test():
-        x [: boolean] = y = True
-        y
-    assert test.typecheck() == fp.fn[(), boolean]
+class TestAssignMultiple:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: boolean] = y = True
+            y
+        return f
 
-def test_assign_multiple_ascription():
-    @fp.fn
-    def test():
-        x [: boolean] = y [: boolean] = True
-        y
-    assert test.typecheck() == fp.fn[(), boolean]
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = y = True
+                return y""")
+
+class TestAssignMultipleAscription:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: boolean] = y [: boolean] = True
+            y
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = y = True
+                return y""")
 
 def test_assign_multiple_ascription_bad():
     @fp.fn
