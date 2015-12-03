@@ -48,7 +48,7 @@ class boolean_(typy.Type):
                 e)
 
     @classmethod
-    def syn_idx_Name_constructor(self, ctx, e):
+    def syn_idx_Name_constructor(cls, ctx, e, inc_idx):
         id = e.id
         if id != "True" and id != "False":
             raise typy.TypeError(
@@ -267,6 +267,17 @@ class fn(typy.FnType):
             ty = asc_ty 
             ctx.ana(value, ty)
         _update_targets(ctx, targets, ty)
+
+    def translate_Assign(self, ctx, stmt):
+        targets, value = stmt.targets, stmt.value
+        target_translation = [ ]
+        for target in targets:
+            if isinstance(target, ast.Name):
+                target_translation.append(astx.copy_node(target))
+            elif isinstance(target, ast.Subscript):
+                target_translation.append(astx.copy_node(target.value))
+        value_translation = ctx.translate(value)
+        return ast.Assign(target_translation, value_translation)
 
     @classmethod
     def check_Expr(cls, ctx, stmt):

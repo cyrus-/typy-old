@@ -97,13 +97,25 @@ class Type(object):
     def init_inc_idx(cls, inc_idx):
         return inc_idx
 
-    # TODO: autogenerate stubs
     def ana_Tuple(self, ctx, e):
         raise NotSupportedError(self, "method", "ana_Tuple", e)
 
     @classmethod
     def syn_idx_Tuple(self, ctx, e, inc_idx):
         raise NotSupportedError(self, "class method", "syn_idx_Tuple", e)
+
+    def translate_Tuple(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_Tuple", e)
+
+    def ana_Name_constructor(self, ctx, e):
+        raise NotSupportedError(self, "method", "ana_Name_constructor", e)
+
+    @classmethod
+    def syn_idx_Name_constructor(self, ctx, e, inc_idx):
+        raise NotSupportedError(self, "class method", "syn_idx_Name_constructor", e)
+
+    def translate_Name_constructor(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_Name_constructor", e)
 
 class IncompleteType(object):
     """Represents an incomplete type, used for literal forms.
@@ -182,6 +194,9 @@ class FnType(Type):
     def syn_Name(self, ctx, e):
         raise NotSupportedError(self, "class method", "syn_Name", e)
 
+    def translate_Name(self, ctx, tree):
+        raise NotSupportedError(self, "method", "translate_Name", tree)
+
     ################################################################################
     # The following stubs are pasted from the result of running _generate_FnType.py.
     ################################################################################
@@ -190,94 +205,162 @@ class FnType(Type):
     def check_FunctionDef(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_FunctionDef", tree)
 
+    def translate_FunctionDef(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_FunctionDef", tree)
+
     @classmethod
     def check_ClassDef(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_ClassDef", tree)
+
+    def translate_ClassDef(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_ClassDef", tree)
 
     @classmethod
     def check_Return(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Return", tree)
 
+    def translate_Return(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Return", tree)
+
     @classmethod
     def check_Delete(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Delete", tree)
 
+    def translate_Delete(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Delete", tree)
+
     @classmethod
     def check_Assign(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Assign", tree)
-    
+
+    def translate_Assign(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Assign", tree)
+
     @classmethod
     def check_AugAssign(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_AugAssign", tree)
+
+    def translate_AugAssign(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_AugAssign", tree)
 
     @classmethod
     def check_Print(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Print", tree)
 
+    def translate_Print(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Print", tree)
+
     @classmethod
     def check_For(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_For", tree)
+
+    def translate_For(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_For", tree)
 
     @classmethod
     def check_While(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_While", tree)
 
+    def translate_While(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_While", tree)
+
     @classmethod
     def check_If(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_If", tree)
+
+    def translate_If(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_If", tree)
 
     @classmethod
     def check_With(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_With", tree)
 
+    def translate_With(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_With", tree)
+
     @classmethod
     def check_Raise(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Raise", tree)
+
+    def translate_Raise(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Raise", tree)
 
     @classmethod
     def check_TryExcept(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_TryExcept", tree)
 
+    def translate_TryExcept(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_TryExcept", tree)
+
     @classmethod
     def check_TryFinally(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_TryFinally", tree)
+
+    def translate_TryFinally(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_TryFinally", tree)
 
     @classmethod
     def check_Assert(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Assert", tree)
 
+    def translate_Assert(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Assert", tree)
+
     @classmethod
     def check_Import(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Import", tree)
+
+    def translate_Import(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Import", tree)
 
     @classmethod
     def check_ImportFrom(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_ImportFrom", tree)
 
+    def translate_ImportFrom(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_ImportFrom", tree)
+
     @classmethod
     def check_Exec(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Exec", tree)
+
+    def translate_Exec(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Exec", tree)
 
     @classmethod
     def check_Global(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Global", tree)
 
+    def translate_Global(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Global", tree)
+
     @classmethod
     def check_Expr(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Expr", tree)
+
+    def translate_Expr(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Expr", tree)
 
     @classmethod
     def check_Pass(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Pass", tree)
 
+    def translate_Pass(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Pass", tree)
+
     @classmethod
     def check_Break(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Break", tree)
+
+    def translate_Break(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Break", tree)
 
     @classmethod
     def check_Continue(cls, ctx, tree):
       raise NotSupportedError(cls, "class method", "check_Continue", tree)
 
+    def translate_Continue(self, ctx, tree):
+      raise NotSupportedError(self, "method", "translate_Continue", tree)
 
     ################################################################################
     # End autogenerated section
