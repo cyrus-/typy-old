@@ -41,50 +41,6 @@ unit = unit_[()]
 # boolean
 #
 
-class boolean_(typy.Type):
-    @classmethod
-    def init_idx(cls, idx):
-        if idx != ():
-            raise typy.TypeFormationError("Index of boolean type must be ().")
-        return idx
-
-    def ana_Name_constructor(self, ctx, e):
-        id = e.id
-        if id != "True" and id != "False":
-            raise typy.TypeError(
-                "Must introduce a value of boolean type with either True or False.",
-                e)
-
-    @classmethod
-    def syn_idx_Name_constructor(cls, ctx, e, inc_idx):
-        id = e.id
-        if id != "True" and id != "False":
-            raise typy.TypeError(
-                "Must introduce a value of boolean type with either True or False.",
-                e)
-
-    def translate_Name_constructor(self, ctx, e):
-        return astx.copy_node(e)
-
-    # TODO: case/if operators
-boolean = boolean_[()]
-
-# 
-# int
-#
-
-class integer_(typy.Type):
-    @classmethod
-    def init_idx(cls, idx):
-        if idx != ():
-            raise typy.TypeFormationError("Index of int type must be ().")
-
-    # TODO: number literals
-    # TODO: unary operators
-    # TODO: binary operators
-
-integer = integer_[()]
-
 #
 # fn
 #
