@@ -5,6 +5,10 @@ import typy
 import typy.util 
 import typy.util.astx as astx
 
+#
+# unit
+#
+
 class unit_(typy.Type):
     @classmethod
     def init_idx(cls, idx):
@@ -33,6 +37,10 @@ class unit_(typy.Type):
 
 unit = unit_[()]
 
+#
+# boolean
+#
+
 class boolean_(typy.Type):
     @classmethod
     def init_idx(cls, idx):
@@ -60,6 +68,26 @@ class boolean_(typy.Type):
 
     # TODO: case/if operators
 boolean = boolean_[()]
+
+# 
+# int
+#
+
+class integer_(typy.Type):
+    @classmethod
+    def init_idx(cls, idx):
+        if idx != ():
+            raise typy.TypeFormationError("Index of int type must be ().")
+
+    # TODO: number literals
+    # TODO: unary operators
+    # TODO: binary operators
+
+integer = integer_[()]
+
+#
+# fn
+#
 
 class fn(typy.FnType):
     @classmethod
