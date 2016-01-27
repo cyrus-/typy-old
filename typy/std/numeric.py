@@ -2,7 +2,12 @@
 import typy
 import typy.util.astx as astx
 
-class I_(typy.Type):
+_pyint = int
+_pylong = long
+_pyfloat = float
+_pycomplex = complex
+
+class int_(typy.Type):
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
@@ -17,7 +22,7 @@ class I_(typy.Type):
 
     def ana_Num(self, ctx, e):
         n = e.n
-        if isinstance(n, (int, long)):
+        if isinstance(n, (_pyint, _pylong)):
             return
         else:
             raise typy.TypeError("Expression is not an int or long literal.", e)
@@ -25,7 +30,7 @@ class I_(typy.Type):
     @classmethod
     def syn_idx_Num(cls, ctx, e, inc_idx):
         n = e.n
-        if isinstance(n, (int, long)):
+        if isinstance(n, (_pyint, _pylong)):
             return ()
         else:
             raise typy.TypeError("Expression is not an int or long literal.", e)
@@ -36,7 +41,7 @@ class I_(typy.Type):
     # TODO: unary operators
     # TODO: binary operators
 
-I = I_[()]
+int = int_[()]
 
 # TODO: long?
 # TODO: float?

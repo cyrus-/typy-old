@@ -1,7 +1,7 @@
 """Python booleans"""
 import typy
 
-class B_(typy.Type):
+class bool_(typy.Type):
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
@@ -34,5 +34,5 @@ class B_(typy.Type):
         return astx.copy_node(e)
 
     # TODO: case/if operators
-B = B_[()]
+bool = bool_[()]
 

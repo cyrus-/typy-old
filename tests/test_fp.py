@@ -11,7 +11,7 @@ from utils import *
 
 import typy
 import typy.fp as fp
-from typy.std import B_, B
+from typy.std import bool_, bool
 unit = fp.unit
 
 # Type Formation
@@ -20,9 +20,9 @@ class TestTypeFormation:
         with pytest.raises(typy.TypeFormationError):
             fp.unit_[0]
 
-    def test_B_index(self):
+    def test_bool_index(self):
         with pytest.raises(typy.TypeFormationError):
-            B_[0]
+            bool_[0]
 
     def test_stdfn_noargs(self):
         fn_ty = fp.fn[(), unit]
@@ -236,7 +236,7 @@ class TestStdFnPass:
     #    assert f() == None
 
 def test_stdfn_Pass_type():
-    fn_ty = fp.fn[(), B]
+    fn_ty = fp.fn[(), bool]
     @fn_ty
     def f():
         pass
@@ -446,14 +446,14 @@ def test_stdfn_sig_named_args_wrong_names2():
 class TestStdFnSigComplexTypes:
     @pytest.fixture
     def f(self):
-        q = [unit, B]
+        q = [unit, bool]
         @fp.fn
         def f(x, y):
             {x : q[1], y : q[0]} >> q[0]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[B, unit, unit]
+        assert f.typecheck() == fp.fn[bool, unit, unit]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -524,21 +524,21 @@ def test_redundant_sigs_4():
     fn_ty = fp.fn[(unit, unit), unit]
     @fn_ty
     def f(x, y):
-        {B, B}
+        {bool, bool}
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
 class TestRedundantSigs5:
     @pytest.fixture
     def f(self):
-        fn_ty = fp.fn[(B, B), unit]
+        fn_ty = fp.fn[(bool, bool), unit]
         @fn_ty
         def f(x, y):
-            {B, B}
+            {bool, bool}
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(B, B), unit]
+        assert f.typecheck() == fp.fn[(bool, bool), unit]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -549,7 +549,7 @@ def test_redundant_sigs_6():
     fn_ty = fp.fn[(unit, unit), ...]
     @fn_ty
     def test(x, y):
-        {B, unit}
+        {bool, unit}
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
@@ -649,21 +649,21 @@ class TestUnitOmittedIncAscription:
 def test_unit_bad_ascription():
     @fp.fn
     def test():
-        () [: B]
+        () [: bool]
     with pytest.raises(typy.NotSupportedError):
         test.typecheck()
 
 def test_unit_bad_inc_ascription():
     @fp.fn
     def test():
-        () [: B_[...]]
+        () [: bool_[...]]
     with pytest.raises(typy.NotSupportedError):
         test.typecheck()
 
 def test_unit_bad_omitted_inc_ascription():
     @fp.fn
     def test():
-        () [: B_]
+        () [: bool_]
     with pytest.raises(typy.NotSupportedError):
         test.typecheck()
 
@@ -674,12 +674,12 @@ class TestVariableLookup:
     def f(self):
         @fp.fn
         def f(x):
-            {x : B}
+            {x : bool}
             x
         return f 
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[B, B]
+        assert f.typecheck() == fp.fn[bool, bool]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -691,12 +691,12 @@ class TestVariableLookupAna:
     def f(self):
         @fp.fn
         def f(x):
-            {x : B} >> B
+            {x : bool} >> bool
             x
         return f 
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[B, B]
+        assert f.typecheck() == fp.fn[bool, bool]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -706,7 +706,7 @@ class TestVariableLookupAna:
 def test_variable_lookup_notfound():
     @fp.fn 
     def test(x):
-        {x : B}
+        {x : bool}
         y
     with pytest.raises(typy.TypeError):
         test.typecheck()
@@ -759,7 +759,7 @@ def test_assign_bad():
     @fp.fn
     def test(x):
         {unit}
-        x = True [: B]
+        x = True [: bool]
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
@@ -768,12 +768,12 @@ class TestAssignAscription:
     def f(self):
         @fp.fn
         def f():
-            x [: B] = True
+            x [: bool] = True
             x
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), B]
+        assert f.typecheck() == fp.fn[(), bool]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -786,13 +786,13 @@ class TestAssignAscriptionDbl:
     def f(self):
         @fp.fn
         def f():
-            x [: B] = True
-            x [: B] = True
+            x [: bool] = True
+            x [: bool] = True
             x
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), B]
+        assert f.typecheck() == fp.fn[(), bool]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -804,7 +804,7 @@ class TestAssignAscriptionDbl:
 def test_assign_ascription_dbl_inconsistent():
     @fp.fn
     def test():
-        x [: B] = True 
+        x [: bool] = True 
         x [: unit] = ()
         x
     with pytest.raises(typy.TypeError):
@@ -815,12 +815,12 @@ class TestAssignMultiple:
     def f(self):
         @fp.fn
         def f():
-            x [: B] = y = True
+            x [: bool] = y = True
             y
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), B]
+        assert f.typecheck() == fp.fn[(), bool]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -833,12 +833,12 @@ class TestAssignMultipleAscription:
     def f(self):
         @fp.fn
         def f():
-            x [: B] = y [: B] = True
+            x [: bool] = y [: bool] = True
             y
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), B]
+        assert f.typecheck() == fp.fn[(), bool]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -849,15 +849,15 @@ class TestAssignMultipleAscription:
 def test_assign_multiple_ascription_bad():
     @fp.fn
     def test():
-        x [: B] = y [: unit] = True
+        x [: bool] = y [: unit] = True
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
 def test_assign_multiple_ascription_bad_2():
     @fp.fn
     def test(x):
-        {x : B}
-        x [: B] = y [: unit] = True
+        {x : bool}
+        x [: bool] = y [: unit] = True
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
@@ -865,6 +865,6 @@ def test_assign_multiple_ascription_bad_3():
     @fp.fn
     def test(x):
         {x : unit}
-        x [: B] = y [: B] = True
+        x [: bool] = y [: bool] = True
     with pytest.raises(typy.TypeError):
         test.typecheck()

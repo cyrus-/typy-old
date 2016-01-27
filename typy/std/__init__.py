@@ -1,4 +1,5 @@
 """typy standard library"""
 
-from numeric import I, I_
-from boolean import B, B_
+from numeric import int, int_
+from boolean import bool, bool_
+

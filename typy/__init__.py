@@ -97,6 +97,26 @@ class Type(object):
     def init_inc_idx(cls, inc_idx):
         return inc_idx
 
+    def ana_Num(self, ctx, e):
+        raise NotSupportedError(self, "method", "ana_Num", e)
+
+    def translate_Num(self, ctx, e):    
+        raise NotSupportedError(self, "method", "translate_Num", e)
+
+    @classmethod
+    def syn_idx_Num(self, ctx, e, inc_idx):
+        raise NotSupportedError(self, "class method", "syn_idx_Num", e)
+
+    def ana_Str(self, ctx, e):
+        raise NotSupportedError(self, "method", "ana_Str", e)
+
+    @classmethod
+    def syn_idx_Str(self, ctx, e, inc_idx):
+        raise NotSupportedError(self, "class method", "syn_idx_Str", e)
+
+    def translate_Str(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_Str", e)
+
     def ana_Tuple(self, ctx, e):
         raise NotSupportedError(self, "method", "ana_Tuple", e)
 
