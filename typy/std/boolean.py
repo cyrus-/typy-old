@@ -1,12 +1,18 @@
 """Python booleans"""
 import typy
 
-class pybool_(typy.Type):
+class B_(typy.Type):
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
             raise typy.TypeFormationError("Index of boolean type must be ().")
         return idx
+
+    @classmethod
+    def init_inc_idx(cls, inc_idx):
+    	if inc_idx != () and inc_idx != Ellipsis:
+    		raise typy.TypeFormationError("Incomplete index of boolean type must be () or Ellipsis.")
+    	return inc_idx
 
     def ana_Name_constructor(self, ctx, e):
         id = e.id
@@ -22,10 +28,11 @@ class pybool_(typy.Type):
             raise typy.TypeError(
                 "Must introduce a value of boolean type with either True or False.",
                 e)
+        return ()
 
     def translate_Name_constructor(self, ctx, e):
         return astx.copy_node(e)
 
     # TODO: case/if operators
-pybool = pybool_[()]
+B = B_[()]
 

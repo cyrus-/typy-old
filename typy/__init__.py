@@ -473,7 +473,6 @@ class Context(object):
             method(self, e)
             e.ty = ty
             e.delegate = ty
-            print "SETTING TMN TO ", classname
             e.translation_method_name = 'translate_%s' % classname
         else:
             syn_ty = self.syn(e)
