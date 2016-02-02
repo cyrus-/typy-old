@@ -74,6 +74,37 @@ def test_integer_ascription_on_string():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
+class TestIntegerUnaryOps():
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x = 123 [: int]
+            x_plus [: int] = +x
+            x_minus [: int] = -x
+            x_invert [: int] = ~x
+            x_invert 
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), int]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = 123
+                x_plus = (+ x)
+                x_minus = (- x)
+                x_invert = (~ x)
+                return x_invert""")
+
+def test_integer_no_not():
+    @fp.fn
+    def test():
+        not (3 [: int])
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
 #
 # bool
 #

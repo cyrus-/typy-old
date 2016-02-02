@@ -505,10 +505,8 @@ class Context(object):
             ty = _process_ascription_slice(slice_, self.fn.static_env)
             if isinstance(ty, Type):
                 self.ana(value, ty)
-                e.ty = ty
-                e.delegate = value.delegate
+                delegate = value.delegate
                 e.is_ascription = True 
-                return ty
             elif isinstance(ty, IncompleteType):
                 if _is_intro_form(value):
                     classname = value.__class__.__name__
@@ -519,35 +517,43 @@ class Context(object):
                     method = getattr(delegate, syn_idx_methodname)
                     syn_idx = method(self, value, ty.inc_idx)
                     ty = _construct_ty(delegate, syn_idx)
-                    e.delegate, e.ty = delegate, ty
                     e.is_ascription = True 
                     value.translation_method_name = "translate_%s" % classname
                     value.delegate, value.ty = delegate, ty
-                    return ty
                 else:
                     raise TypeError(
                         "Incomplete type ascriptions can only appear on introductory forms.", 
                         value)
             else:
                 # not an ascription
-                value_ty = self.syn(value)
-                ty = value_ty.syn_Subscript(self, e)
-                e.delegate, e.ty = value_ty, ty
+                delegate = self.syn(value)
+                ty = delegate.syn_Subscript(self, e)
                 e.translation_method_name = 'translate_Subscript'
-                return ty
         elif isinstance(e, ast.Name):
             id = e.id
             delegate = tycon(self.fn.ascription)
             ty = delegate.syn_Name(self, e)
             if isinstance(ty, Type):
-                e.delegate, e.ty = delegate, ty
                 e.translation_method_name = 'translate_Name'
-                return ty
             else:
-                raise typy.TypeInvariantError(
+                raise TypeInvariantError(
                     "syn_Name did not return a type.", e)
+        elif isinstance(e, ast.UnaryOp):
+            operand = e.operand
+            delegate = self.syn(operand)
+            ty = delegate.syn_UnaryOp(self, e)
+            if isinstance(ty, Type):
+                e.translation_method_name = 'translate_UnaryOp'
+            else:
+                raise TypeInvariantError(
+                    "syn_UnaryOp did not return a type.", e)
         else:
             raise TypeError("Unsupported form", e)
+
+        assert delegate is not None
+        assert ty is not None 
+        e.delegate, e.ty = delegate, ty
+        return ty 
 
     def translate(self, tree):
         if isinstance(tree, ast.stmt):

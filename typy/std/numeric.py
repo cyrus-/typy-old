@@ -1,4 +1,6 @@
 """typy numeric types that behave like the corresponding Python types"""
+import ast 
+
 import typy
 import typy.util.astx as astx
 
@@ -38,7 +40,15 @@ class int_(typy.Type):
     def translate_Num(self, ctx, e):
         return astx.copy_node(e)
 
-    # TODO: unary operators
+    def syn_UnaryOp(self, ctx, e):
+        if not isinstance(e.op, ast.Not):
+          return self
+        else:
+            raise typy.TypeError("Invalid unary operator 'not'.", e)
+
+    def translate_UnaryOp(self, ctx, e):
+        return astx.copy_node(e)
+
     # TODO: binary operators
 
 int = int_[()]
