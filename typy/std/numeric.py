@@ -44,12 +44,24 @@ class int_(typy.Type):
         if not isinstance(e.op, ast.Not):
           return self
         else:
-            raise typy.TypeError("Invalid unary operator 'not'.", e)
+            raise typy.TypeError("Invalid unary operator 'not' for operand of type int.", e)
 
     def translate_UnaryOp(self, ctx, e):
         return astx.copy_node(e)
 
+    def syn_BinOp(self, ctx, e):
+        op = e.op
+        if isinstance(op, ast.Div):
+            raise typy.TypeError("Cannot divide integers. Use // or convert to float.", e)
+        ctx.ana(e.right, self)
+        return self
+
+    def translate_BinOp(self, ctx, e):
+        return astx.copy_node(e)
+
+
     # TODO: binary operators
+    # TODO: comparators
 
 int = int_[()]
 

@@ -265,7 +265,7 @@ class fn(typy.FnType):
 
     @classmethod
     def check_Expr(cls, ctx, stmt):
-        ctx.syn(value)
+        ctx.syn(stmt.value)
 
     def translate_Expr(self, ctx, stmt):
         return ast.Expr(ctx.translate(stmt.value))

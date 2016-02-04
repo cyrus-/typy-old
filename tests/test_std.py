@@ -80,10 +80,12 @@ class TestIntegerUnaryOps():
         @fp.fn
         def f():
             x = 123 [: int]
-            x_plus [: int] = +x
-            x_minus [: int] = -x
-            x_invert [: int] = ~x
-            x_invert 
+            x_plus = +x
+            x_plus [: int]
+            x_minus = -x
+            x_minus [: int]
+            x_invert = ~x
+            x_invert [: int]
         return f
 
     def test_type(self, f):
@@ -94,7 +96,9 @@ class TestIntegerUnaryOps():
             def f():
                 x = 123
                 x_plus = (+ x)
+                x_plus
                 x_minus = (- x)
+                x_minus
                 x_invert = (~ x)
                 return x_invert""")
 
@@ -104,6 +108,68 @@ def test_integer_no_not():
         not (3 [: int])
     with pytest.raises(typy.TypeError):
         test.typecheck()
+
+class TestIntegerBinops():
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x = 123 [: int]
+            y = 456 [: int]
+            x_plus_y = x + y
+            x_plus_y [: int]
+            x_minus_y = x - y
+            x_minus_y [: int]
+            x_mult_y = x * y
+            x_mult_y [: int]
+            x_mod_y = x % y
+            x_mod_y [: int]
+            x_pow_y = x ** y
+            x_pow_y [: int]
+            x_lshift_y = x << y
+            x_lshift_y [: int]
+            x_rshift_y = x >> y
+            x_rshift_y [: int]
+            x_bitor_y = x | y
+            x_bitor_y [: int]
+            x_bitxor_y = x ^ y
+            x_bitxor_y [: int]
+            x_bitand_y = x & y
+            x_bitand_y [: int]
+            x_floordiv_y = x // y
+            x_floordiv_y [: int]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), int]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = 123
+                y = 456
+                x_plus_y = (x + y)
+                x_plus_y
+                x_minus_y = (x - y)
+                x_minus_y
+                x_mult_y = (x * y)
+                x_mult_y
+                x_mod_y = (x % y)
+                x_mod_y
+                x_pow_y = (x ** y)
+                x_pow_y
+                x_lshift_y = (x << y)
+                x_lshift_y
+                x_rshift_y = (x >> y)
+                x_rshift_y
+                x_bitor_y = (x | y)
+                x_bitor_y
+                x_bitxor_y = (x ^ y)
+                x_bitxor_y
+                x_bitand_y = (x & y)
+                x_bitand_y
+                x_floordiv_y = (x // y)
+                return x_floordiv_y""")
 
 #
 # bool

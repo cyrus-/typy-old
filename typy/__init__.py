@@ -97,6 +97,8 @@ class Type(object):
     def init_inc_idx(cls, inc_idx):
         return inc_idx
 
+    # Num
+
     def ana_Num(self, ctx, e):
         raise NotSupportedError(self, "method", "ana_Num", e)
 
@@ -106,6 +108,8 @@ class Type(object):
     @classmethod
     def syn_idx_Num(self, ctx, e, inc_idx):
         raise NotSupportedError(self, "class method", "syn_idx_Num", e)
+
+    # Str 
 
     def ana_Str(self, ctx, e):
         raise NotSupportedError(self, "method", "ana_Str", e)
@@ -117,6 +121,8 @@ class Type(object):
     def translate_Str(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Str", e)
 
+    # Tuple
+
     def ana_Tuple(self, ctx, e):
         raise NotSupportedError(self, "method", "ana_Tuple", e)
 
@@ -127,6 +133,8 @@ class Type(object):
     def translate_Tuple(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Tuple", e)
 
+    # Name_constructor
+
     def ana_Name_constructor(self, ctx, e):
         raise NotSupportedError(self, "method", "ana_Name_constructor", e)
 
@@ -136,6 +144,23 @@ class Type(object):
 
     def translate_Name_constructor(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Name_constructor", e)
+
+    # UnaryOp
+
+    def syn_UnaryOp(self, ctx, e):
+        raise NotSupportedError(self, "method", "syn_UnaryOp", e)
+
+    def translate_UnaryOp(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_UnaryOp", e)
+
+    # BinOp
+
+    def syn_BinOp(self, ctx, e):
+        raise NotSupportedError(self, "method", "syn_BinOp", e)
+
+    def translate_BinOp(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_BinOp", e)
+
 
 class IncompleteType(object):
     """Represents an incomplete type, used for literal forms.
@@ -547,6 +572,15 @@ class Context(object):
             else:
                 raise TypeInvariantError(
                     "syn_UnaryOp did not return a type.", e)
+        elif isinstance(e, ast.BinOp):
+            left = e.left
+            delegate = self.syn(left)
+            ty = delegate.syn_BinOp(self, e)
+            if isinstance(ty, Type):
+                e.translation_method_name = 'translate_BinOp'
+            else:
+                raise TypeInvariantError(
+                    "syn_BinOp did not return a type.", e)
         else:
             raise TypeError("Unsupported form", e)
 
