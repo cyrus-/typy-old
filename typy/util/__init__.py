@@ -31,3 +31,8 @@ class DictStack(object):
         for d in reversed(self.stack):
             if key in d: return True
         return False 
+
+def tpl_cons(hd, tl):
+    yield hd
+    for x in tl:
+        yield x 
