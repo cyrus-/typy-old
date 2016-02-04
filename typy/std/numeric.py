@@ -2,7 +2,9 @@
 import ast 
 
 import typy
+import typy.util
 import typy.util.astx as astx
+import typy.std.boolean
 
 _pyint = int
 _pylong = long
@@ -59,9 +61,18 @@ class int_(typy.Type):
     def translate_BinOp(self, ctx, e):
         return astx.copy_node(e)
 
+    def syn_Compare(self, ctx, e):
+        left, ops, comparators = e.left, e.ops, e.comparators
+        for e_ in typy.util.tpl_cons(left, comparators):
+            if hasattr(e_, 'match'): continue # already synthesized
+            ctx.ana(e_, self)
+        for op in ops:
+            if isinstance(op, (ast.Is, ast.IsNot, ast.In, ast.NotIn)):
+                raise typy.TypeError("Type int does not support this operator.", op)
+        return typy.std.boolean.bool
 
-    # TODO: binary operators
-    # TODO: comparators
+    def translate_Compare(self, ctx, e):
+        return astx.copy_node(e)
 
 int = int_[()]
 

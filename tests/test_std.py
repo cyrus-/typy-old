@@ -74,7 +74,7 @@ def test_integer_ascription_on_string():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestIntegerUnaryOps():
+class TestIntegerUnaryOps:
     @pytest.fixture
     def f(self):
         @fp.fn
@@ -109,7 +109,7 @@ def test_integer_no_not():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestIntegerBinops():
+class TestIntegerBinops:
     @pytest.fixture
     def f(self):
         @fp.fn
@@ -171,6 +171,45 @@ class TestIntegerBinops():
                 x_floordiv_y = (x // y)
                 return x_floordiv_y""")
 
+class TestIntegerCompareOps:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x = 123 [: int]
+            x_eq_y = (x == 456 == 789)
+            x_eq_y [: bool]
+            x_neq_y = (x != 456 != 789)
+            x_neq_y [: bool]
+            x_lt_y = (x < 456 < 789)
+            x_lt_y [: bool]
+            x_lte_y = (x <= 456 <= 789)
+            x_lte_y [: bool]
+            x_gt_y = (x > 456 > 789)
+            x_gt_y [: bool]
+            x_gte_y = (x >= 456 >= 789)
+            x_gte_y [: bool]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), bool]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = 123
+                x_eq_y = (x == 456 == 789)
+                x_eq_y
+                x_neq_y = (x != 456 != 789)
+                x_neq_y
+                x_lt_y = (x < 456 < 789)
+                x_lt_y
+                x_lte_y = (x <= 456 <= 789)
+                x_lte_y
+                x_gt_y = (x > 456 > 789)
+                x_gt_y
+                x_gte_y = (x >= 456 >= 789)
+                return x_gte_y""")
 #
 # bool
 #

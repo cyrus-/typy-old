@@ -4,6 +4,7 @@ import inspect # for accessing source code for functions
 import textwrap # for stripping leading spaces
 
 import six # Python 2-3 compatibility, e.g. metaclasses
+import util
 # TODO: semver
 # TODO: fix indentation
 
@@ -160,6 +161,14 @@ class Type(object):
 
     def translate_BinOp(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_BinOp", e)
+
+    # Compare
+
+    def syn_Compare(self, ctx, e):
+        raise NotSupportedError(self, "method", "syn_Compare", e)
+
+    def translate_BinOp(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_Compare", e)
 
 
 class IncompleteType(object):
@@ -581,8 +590,27 @@ class Context(object):
             else:
                 raise TypeInvariantError(
                     "syn_BinOp did not return a type.", e)
+        elif isinstance(e, ast.Compare):
+            left, comparators = e.left, e.comparators
+            delegate, match = None, None
+            for e_ in util.tpl_cons(left, comparators):
+                try:
+                    delegate = self.syn(e_)
+                    match = e_
+                    break
+                except TypeError: 
+                    continue
+            if delegate is None:
+                raise TypeError("No comparators synthesize a type.", e)
+            match.match = True
+            ty = delegate.syn_Compare(self, e)
+            if isinstance(ty, Type):
+                e.translation_method_name = 'translate_Compare'
+            else:
+                raise TypeInvariantError(
+                    "syn_Compare did not return a type.", e)
         else:
-            raise TypeError("Unsupported form", e)
+            raise TypeError("Unsupported form for type synthesis: " + e.__class__.__name__, e)
 
         assert delegate is not None
         assert ty is not None 
@@ -602,6 +630,9 @@ class Context(object):
             elif isinstance(tree, ast.Name):
                 delegate = self.fn.tree.ty
                 return delegate.translate_Name(self, tree)
+            elif isinstance(tree, ast.Compare):
+                delegate = tree.delegate
+                return delegate.translate_Compare(self, tree)
             else:
                 method_name = tree.translation_method_name
                 delegate = tree.ty
