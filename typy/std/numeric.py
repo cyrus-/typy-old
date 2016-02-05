@@ -67,7 +67,7 @@ class int_(typy.Type):
             if hasattr(e_, 'match'): continue # already synthesized
             ctx.ana(e_, self)
         for op in ops:
-            if isinstance(op, (ast.Is, ast.IsNot, ast.In, ast.NotIn)):
+            if isinstance(op, (ast.In, ast.NotIn)):
                 raise typy.TypeError("Type int does not support this operator.", op)
         return typy.std.boolean.bool
 
