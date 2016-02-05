@@ -38,10 +38,6 @@ class unit_(typy.Type):
 unit = unit_[()]
 
 #
-# boolean
-#
-
-#
 # fn
 #
 

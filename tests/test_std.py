@@ -449,9 +449,9 @@ class TestBooleanBoolOps:
         @fp.fn
         def f():
             x [: bool] = True
-            x_and_y = (x and True)
+            x_and_y = (x and True and True and True)
             x_and_y [: bool]
-            x_or_y = (x or True)
+            x_or_y = (x or True or True or True)
             x_or_y [: bool]
         return f
 
@@ -462,7 +462,7 @@ class TestBooleanBoolOps:
         translation_eq(f, """
             def f():
                 x = True
-                x_and_y = (x and True)
+                x_and_y = (x and True and True and True)
                 x_and_y
-                x_or_y = (x or True)
+                x_or_y = (x or True or True or True)
                 return x_or_y""")

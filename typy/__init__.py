@@ -170,6 +170,14 @@ class Type(object):
     def translate_BinOp(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Compare", e)
 
+    # BoolOp
+
+    def syn_BoolOp(self, ctx, e):
+        raise NotSupportedError(self, "method", "syn_BoolOp", e)
+
+    def translate_BinOp(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_BoolOp", e)
+
 
 class IncompleteType(object):
     """Represents an incomplete type, used for literal forms.
@@ -609,6 +617,25 @@ class Context(object):
             else:
                 raise TypeInvariantError(
                     "syn_Compare did not return a type.", e)
+        elif isinstance(e, ast.BoolOp):
+            values = e.values
+            delegate, match = None, None
+            for value in values:
+                try:
+                    delegate = self.syn(value)
+                    match = value
+                    break
+                except TypeError:
+                    continue
+            if delegate is None:
+                raise TypeError("No clauses of boolean operation synthesize a type.", e)
+            match.match = True
+            ty = delegate.syn_BoolOp(self, e)
+            if isinstance(ty, Type):
+                e.translation_method_name = 'translate_BoolOp'
+            else:
+                raise TypeInvariantError(
+                    "syn_BoolOp did not return a type.", e)
         else:
             raise TypeError("Unsupported form for type synthesis: " + e.__class__.__name__, e)
 
@@ -628,11 +655,17 @@ class Context(object):
             if hasattr(tree, "is_ascription"):
                 return self.translate(tree.value)
             elif isinstance(tree, ast.Name):
-                delegate = self.fn.tree.ty
-                return delegate.translate_Name(self, tree)
-            elif isinstance(tree, ast.Compare):
+                if _is_intro_form(tree):
+                    delegate = tree.ty
+                    method = getattr(delegate, tree.translation_method_name)
+                    return method(self, tree)
+                else:
+                    delegate = self.fn.tree.ty
+                    return delegate.translate_Name(self, tree)
+            elif isinstance(tree, (ast.BoolOp, ast.Compare, ast.BinOp, ast.UnaryOp)):
                 delegate = tree.delegate
-                return delegate.translate_Compare(self, tree)
+                method = getattr(delegate, tree.translation_method_name)
+                return method(self, tree)
             else:
                 method_name = tree.translation_method_name
                 delegate = tree.ty

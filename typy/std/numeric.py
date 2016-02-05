@@ -63,12 +63,12 @@ class int_(typy.Type):
 
     def syn_Compare(self, ctx, e):
         left, ops, comparators = e.left, e.ops, e.comparators
-        for e_ in typy.util.tpl_cons(left, comparators):
-            if hasattr(e_, 'match'): continue # already synthesized
-            ctx.ana(e_, self)
         for op in ops:
             if isinstance(op, (ast.In, ast.NotIn)):
                 raise typy.TypeError("Type int does not support this operator.", op)
+        for e_ in typy.util.tpl_cons(left, comparators):
+            if hasattr(e_, 'match'): continue # already synthesized
+            ctx.ana(e_, self)
         return typy.std.boolean.bool
 
     def translate_Compare(self, ctx, e):
