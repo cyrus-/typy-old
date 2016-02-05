@@ -1,4 +1,6 @@
 """Python booleans"""
+import ast
+
 import typy
 
 class bool_(typy.Type):
@@ -31,6 +33,17 @@ class bool_(typy.Type):
         return ()
 
     def translate_Name_constructor(self, ctx, e):
+        return astx.copy_node(e)
+
+    def syn_UnaryOp(self, ctx, e):
+        if isinstance(e.op, ast.Not):
+            return self
+        else:
+            raise typy.TypeError(
+                """Type bool does not support this unary operator.""",
+                e)
+
+    def translate_UnaryOp(self, ctx, e):
         return astx.copy_node(e)
 
     # TODO: case/if operators
