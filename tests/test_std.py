@@ -189,6 +189,10 @@ class TestIntegerCompareOps:
             x_gt_y [: bool]
             x_gte_y = (x >= 456 >= 789)
             x_gte_y [: bool]
+            x_is_y = (x is 456 is 789)
+            x_is_y [: bool]
+            x_isnot_y = (x is not 456 is not 789)
+            x_isnot_y [: bool]
         return f
 
     def test_type(self, f):
@@ -209,7 +213,49 @@ class TestIntegerCompareOps:
                 x_gt_y = (x > 456 > 789)
                 x_gt_y
                 x_gte_y = (x >= 456 >= 789)
-                return x_gte_y""")
+                x_gte_y
+                x_is_y = (x is 456 is 789)
+                x_is_y
+                x_isnot_y = (x is not 456 is not 789)
+                return x_isnot_y""")
+
+def test_int_In():
+    @fp.fn
+    def test():
+        x [: int] = 123
+        y [: int] = 456
+        x in y
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_int_NotIn():
+    @fp.fn
+    def test():
+        x [: int] = 123
+        y [: int] = 456
+        x not in y
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_int_And():
+    @fp.fn
+    def test():
+        x [: int] = 123
+        y [: int] = 456
+        x and y
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_int_Or():
+    @fp.fn
+    def test():
+        x [: int] = 123
+        y [: int] = 456
+        x or y
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+
 #
 # bool
 #
@@ -251,7 +297,7 @@ class TestBooleanIncAscription:
     def f(self):
         @fp.fn
         def f():
-            True [: bool]
+            True [: bool_]
         return f
 
     def test_type(self, f):
@@ -268,3 +314,155 @@ def test_bool_ascription_bad():
         Bad [: bool]
     with pytest.raises(typy.TypeError):
         test.typecheck()
+
+class TestBooleanNot:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: bool] = True
+            not x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), bool]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = True
+                return (not x)""")
+
+def test_bool_Invert():
+    @fp.fn
+    def test():
+        x [: bool] = True
+        ~x
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_bool_UAdd():
+    @fp.fn
+    def test():
+        x [: bool] = True
+        +x
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_bool_USub():
+    @fp.fn
+    def test():
+        x [: bool] = True
+        -x
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestBooleanCompareOps:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: bool] = True
+            x_eq_y = (x == True)
+            x_eq_y [: bool]
+            x_neq_y = (x != True)
+            x_neq_y [: bool]
+            x_is_y = (x is True)
+            x_is_y [: bool]
+            x_isnot_y = (x is not True)
+            x_isnot_y
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), bool]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = True
+                x_eq_y = (x == True)
+                x_eq_y
+                x_neq_y = (x != True)
+                x_neq_y
+                x_is_y = (x is True)
+                x_is_y
+                x_isnot_y = (x is not True)
+                return x_isnot_y""")
+
+def test_bool_Lt():
+    @fp.fn
+    def test():
+        x [: bool] = True
+        y [: bool] = False
+        x < y
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_bool_LtE():
+    @fp.fn
+    def test():
+        x [: bool] = True
+        y [: bool] = False
+        x <= y
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_bool_Gt():
+    @fp.fn
+    def test():
+        x [: bool] = True
+        y [: bool] = False
+        x > y
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_bool_GtE():
+    @fp.fn
+    def test():
+        x [: bool] = True
+        y [: bool] = False
+        x >= y
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_bool_In():
+    @fp.fn
+    def test():
+        x [: bool] = True
+        y [: bool] = False
+        x in y
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_bool_NotIn():
+    @fp.fn
+    def test():
+        x [: bool] = True
+        y [: bool] = False
+        x not in y
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestBooleanBoolOps:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: bool] = True
+            x_and_y = (x and True)
+            x_and_y [: bool]
+            x_or_y = (x or True)
+            x_or_y [: bool]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), bool]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = True
+                x_and_y = (x and True)
+                x_and_y
+                x_or_y = (x or True)
+                return x_or_y""")
