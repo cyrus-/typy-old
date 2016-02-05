@@ -45,7 +45,9 @@ class bool_(typy.Type):
                 e)
 
     def translate_UnaryOp(self, ctx, e):
-        return astx.copy_node(e)
+        translation = astx.copy_node(e)
+        translation.operand = ctx.translate(e.operand)
+        return translation
 
     def syn_Compare(self, ctx, e):
         left, ops, comparators = e.left, e.ops, e.comparators
@@ -58,7 +60,12 @@ class bool_(typy.Type):
         return self
 
     def translate_Compare(self, ctx, e):
-        return astx.copy_node(e)
+        translation = astx.copy_node(e)
+        translation.left = ctx.translate(e.left)
+        translation.comparators = (
+            ctx.translate(comparator)
+            for comparator in e.comparators)
+        return translation
 
     def syn_BoolOp(self, ctx, e):
         values = e.values
@@ -67,7 +74,11 @@ class bool_(typy.Type):
         return self
 
     def translate_BoolOp(self, ctx, e):
-        return astx.copy_node(e)
+        translation = astx.copy_node(e)
+        translation.values = tuple(
+            ctx.translate(value)
+            for value in e.values)
+        return translation
 
     # TODO: case/if operators
 bool = bool_[()]

@@ -4,6 +4,7 @@ import ast
 import typy
 import typy.util 
 import typy.util.astx as astx
+import typy.std
 
 #
 # unit
@@ -34,6 +35,25 @@ class unit_(typy.Type):
 
     def translate_Tuple(self, ctx, e):
         return ast.Name("None", ast.Load())
+
+    def syn_Compare(self, ctx, e):
+        left, ops, comparators = e.left, e.ops, e.comparators
+        for op in ops:
+            if not isinstance(op, (ast.Eq, ast.NotEq, ast.Is, ast.IsNot)):
+                raise typy.TypeError(
+                    "Unit type does not support this operator.", e)
+        for e_ in typy.util.tpl_cons(left, comparators):
+            if hasattr(e_, "match"): continue # already synthesized
+            ctx.ana(e_, self)
+        return typy.std.bool
+
+    def translate_Compare(self, ctx, e):
+        translation=astx.copy_node(e)
+        translation.left = ctx.translate(e.left)
+        translation.comparators = tuple(
+            ctx.translate(comparator)
+            for comparator in e.comparators)
+        return translation
 
 unit = unit_[()]
 

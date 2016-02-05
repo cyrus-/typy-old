@@ -667,6 +667,86 @@ def test_unit_bad_omitted_inc_ascription():
     with pytest.raises(typy.NotSupportedError):
         test.typecheck()
 
+class TestUnitCompare:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: unit] = ()
+            x_eq_y = (x == () == ())
+            x_eq_y [: bool]
+            x_neq_y = (x != () != ())
+            x_neq_y [: bool]
+            x_is_y = (x is () is ())
+            x_is_y [: bool]
+            x_isnot_y = (x is not () is not ())
+            x_isnot_y [: bool]
+        return f
+
+    def test_type(self, f): 
+        assert f.typecheck() == fp.fn[(), bool]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = None
+                x_eq_y = (x == None == None)
+                x_eq_y
+                x_neq_y = (x != None != None)
+                x_neq_y
+                x_is_y = (x is None is None)
+                x_is_y
+                x_isnot_y = (x is not None is not None)
+                return x_isnot_y""")
+
+def test_unit_Lt():
+    @fp.fn
+    def f():
+        x [: unit] = ()
+        x < ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_unit_LtE():
+    @fp.fn
+    def f():
+        x [: unit] = ()
+        x <= ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_unit_Gt():
+    @fp.fn
+    def f():
+        x [: unit] = ()
+        x > ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_unit_GtE():
+    @fp.fn
+    def f():
+        x [: unit] = ()
+        x >= ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_unit_In():
+    @fp.fn
+    def f():
+        x [: unit] = ()
+        x in ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_unit_NotIn():
+    @fp.fn
+    def f():
+        x [: unit] = ()
+        x not in ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
 # Variables
 
 class TestVariableLookup:

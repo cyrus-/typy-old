@@ -49,7 +49,9 @@ class int_(typy.Type):
             raise typy.TypeError("Invalid unary operator 'not' for operand of type int.", e)
 
     def translate_UnaryOp(self, ctx, e):
-        return astx.copy_node(e)
+        translation = astx.copy_node(e)
+        translation.operand = ctx.translate(e.operand)
+        return translation
 
     def syn_BinOp(self, ctx, e):
         op = e.op
@@ -59,7 +61,10 @@ class int_(typy.Type):
         return self
 
     def translate_BinOp(self, ctx, e):
-        return astx.copy_node(e)
+        translation = astx.copy_node(e)
+        translation.left = ctx.translate(e.left)
+        translation.right = ctx.translate(e.right)
+        return translation
 
     def syn_Compare(self, ctx, e):
         left, ops, comparators = e.left, e.ops, e.comparators
@@ -72,7 +77,12 @@ class int_(typy.Type):
         return typy.std.boolean.bool
 
     def translate_Compare(self, ctx, e):
-        return astx.copy_node(e)
+        translation = astx.copy_node(e)
+        translation.left = ctx.translate(e.left)
+        translation.comparators = (
+            ctx.translate(comparator)
+            for comparator in e.comparators)
+        return translation
 
 int = int_[()]
 
