@@ -606,8 +606,6 @@ class TestFloatUnaryOps:
             x_plus [: float]
             x_minus = -x
             x_minus [: float]
-            x_invert = ~x
-            x_invert [: float]
         return f
 
     def test_type(self, f):
@@ -620,14 +618,20 @@ class TestFloatUnaryOps:
                 x_plus = (+ x)
                 x_plus
                 x_minus = (- x)
-                x_minus
-                x_invert = (~ x)
-                return x_invert""")
+                return x_minus""")
 
 def test_float_no_not():
     @fp.fn
     def test():
         not (3 [: float])
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_float_no_invert():
+    @fp.fn
+    def test():
+        x [: float] = 3
+        ~x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
@@ -648,16 +652,6 @@ class TestFloatBinops:
             x_mod_y [: float]
             x_pow_y = x ** y
             x_pow_y [: float]
-            x_lshift_y = x << y
-            x_lshift_y [: float]
-            x_rshift_y = x >> y
-            x_rshift_y [: float]
-            x_bitor_y = x | y
-            x_bitor_y [: float]
-            x_bitxor_y = x ^ y
-            x_bitxor_y [: float]
-            x_bitand_y = x & y
-            x_bitand_y [: float]
             x_div_y = x / y
             x_div_y [: float]
             x_floordiv_y = x // y
@@ -682,21 +676,51 @@ class TestFloatBinops:
                 x_mod_y
                 x_pow_y = (x ** y)
                 x_pow_y
-                x_lshift_y = (x << y)
-                x_lshift_y
-                x_rshift_y = (x >> y)
-                x_rshift_y
-                x_bitor_y = (x | y)
-                x_bitor_y
-                x_bitxor_y = (x ^ y)
-                x_bitxor_y
-                x_bitand_y = (x & y)
-                x_bitand_y
                 x_div_y = (x / y)
                 x_div_y
                 x_floordiv_y = (x // y)
                 return x_floordiv_y""")
 
+def test_float_no_lshift():
+    @fp.fn
+    def test():
+        x [: float] = 3
+        x << x
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_float_no_rshift():
+    @fp.fn
+    def test():
+        x [: float] = 3
+        x >> x
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_float_no_bitor():
+    @fp.fn
+    def test():
+        x [: float] = 3
+        x | x
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_float_no_bitxor():
+    @fp.fn
+    def test():
+        x [: float] = 3
+        x ^ x
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_float_no_bitand():
+    @fp.fn
+    def test():
+        x [: float] = 3
+        x & x
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+ 
 class TestFloatCompareOps:
     @pytest.fixture
     def f(self):
