@@ -6,7 +6,7 @@ from utils import *
 import typy
 import typy.fp as fp
 import typy.std as std
-from typy.std import int, int_, float, float_, bool, bool_, complex, complex_
+from typy.std import int, int_, float, float_, bool, bool_, complex, complex_, str, str_
 
 #
 # bool
@@ -1370,3 +1370,8 @@ class TestConvertFC():
             def f():
                 x = 456.0
                 return __builtin__.complex(x)""")
+
+#
+# str
+# 
+

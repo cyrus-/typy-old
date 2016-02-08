@@ -54,3 +54,45 @@ class str_(typy.Type):
             ctx.ana(e_, self)
         return typy.std.boolean.bool
 
+    def translate_Compare(self, ctx, e):
+        translation = astx.copy_node(e)
+        translation.left = ctx.translate(e.left)
+        translation.comparators = tuple(
+            ctx.translate(comparators)
+            for comparator in comparators)
+        return translation
+
+    def syn_Subscript(self, ctx, e):
+        slice_ = e.slice 
+        if isinstance(slice_, ast.Ellipsis):
+            raise typy.TypeError("String slice cannot be an Ellipsis.", e)
+        elif isinstance(slice_, ast.ExtSlice):
+            raise typy.TypeError("String slice can only have one dimension.", e)
+        elif isinstance(slice_, ast.Index):
+            ctx.ana(slice_.value, int)
+        else: #if isinstance(slice_, ast.Slice):
+            lower, upper, step = slice_.lower, slice_.upper, slice_.step
+            if lower is not None:
+                ctx.ana(lower, int)
+            if upper is not None:
+                ctx.ana(upper, int)
+            if step is not None:
+                ctx.ana(step, int)
+        return self
+
+    def translate_Subscript(self, ctx, e):
+        translation = astx.copy_node(e)
+        translation.value = ctx.translate(e.value)
+        slice_ = e.slice
+        slice_translation = astx.copy_node(slice_)
+        if isinstance(slice_, ast.Index):
+            slice_translation.value = ctx.translate(slice_.value)
+        else:
+            lower, upper, step = slice_.lower, slice_.upper, slice_.step
+            slice_translation.lower = ctx.translate(lower) if lower is not None else None
+            slice_translation.upper = ctx.translate(upper) if upper is not None else None
+            slice_translation.step = ctx.translate(step) if step is not None else None
+        translation.slice = slice_translation
+        return translation 
+
+str = str_[()]
