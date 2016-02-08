@@ -186,6 +186,14 @@ class Type(object):
     def translate_Attribute(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Attribute", e)
 
+    # Subscript
+
+    def syn_Subscript(self, ctx, e):
+        raise NotSupportedError(self, "method", "syn_Subscript", e)
+
+    def translate_Subscript(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_Subscript", e)
+
     # Call
 
     def syn_Call(self, ctx, e):

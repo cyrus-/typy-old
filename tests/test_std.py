@@ -1375,3 +1375,153 @@ class TestConvertFC():
 # str
 # 
 
+class TestStringIntro:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            "test" [: str]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), str]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return 'test'""")
+
+class TestStringIncIntro:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            "test" [: str_]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), str]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return 'test'""")
+
+def test_string_num_intro():
+    @fp.fn
+    def test(self):
+        123 [: str]
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestStringAdd:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            ("test" [: str]) + "test"
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), str]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ('test' + 'test')""")
+
+class TestStringCompare:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x = "abc" [: str] == "def" == "ghi"
+            x [: bool]
+            x = "abc" [: str] != "def" != "ghi"
+            x [: bool]
+            x = "abc" [: str] is "def" is "ghi"
+            x [: bool]
+            x = "abc" [: str] is not "def" is not "ghi"
+            x [: bool]
+            x = "abc" [: str] in "def" in "ghi"
+            x [: bool]
+            x = "abc" [: str] not in "def" not in "ghi"
+            x [: bool]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), bool]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = ('abc' == 'def' == 'ghi')
+                x
+                x = ('abc' != 'def' != 'ghi')
+                x
+                x = ('abc' is 'def' is 'ghi')
+                x
+                x = ('abc' is not 'def' is not 'ghi')
+                x
+                x = ('abc' in 'def' in 'ghi')
+                x
+                x = ('abc' not in 'def' not in 'ghi')
+                return x""") 
+
+class TestStringSubscript:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: str] = "abcdefg"
+            y = x[0]
+            y [: str]
+            y = x[0:1]
+            y [: str]
+            y = x[0:1:2]
+            y [: str]
+            y = x[0:]
+            y [: str]
+            # no x[:1] because that's ascription syntax
+            # can always use x[0:1] for this
+            y = x[0:1:]
+            y [: str]
+            y = x[0::1]
+            y [: str]
+            y = x[:0:1]
+            y [: str]
+            y = x[0::]
+            y [: str]
+            y = x[:0:]
+            y [: str]
+            y = x[::0]
+            y [: str]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), str]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = 'abcdefg'
+                y = x[0]
+                y
+                y = x[0:1]
+                y
+                y = x[0:1:2]
+                y
+                y = x[0:]
+                y
+                y = x[0:1]
+                y
+                y = x[0::1]
+                y
+                y = x[:0:1]
+                y
+                y = x[0:]
+                y
+                y = x[:0]
+                y
+                y = x[::0]
+                return y""")

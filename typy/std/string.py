@@ -5,7 +5,7 @@ import typy
 import typy.util
 import typy.util.astx as astx
 import typy.std.boolean
-import typy.fp
+import typy.std.numeric
 
 class str_(typy.Type):
     @classmethod
@@ -33,7 +33,7 @@ class str_(typy.Type):
     def syn_BinOp(self, ctx, e):
         op = e.op
         if isinstance(op, ast.Add):
-            e.ana(e.right, self)
+            ctx.ana(e.right, self)
             return self
         else:
             raise typy.TypeError("Invalid binary operator on strings.", e)
@@ -58,8 +58,8 @@ class str_(typy.Type):
         translation = astx.copy_node(e)
         translation.left = ctx.translate(e.left)
         translation.comparators = tuple(
-            ctx.translate(comparators)
-            for comparator in comparators)
+            ctx.translate(comparator)
+            for comparator in e.comparators)
         return translation
 
     def syn_Subscript(self, ctx, e):
@@ -69,15 +69,15 @@ class str_(typy.Type):
         elif isinstance(slice_, ast.ExtSlice):
             raise typy.TypeError("String slice can only have one dimension.", e)
         elif isinstance(slice_, ast.Index):
-            ctx.ana(slice_.value, int)
+            ctx.ana(slice_.value, typy.std.numeric.int)
         else: #if isinstance(slice_, ast.Slice):
             lower, upper, step = slice_.lower, slice_.upper, slice_.step
             if lower is not None:
-                ctx.ana(lower, int)
+                ctx.ana(lower, typy.std.numeric.int)
             if upper is not None:
-                ctx.ana(upper, int)
-            if step is not None:
-                ctx.ana(step, int)
+                ctx.ana(upper, typy.std.numeric.int)
+            if not _is_None(step):
+                ctx.ana(step, typy.std.numeric.int)
         return self
 
     def translate_Subscript(self, ctx, e):
@@ -91,8 +91,22 @@ class str_(typy.Type):
             lower, upper, step = slice_.lower, slice_.upper, slice_.step
             slice_translation.lower = ctx.translate(lower) if lower is not None else None
             slice_translation.upper = ctx.translate(upper) if upper is not None else None
-            slice_translation.step = ctx.translate(step) if step is not None else None
+            if not _is_None(step):
+                slice_translation.step = ctx.translate(step)
+            else:
+                slice_translation.step = None
         translation.slice = slice_translation
         return translation 
+
+def _is_None(node):
+    #
+    # for some reason, 
+    #
+    #   > ast.dump(ast.parse(x[0:1:]))
+    #   Module(body=[Expr(value=Subscript(value=Name(id='x', ctx=Load()), slice=Slice(lower=Num(n=0), upper=None, step=Name(id='None', ctx=Load())), ctx=Load()))])
+    #
+    # notice that the step value is not 'None' but the Name that contains 'None'. Need to special case this.
+    #
+    return node is None or (isinstance(node, ast.Name) and node.id == 'None')
 
 str = str_[()]
