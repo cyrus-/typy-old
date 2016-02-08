@@ -82,7 +82,7 @@ class int_(typy.Type):
     def translate_Compare(self, ctx, e):
         translation = astx.copy_node(e)
         translation.left = ctx.translate(e.left)
-        translation.comparators = (
+        translation.comparators = tuple(
             ctx.translate(comparator)
             for comparator in e.comparators)
         return translation
@@ -339,3 +339,9 @@ class complex_(typy.Type):
         return translation
 
 complex = complex_[()]
+
+# MAYBE: ~x on complex equivalent to x.conjugate()?
+# MAYBE: x.conj equivalent to x.conjugate?
+# MAYBE: float to integer helper?
+# MAYBE: expose .bitwidth method of int
+# TODO: wrap builtin functions
