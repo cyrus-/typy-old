@@ -178,6 +178,21 @@ class Type(object):
     def translate_BinOp(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_BoolOp", e)
 
+    # Attribute
+
+    def syn_Attribute(self, ctx, e):
+        raise NotSupportedError(self, "method", "syn_Attribute", e)
+
+    def translate_Attribute(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_Attribute", e)
+
+    # Call
+
+    def syn_Call(self, ctx, e):
+        raise NotSupportedError(self, "method", "syn_Call", e)
+
+    def translate_Call(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_Call", e)
 
 class IncompleteType(object):
     """Represents an incomplete type, used for literal forms.
@@ -580,6 +595,15 @@ class Context(object):
             else:
                 raise TypeInvariantError(
                     "syn_Name did not return a type.", e)
+        elif isinstance(e, ast.Call):
+            func = e.func
+            delegate = self.syn(func)
+            ty = delegate.syn_Call(self, e)
+            if isinstance(ty, Type):
+                e.translation_method_name = 'translate_Call'
+            else:
+                raise TypeInvariantError(
+                    "syn_Call did not return a type.", e)
         elif isinstance(e, ast.UnaryOp):
             operand = e.operand
             delegate = self.syn(operand)
@@ -636,6 +660,15 @@ class Context(object):
             else:
                 raise TypeInvariantError(
                     "syn_BoolOp did not return a type.", e)
+        elif isinstance(e, ast.Attribute):
+            value = e.value
+            delegate = self.syn(value)
+            ty = delegate.syn_Attribute(self, e)
+            if isinstance(ty, Type):
+                e.translation_method_name = 'translate_Attribute'
+            else:
+                raise TypeInvariantError(
+                    "syn_Attribute did not return a type.", e)
         else:
             raise TypeError("Unsupported form for type synthesis: " + e.__class__.__name__, e)
 
@@ -662,7 +695,7 @@ class Context(object):
                 else:
                     delegate = self.fn.tree.ty
                     return delegate.translate_Name(self, tree)
-            elif isinstance(tree, (ast.BoolOp, ast.Compare, ast.BinOp, ast.UnaryOp)):
+            elif isinstance(tree, (ast.Call, ast.Attribute, ast.BoolOp, ast.Compare, ast.BinOp, ast.UnaryOp)):
                 delegate = tree.delegate
                 method = getattr(delegate, tree.translation_method_name)
                 return method(self, tree)

@@ -64,3 +64,13 @@ def deep_copy_node(node, *args, **kwargs):
 
     return new_node
 
+def builtin_call(name, args):
+    return ast.Call(
+        func=ast.Attribute(
+            value=ast.Name(
+                id='__builtin__', ctx=ast.Load()), 
+            attr=name, ctx=ast.Load()),
+        args=args, 
+        keywords=[], 
+        starargs=None, 
+        kwargs=None)

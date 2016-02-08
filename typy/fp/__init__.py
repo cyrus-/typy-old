@@ -286,6 +286,34 @@ class fn(typy.FnType):
     def translate_Expr(self, ctx, stmt):
         return ast.Expr(ctx.translate(stmt.value))
 
+    def syn_Call(self, ctx, e):
+        args, keywords, starargs, kwargs = e.args, e.keywords, e.starargs, e.kwargs
+        if len(keywords) != 0 or kwargs != None:
+            raise typy.TypeError("Keyword arguments are not supported.",
+                e)
+        if starargs != None:
+            raise typy.TypeError("Star arguments are not supported.",
+                e)
+        arg_types, return_type = self.idx
+        n_args = len(args)
+        n_arg_types = len(arg_types)
+        if n_args < n_arg_types:
+            raise typy.TypeError("Too few arguments.", e)
+        elif n_args > n_arg_types:
+            raise typy.TypeError("Too many arguments.", args[n_arg_types])
+        for (arg, arg_type) in zip(args, arg_types):
+            ctx.ana(arg, arg_type)
+        return return_type 
+
+    def translate_Call(self, ctx, e):
+        func, args = e.func, e.args
+        translation = astx.copy_node(e)
+        translation.func = ctx.translate(func)
+        translation.args = list(
+            ctx.translate(arg)
+            for arg in args)
+        return translation
+
 def _normalize_fn_idx(idx):
     len_idx = len(idx)
     if len_idx < 2:
