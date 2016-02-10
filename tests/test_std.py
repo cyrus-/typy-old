@@ -1702,3 +1702,131 @@ class TestTplTupleIncIntro():
                 z2 = (x, y)
                 return z2""")
 
+class TestTplDictIntro():
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            z1 [: tpl[str, int]] = {0 : "test", 1 : 0}
+            z2 [: tpl['lbl0' : str, 'lbl1' : int]] = {'lbl0': "test", 'lbl1': 0}
+            z3 [: tpl['lbl0' : str, 'lbl1' : int]] = {'lbl1': 0, 'lbl0': "test"}
+            z3
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), tpl['lbl0' : str, 'lbl1' : int]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                z1 = (lambda x: (x[0], x[1]))(('test', 0))
+                z2 = (lambda x: (x[0], x[1]))(('test', 0))
+                z3 = (lambda x: (x[1], x[0]))((0, 'test'))
+                return z3""")
+
+def test_tpl_Dict_intro_few():
+    @fp.fn
+    def test():
+        z1 [: tpl[str, int]] = {0 : "test"}
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_tpl_Dict_intro_many():
+    @fp.fn 
+    def test():
+        z1 [: tpl[str, int]] = {0 : "test", 1 : 0, 2 : 0}
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestTplDictIncIntro():
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: str] = "test"
+            y [: int] = 0
+            z1 [: tpl] = {'lbl0' : x, 'lbl1' : y}
+            z1
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), tpl['lbl0' : str, 'lbl1' : int]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = 'test'
+                y = 0
+                z1 = (lambda x: (x[0], x[1]))((x, y))
+                return z1""")
+
+def test_tpl_Dict_empty_lbl():
+    @fp.fn
+    def test():
+        x [: str] = "test"
+        z1 [: tpl] = {'' : x}
+        z1
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_tpl_Dict_neg_lbl():
+    @fp.fn
+    def test():
+        x [: str] = "test"
+        z1 [: tpl] = {-1 : x}
+        z1
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_tpl_Dict_bad_lbl():
+    @fp.fn 
+    def test():
+        x [: str] = "test"
+        z1 [: tpl] = {None : x}
+        z1
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_tpl_Dict_duplicate_lbl():
+    @fp.fn
+    def test():
+        x [: str] = "test"
+        y [: int] = 0
+        z1 [: tpl] = {"lbl0": x, "lbl0": y}
+        z1
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestTplDictAttribute():
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f(x):
+            {x : tpl['lbl0' : str]}
+            x.lbl0
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[tpl['lbl0' : str], str]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return x[0]""")
+
+class TestTplDictAttribute():
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f(x):
+            {x : tpl[str, 'lbl1' : int]}
+            (x[0], x['lbl1']) [: tpl]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[tpl[str, 'lbl1' : int], tpl[str, int]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (x[0], x[1])""")

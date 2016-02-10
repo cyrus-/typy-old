@@ -712,7 +712,7 @@ class Context(object):
                 else:
                     delegate = self.fn.tree.ty
                     translation = delegate.translate_Name(self, tree)
-            elif isinstance(tree, (ast.Call, ast.Attribute, ast.BoolOp, ast.Compare, ast.BinOp, ast.UnaryOp)):
+            elif isinstance(tree, (ast.Call, ast.Subscript, ast.Attribute, ast.BoolOp, ast.Compare, ast.BinOp, ast.UnaryOp)):
                 delegate = tree.delegate
                 method = getattr(delegate, tree.translation_method_name)
                 translation = method(self, tree)

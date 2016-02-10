@@ -59,7 +59,7 @@ class tpl(typy.Type):
         if n_keys < n_idx:
             raise typy.TypeError(
                 "Too few components provided.", e)
-        elif n_elts > n_idx:
+        elif n_keys > n_idx:
             raise typy.TypeError(
                 "Too many components provided.", e)
 
@@ -75,13 +75,14 @@ class tpl(typy.Type):
                 raise typy.TypeError(
                     "Invalid label: " + str(label), key)
             used_labels.add(label)
+            key.evaluated = label
             ctx.ana(value, ty)
 
     @classmethod
     def syn_idx_Dict(self, ctx, e, inc_idx):
         keys, values = e.keys, e.values
-        idx = ordereddict.OrderedDict()
-        for i, (key, value) in enumerate(zip(keys, values)):
+        idx = { }
+        for key, value in zip(keys, values):
             label = ctx.fn.static_env.eval_expr_ast(key)
             if isinstance(label, six.string_types):
                 if len(label) == 0:
@@ -98,9 +99,9 @@ class tpl(typy.Type):
                 raise typy.TypeError(
                     "Duplicate label: " + str(label), key)
             ty = ctx.syn(value)
-            idx[label] = (i, ty)
+            idx[label] = (label, ty)
             key.evaluated = label
-        return idx
+        return tuple(idx.itervalues())
 
     def translate_Dict(self, ctx, e):
         keys, values = e.keys, e.values
@@ -115,7 +116,7 @@ class tpl(typy.Type):
         lambda_translation = ast.Lambda(
             args=ast.arguments(
                 args=[ast.Name(id='x', ctx=ast.Param())],
-                vargarg=None,
+                vararg=None,
                 kwarg=None,
                 defaults=[]),
             body=ast.Tuple(
@@ -155,7 +156,7 @@ class tpl(typy.Type):
             value=ctx.translate(e.value),
             slice=ast.Num(n=n),
             ctx=ast.Load()
-        ))
+        ), e)
 
     def syn_Subscript(self, ctx, e):
         slice_ = e.slice
@@ -164,20 +165,21 @@ class tpl(typy.Type):
         value = slice_.value
         label = ctx.fn.static_env.eval_expr_ast(value)
         try:
-            (_, ty) = idx[label]
+            (_, ty) = self.idx[label]
         except KeyError:
             raise typy.TypeError("Cannot project component labeled " + str(label), e)
         value.evaluated = label
         return ty
 
     def translate_Subscript(self, ctx, e):
+        value = e.value 
         label = e.slice.value.evaluated
         (n, _) = self.idx[label]
         return ast.copy_location(ast.Subscript(
             value=ctx.translate(value),
             slice=ast.Num(n=n),
             ctx=ast.Load()
-        )) 
+        ), e)
 
     # TODO: x + y
     # TODO: x - "label"
