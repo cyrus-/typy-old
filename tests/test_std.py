@@ -1525,3 +1525,180 @@ class TestStringSubscript:
                 y
                 y = x[::0]
                 return y""")
+
+# 
+# tpl
+#
+from typy.std import tpl
+import ordereddict
+OD = ordereddict.OrderedDict
+
+def test_tpl_formation_unit():
+    assert isinstance(tpl[()], typy.Type)
+    assert tpl[()].idx == OD(())
+
+def test_tpl_formation_single_ty():
+    assert isinstance(tpl[int], typy.Type)
+    assert tpl[int].idx == OD(((0, (0, int)),))
+
+def test_tpl_formation_two_ty():
+    assert isinstance(tpl[int, int], typy.Type)
+    assert tpl[int, int].idx == OD((
+        (0, (0, int)),
+        (1, (1, int))
+    ))
+
+def test_tpl_formation_single_noty():
+    with pytest.raises(typy.TypeFormationError):
+        tpl["int"]
+
+def test_tpl_formation_two_noty():
+    with pytest.raises(typy.TypeFormationError):
+        tpl[int, "int"]
+
+def test_tpl_formation_single_label():
+    assert tpl["lbl0" : int].idx == OD((
+        ("lbl0", (0, int)),
+    ))
+
+def test_tpl_formation_two_labels():
+    assert tpl["lbl0": int, "lbl1": str].idx == OD((
+        ("lbl0", (0, int)),
+        ("lbl1", (1, str))
+    ))
+
+def test_tpl_formation_duplicate_labels():
+    with pytest.raises(typy.TypeFormationError):
+        tpl["lbl0": int, "lbl0": str]
+
+def test_tpl_formation_empty_lbl():
+    with pytest.raises(typy.TypeFormationError):
+        tpl["": int]
+
+def test_tpl_formation_int_labels():
+    assert tpl[1 : int, 0 : int].idx == OD((
+        (1, (0, int)),
+        (0, (1, int))
+    ))
+
+def test_tpl_formation_neg_label():
+    with pytest.raises(typy.TypeFormationError):
+        tpl[-1 : int]
+
+def test_tpl_formation_non_string_label():
+    with pytest.raises(typy.TypeFormationError):
+        tpl[None : int]
+
+def test_tpl_formation_non_type_component():
+    with pytest.raises(typy.TypeFormationError):
+        tpl["lbl0" : None]
+
+def test_tpl_inc_ty_formation():
+    assert isinstance(tpl[...], typy.IncompleteType)
+
+def test_tpl_inc_ty_formation_bad():
+    with pytest.raises(typy.TypeFormationError):
+        tpl[..., 'lbl0' : int]
+
+class TestTplTupleIntroUnit:
+    @pytest.fixture
+    def f(self):
+        @fp.fn 
+        def f():
+            () [: tpl[()]]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), tpl[()]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+class TestTplTupleIncIntroUnit:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            () [: tpl]
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), tpl[()]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+class TestTplTupleIntro:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: str] = "test"
+            y [: int] = 0
+            z1 [: tpl[str]] = (x,)
+            z2 [: tpl[str, int]] = (x, y)
+            z3 [: tpl['lbl0': str]] = (x,)
+            z4 [: tpl['lbl0': str, 'lbl1': int]] = (x, y)
+            z4
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), tpl['lbl0': str, 'lbl1': int]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = 'test'
+                y = 0
+                z1 = (x,)
+                z2 = (x, y)
+                z3 = (x,)
+                z4 = (x, y)
+                return z4""")
+
+def test_tpl_Tuple_intro_few():
+    @fp.fn
+    def test():
+        x [: str] = "test"
+        z [: tpl[str, int]] = (x,)
+        z
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_tpl_Tuple_intro_many():
+    @fp.fn
+    def test():
+        x [: str] = "test"
+        z [: tpl[str, str, int]] = (x, x)
+        z
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestTplTupleIncIntro():
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            x [: str] = "test"
+            y [: int] = 0
+            z1 [: tpl]  = () 
+            z2 [: tpl] = (x, y)
+            z2
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), tpl[str, int]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = 'test'
+                y = 0
+                z1 = ()
+                z2 = (x, y)
+                return z2""")
+

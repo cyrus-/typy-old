@@ -11,5 +11,5 @@ setup(
 	license='MIT',
 	description='A programmable static type system as a Python library.',
 	long_description='',
-	install_requires=('astunparse',)
+	install_requires=('astunparse','six','ordereddict')
 )

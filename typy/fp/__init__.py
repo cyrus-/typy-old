@@ -263,9 +263,13 @@ class fn(typy.FnType):
         asc_ty = _process_targets(ctx, targets)
         if asc_ty == None:
             ty = ctx.syn(value)
-        else:
+        elif isinstance(asc_ty, typy.Type):
             ty = asc_ty 
             ctx.ana(value, ty)
+        elif isinstance(asc_ty, typy.IncompleteType):
+            ty = ctx.ana_intro_inc(value, asc_ty)
+        else:
+            raise typy.TypeError("Invalid type ascription", stmt)
         _update_targets(ctx, targets, ty)
 
     def translate_Assign(self, ctx, stmt):
@@ -458,8 +462,22 @@ def _process_targets(ctx, targets):
                                 raise typy.TypeError(
                                     "Variable {0} has conflicting types.".format(target_value.id), target)
                         else:
-                            raise typy.TypeError(
-                                "Variable type ascription is not a type.", upper)
+                            if issubclass(cur_asc_ty, typy.Type):
+                                cur_asc_ty = cur_asc_ty[...]
+
+                            if isinstance(cur_asc_ty, typy.IncompleteType):
+                                try:
+                                    ctx_ty = variables[id]
+                                except KeyError:
+                                    if asc_ty is None:
+                                        asc_ty = cur_asc_ty
+                                    elif asc_ty != cur_asc_ty:
+                                        raise typy.TypeError("Variable {0} has conflicting types.", upper)
+                                else:
+                                    raise typy.TypeError("Variable already has a type.", upper)
+                            else:
+                                raise typy.TypeError(
+                                    "Variable type ascription is not a type or incomplete type.", upper)
         else:
             raise typy.TypeError(
                 "Form not supported for assignment.", target)

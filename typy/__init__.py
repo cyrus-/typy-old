@@ -544,6 +544,23 @@ class Context(object):
         method = getattr(delegate, check_method)
         method(self, stmt)
 
+    def ana_intro_inc(self, value, inc_ty):
+        if not _is_intro_form(value):
+            raise UsageError("Expression is not an intro form.")
+        if not isinstance(inc_ty, IncompleteType):
+            raise UsageError("No incomplete type provided.")
+        classname = value.__class__.__name__
+        if classname == "Name":
+            classname = "Name_constructor"
+        syn_idx_methodname = 'syn_idx_%s' % classname
+        delegate = inc_ty.tycon
+        method = getattr(delegate, syn_idx_methodname)
+        syn_idx = method(self, value, inc_ty.inc_idx)
+        ty = _construct_ty(delegate, syn_idx)
+        value.translation_method_name = "translate_%s" % classname
+        value.delegate, value.ty = delegate, ty
+        return ty 
+
     def ana(self, e, ty):
         if not isinstance(e, ast.expr):
             raise UsageError("Cannot analyze a non-expression.")
@@ -574,17 +591,9 @@ class Context(object):
                 e.is_ascription = True 
             elif isinstance(ty, IncompleteType):
                 if _is_intro_form(value):
-                    classname = value.__class__.__name__
-                    if classname == "Name":
-                        classname = "Name_constructor"
-                    syn_idx_methodname = 'syn_idx_%s' % classname
-                    delegate = ty.tycon
-                    method = getattr(delegate, syn_idx_methodname)
-                    syn_idx = method(self, value, ty.inc_idx)
-                    ty = _construct_ty(delegate, syn_idx)
+                    self.ana_intro_inc(value, ty)
+                    delegate, ty = value.delegate, value.ty
                     e.is_ascription = True 
-                    value.translation_method_name = "translate_%s" % classname
-                    value.delegate, value.ty = delegate, ty
                 else:
                     raise TypeError(
                         "Incomplete type ascriptions can only appear on introductory forms.", 
@@ -691,29 +700,30 @@ class Context(object):
             method_name = 'translate_' + classname
             delegate = self.fn.tree.ty
             method = getattr(delegate, method_name)
-            return method(self, tree)
+            translation = method(self, tree)
         elif isinstance(tree, ast.expr):
             if hasattr(tree, "is_ascription"):
-                return self.translate(tree.value)
+                translation = self.translate(tree.value)
             elif isinstance(tree, ast.Name):
                 if _is_intro_form(tree):
                     delegate = tree.ty
                     method = getattr(delegate, tree.translation_method_name)
-                    return method(self, tree)
+                    translation = method(self, tree)
                 else:
                     delegate = self.fn.tree.ty
-                    return delegate.translate_Name(self, tree)
+                    translation = delegate.translate_Name(self, tree)
             elif isinstance(tree, (ast.Call, ast.Attribute, ast.BoolOp, ast.Compare, ast.BinOp, ast.UnaryOp)):
                 delegate = tree.delegate
                 method = getattr(delegate, tree.translation_method_name)
-                return method(self, tree)
+                translation = method(self, tree)
             else:
                 method_name = tree.translation_method_name
                 delegate = tree.ty
                 method = getattr(delegate, method_name)
-                return method(self, tree)
+                translation = method(self, tree)
         else:
             raise NotImplementedError("cannot translate this...")
+        return translation
 
 _intro_forms = (ast.Lambda, ast.Dict, ast.Set, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp, ast.Num, ast.Str, ast.List, ast.Tuple)
 def _is_intro_form(e):
