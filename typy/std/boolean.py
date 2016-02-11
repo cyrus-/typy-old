@@ -4,7 +4,10 @@ import ast
 import typy
 import typy.util.astx as astx
 
-class bool_(typy.Type):
+class Bool_(typy.Type):
+    def __str__(self):
+        return "Bool"
+
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
@@ -81,5 +84,5 @@ class bool_(typy.Type):
         return translation
 
     # TODO: case/if operators
-bool = bool_[()]
+Bool = Bool_[()]
 

@@ -7,12 +7,10 @@ import typy.util.astx as astx
 import typy.std.boolean
 import typy.fp
 
-_pyint = int
-_pylong = long
-_pyfloat = float
-_pycomplex = complex
+class Int_(typy.Type):
+    def __str__(self):
+        return "Int"
 
-class int_(typy.Type):
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
@@ -27,7 +25,7 @@ class int_(typy.Type):
 
     def ana_Num(self, ctx, e):
         n = e.n
-        if isinstance(n, (_pyint, _pylong)):
+        if isinstance(n, (int, long)):
             return
         else:
             raise typy.TypeError("Expression is not an int or long literal.", e)
@@ -35,7 +33,7 @@ class int_(typy.Type):
     @classmethod
     def syn_idx_Num(cls, ctx, e, inc_idx):
         n = e.n
-        if isinstance(n, (_pyint, _pylong)):
+        if isinstance(n, (int, long)):
             return ()
         else:
             raise typy.TypeError("Expression is not an int or long literal.", e)
@@ -57,8 +55,8 @@ class int_(typy.Type):
     def syn_BinOp(self, ctx, e):
         op = e.op
         if isinstance(op, ast.Div):
-            ctx.ana(e.right, float)
-            return float
+            ctx.ana(e.right, Float)
+            return Float
         else:
             ctx.ana(e.right, self)
             return self
@@ -77,7 +75,7 @@ class int_(typy.Type):
         for e_ in typy.util.tpl_cons(left, comparators):
             if hasattr(e_, 'match'): continue # already synthesized
             ctx.ana(e_, self)
-        return typy.std.boolean.bool
+        return typy.std.boolean.Bool
 
     def translate_Compare(self, ctx, e):
         translation = astx.copy_node(e)
@@ -90,9 +88,9 @@ class int_(typy.Type):
     def syn_Attribute(self, ctx, e):
         attr = e.attr
         if attr == 'f':
-            return float
+            return Float
         elif attr == 'c':
-            return complex
+            return Complex
         else:
             raise typy.TypeError("Invalid attribute.", e)
 
@@ -107,9 +105,12 @@ class int_(typy.Type):
             astx.builtin_call(name, [ctx.translate(value)]),
             value)
 
-int = int_[()]
+Int = Int_[()]
 
-class float_(typy.Type):
+class Float_(typy.Type):
+    def __str__(self):
+        return "Float"
+
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
@@ -123,20 +124,20 @@ class float_(typy.Type):
         return inc_idx
 
     def ana_Num(self, ctx, e):
-        if not isinstance(e.n, (_pyint, _pylong, _pyfloat)):
+        if not isinstance(e.n, (int, long, float)):
             raise typy.TypeError(
                 "Complex literal cannot be used to introduce value of type 'float'.", e)
 
     @classmethod
     def syn_idx_Num(cls, ctx, e, inc_idx):
-        if not isinstance(e.n, (_pyint, _pylong, _pyfloat)):
+        if not isinstance(e.n, (int, long, float)):
             raise typy.TypeError(
                 "Complex literal cannot be used to introduce value of type 'float'.", e)
         return ()
 
     def translate_Num(self, ctx, e):
         translation = astx.copy_node(e)
-        translation.n = _pyfloat(e.n)
+        translation.n = float(e.n)
         return translation
 
     def syn_UnaryOp(self, ctx, e):
@@ -170,7 +171,7 @@ class float_(typy.Type):
         for e_ in typy.util.tpl_cons(left, comparators):
             if hasattr(e_, 'match'): continue # already synthesized
             ctx.ana(e_, self)
-        return typy.std.boolean.bool
+        return typy.std.boolean.Bool
 
     def translate_Compare(self, ctx, e):
         translation = astx.copy_node(e)
@@ -182,7 +183,7 @@ class float_(typy.Type):
 
     def syn_Attribute(self, ctx, e):
         if e.attr == 'c':
-            return complex
+            return Complex
         else:
             raise typy.TypeError("Invalid attribute.", e)
 
@@ -191,9 +192,12 @@ class float_(typy.Type):
         return ast.copy_location(
             astx.builtin_call('complex', [ctx.translate(value)]),
             value)
-float = float_[()]
+Float = Float_[()]
 
-class complex_(typy.Type):
+class Complex_(typy.Type):
+    def __str__(self):
+        return "Complex"
+
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
@@ -217,10 +221,10 @@ class complex_(typy.Type):
     def translate_Num(self, ctx, e):
         translation = astx.copy_node(e)
         n = e.n
-        if isinstance(n, _pycomplex):
+        if isinstance(n, complex):
             translation.n = n
         else:
-            translation.n = _pycomplex(e.n)
+            translation.n = complex(e.n)
         return translation
 
     @classmethod
@@ -233,26 +237,26 @@ class complex_(typy.Type):
         rl, im = elts[0], elts[1]
 
         if isinstance(rl, ast.Num):
-            ctx.ana(rl, float)
+            ctx.ana(rl, Float)
         else:
             rl_ty = ctx.syn(rl)
-            if rl_ty != int and rl_ty != float:
+            if rl_ty != Int and rl_ty != Float:
                 raise typy.TypeError(
                     "Real component must be be integer or float.", rl)
 
         if not isinstance(im, ast.Num):
             im_ty = ctx.syn(im)
-            if im_ty != int and im_ty != float:
+            if im_ty != Int and im_ty != Float:
                 raise typy.TypeError(
                     "Imaginary component must be a complex literal, or an expressin of type 'int' or 'float'.",
                     im)
 
     def ana_Tuple(self, ctx, e):
-        complex_._process_Tuple(ctx, e)
+        Complex_._process_Tuple(ctx, e)
 
     @classmethod
-    def syn_idx_Tuple(self, ctx, e, inc_idx):
-        complex_._process_Tuple(ctx, e)
+    def syn_idx_Tuple(cls, ctx, e, inc_idx):
+        Complex_._process_Tuple(ctx, e)
         return ()
 
     def translate_Tuple(self, ctx, e):
@@ -263,7 +267,7 @@ class complex_(typy.Type):
 
         if isinstance(im, ast.Num):
             n = im.n
-            if isinstance(n, _pycomplex):
+            if isinstance(n, complex):
                 n = n.imag
             im_trans = ast.copy_location(
                 ast.Num(n), 
@@ -314,7 +318,7 @@ class complex_(typy.Type):
         for e_ in typy.util.tpl_cons(left, comparators):
             if hasattr(e_, 'match'): continue # already synthesized
             ctx.ana(e_, self)
-        return typy.std.boolean.bool
+        return typy.std.boolean.Bool
 
     def translate_Compare(self, ctx, e):
         translation = astx.copy_node(e)
@@ -327,7 +331,7 @@ class complex_(typy.Type):
     def syn_Attribute(self, ctx, e):
         attr = e.attr
         if attr == "real" or attr == "imag":
-            return float
+            return Float
         elif attr == "conjugate":
             return typy.fp.fn[(), self]
         else:
@@ -338,7 +342,7 @@ class complex_(typy.Type):
         translation.value = ctx.translate(e.value)
         return translation
 
-complex = complex_[()]
+Complex = Complex_[()]
 
 # MAYBE: ~x on complex equivalent to x.conjugate()?
 # MAYBE: x.conj equivalent to x.conjugate?

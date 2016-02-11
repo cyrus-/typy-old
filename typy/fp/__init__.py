@@ -45,7 +45,7 @@ class unit_(typy.Type):
         for e_ in typy.util.tpl_cons(left, comparators):
             if hasattr(e_, "match"): continue # already synthesized
             ctx.ana(e_, self)
-        return typy.std.bool
+        return typy.std.Bool
 
     def translate_Compare(self, ctx, e):
         translation=astx.copy_node(e)

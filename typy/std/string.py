@@ -7,7 +7,10 @@ import typy.util.astx as astx
 import typy.std.boolean
 import typy.std.numeric
 
-class str_(typy.Type):
+class Str_(typy.Type):
+    def __str__(self):
+        return "Str"
+
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
@@ -52,7 +55,7 @@ class str_(typy.Type):
         for e_ in typy.util.tpl_cons(left, comparators):
             if hasattr(e_, 'match'): continue # already synthesized
             ctx.ana(e_, self)
-        return typy.std.boolean.bool
+        return typy.std.boolean.Bool
 
     def translate_Compare(self, ctx, e):
         translation = astx.copy_node(e)
@@ -69,15 +72,15 @@ class str_(typy.Type):
         elif isinstance(slice_, ast.ExtSlice):
             raise typy.TypeError("String slice can only have one dimension.", e)
         elif isinstance(slice_, ast.Index):
-            ctx.ana(slice_.value, typy.std.numeric.int)
+            ctx.ana(slice_.value, typy.std.numeric.Int)
         else: #if isinstance(slice_, ast.Slice):
             lower, upper, step = slice_.lower, slice_.upper, slice_.step
             if lower is not None:
-                ctx.ana(lower, typy.std.numeric.int)
+                ctx.ana(lower, typy.std.numeric.Int)
             if upper is not None:
-                ctx.ana(upper, typy.std.numeric.int)
+                ctx.ana(upper, typy.std.numeric.Int)
             if not _is_None(step):
-                ctx.ana(step, typy.std.numeric.int)
+                ctx.ana(step, typy.std.numeric.Int)
         return self
 
     def translate_Subscript(self, ctx, e):
@@ -109,4 +112,4 @@ def _is_None(node):
     #
     return node is None or (isinstance(node, ast.Name) and node.id == 'None')
 
-str = str_[()]
+Str = Str_[()]

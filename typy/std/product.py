@@ -21,6 +21,14 @@ class tpl(typy.Type):
             raise typy.TypeFormationError(
                 "Incomplete tuple type must have Ellipsis index.")
 
+    def __str__(self):
+        idx = self.idx
+        return (
+            "Tpl[" + 
+            (str.join(", ", _idx_to_str(idx)) if len(idx) > 0 else "()") + 
+            "]"
+        )
+
     def ana_Tuple(self, ctx, e):
         elts = e.elts
         idx = self.idx
@@ -234,3 +242,14 @@ def _normalize_tuple_idx(idx):
                 "Component labeled " + label + " has invalid type specification.")
 
         yield (label, (i, ty))
+
+def _idx_to_str(idx):
+    label_seen = False
+    for label, (i, ty) in idx.iteritems():
+        if i == label:
+            if not label_seen:
+                yield str(ty)
+                continue
+        else:
+            label_seen = True
+        yield repr(label) + " : " + str(ty)
