@@ -1829,7 +1829,7 @@ class TestTplDictAttribute():
             def f(x):
                 return x[0]""")
 
-class TestTplDictAttribute():
+class TestTplDictSubscript():
     @pytest.fixture
     def f(self):
         @fp.fn

@@ -409,8 +409,9 @@ def _setup_args(ctx, args, arg_types, tree):
     if args.kwarg:
         raise typy.TypeError("Kwargs are not supported.", args.kwarg)
 
-    # set up arguments in context
     variables = ctx.variables
+
+    # set up arguments in context
     arguments = args.args
     n_args, n_arg_types = len(arguments), len(arg_types)
     if n_args != n_arg_types:
@@ -423,7 +424,18 @@ def _setup_args(ctx, args, arg_types, tree):
         if not isinstance(arg, ast.Name):
             raise typy.TypeError("Argument must be an identifier.", arg)
         arg_id = arg.id
+        # ... the Python parser checks dupes itself
+        #if arg_id in variables:
+        #    raise typy.TypeError("Duplicate argument: " + arg_id + ".", arg)
         variables[arg_id] = arg_type
+
+
+    return_type = ctx.return_type
+    if ctx.return_type != Ellipsis:
+        name = tree.name
+        if name in variables:
+            raise typy.TypeError("Argument shadows function name: " + name + ".", name)
+        variables[tree.name] = fn[arg_types, return_type]
 
 def _process_targets(ctx, targets):
     asc_ty = None

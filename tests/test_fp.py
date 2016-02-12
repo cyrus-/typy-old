@@ -949,3 +949,36 @@ def test_assign_multiple_ascription_bad_3():
         x [: Bool] = y [: Bool] = True
     with pytest.raises(typy.TypeError):
         test.typecheck()
+
+class TestRecursiveFn:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f(x, y):
+            {Bool, Bool} >> Bool
+            f(x, y)
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(Bool, Bool), Bool]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x, y):
+                return f(x, y)""")
+
+def test_nonrecursive_fn():
+    @fp.fn
+    def f():
+        {}
+        f()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_shadow_fn_name():
+    @fp.fn
+    def f(f):
+        {Bool} >> Bool
+        f
+    with pytest.raises(typy.TypeError):
+        f.typecheck()

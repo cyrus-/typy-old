@@ -486,7 +486,15 @@ class StaticEnv(object):
 def _func_closure(f):
     closure = f.func_closure
     if closure is None: return {}
-    else: return dict(zip(f.func_code.co_freevars, (c.cell_contents for c in closure)))
+    else:
+        return dict(_get_cell_contents(f.func_code.co_freevars, closure))
+
+def _get_cell_contents(co_freevars, closure):
+    for x, c in zip(co_freevars, closure):
+        try:
+            yield x, c.cell_contents
+        except ValueError:
+            continue
 
 class Fn(object):
     """All top-level typy functions are instances of Fn."""
