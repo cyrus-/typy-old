@@ -152,6 +152,18 @@ class Type(object):
     def translate_Name_constructor(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Name_constructor", e)
 
+    # Call_constructor
+
+    def ana_Call_constructor(self, ctx, e):
+        raise NotSupportedError(self, "method", "ana_Call_constructor", e)
+
+    @classmethod
+    def syn_idx_Call_constructor(self, ctx, e, inc_idx):
+        raise NotSupportedError(self, "method", "syn_idx_Call_constructor", e)
+
+    def translate_Call_constructor(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_Call_constructor", e)
+
     # UnaryOp
 
     def syn_UnaryOp(self, ctx, e):
@@ -566,6 +578,8 @@ class Context(object):
         classname = value.__class__.__name__
         if classname == "Name":
             classname = "Name_constructor"
+        elif classname == "Call":
+            classname = "Call_constructor"
         syn_idx_methodname = 'syn_idx_%s' % classname
         delegate = inc_ty.tycon
         method = getattr(delegate, syn_idx_methodname)
@@ -582,8 +596,10 @@ class Context(object):
             raise UsageError("Cannot analyze an expression against a non-type.")
         if _is_intro_form(e):
             classname = e.__class__.__name__
-            if classname == "Name" and e.id[0].isupper():
+            if classname == "Name":
                 classname = "Name_constructor"
+            elif classname == "Call":
+                classname = "Call_constructor"
             ana_method = 'ana_%s' % classname
             method = getattr(ty, ana_method)
             method(self, e)
@@ -718,23 +734,23 @@ class Context(object):
         elif isinstance(tree, ast.expr):
             if hasattr(tree, "is_ascription"):
                 translation = self.translate(tree.value)
-            elif isinstance(tree, ast.Name):
-                if _is_intro_form(tree):
-                    delegate = tree.ty
-                    method = getattr(delegate, tree.translation_method_name)
-                    translation = method(self, tree)
-                else:
-                    delegate = self.fn.tree.ty
-                    translation = delegate.translate_Name(self, tree)
-            elif isinstance(tree, (ast.Call, ast.Subscript, ast.Attribute, ast.BoolOp, ast.Compare, ast.BinOp, ast.UnaryOp)):
-                delegate = tree.delegate
+            elif _is_intro_form(tree):
+                delegate = tree.ty
                 method = getattr(delegate, tree.translation_method_name)
                 translation = method(self, tree)
             else:
-                method_name = tree.translation_method_name
-                delegate = tree.ty
-                method = getattr(delegate, method_name)
-                translation = method(self, tree)
+                if isinstance(tree, ast.Name):
+                    delegate = self.fn.tree.ty
+                    translation = delegate.translate_Name(self, tree)
+                elif isinstance(tree, (ast.Call, ast.Subscript, ast.Attribute, ast.BoolOp, ast.Compare, ast.BinOp, ast.UnaryOp)):
+                    delegate = tree.delegate
+                    method = getattr(delegate, tree.translation_method_name)
+                    translation = method(self, tree)
+                else:
+                    method_name = tree.translation_method_name
+                    delegate = tree.ty
+                    method = getattr(delegate, method_name)
+                    translation = method(self, tree)
         else:
             raise NotImplementedError("cannot translate this...")
         return translation
@@ -742,7 +758,14 @@ class Context(object):
 _intro_forms = (ast.Lambda, ast.Dict, ast.Set, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp, ast.Num, ast.Str, ast.List, ast.Tuple)
 def _is_intro_form(e):
     return isinstance(e, _intro_forms) \
-                 or (isinstance(e, ast.Name) and e.id[0].isupper())
+                 or _is_Name_constructor(e) \
+                 or _is_Name_constructor_call(e)
+
+def _is_Name_constructor(e):
+    return isinstance(e, ast.Name) and e.id[0].isupper()
+
+def _is_Name_constructor_call(e):
+    return isinstance(e, ast.Call) and _is_Name_constructor(e.func)
 
 def _process_ascription_slice(slice_, static_env):
     if isinstance(slice_, ast.Slice):

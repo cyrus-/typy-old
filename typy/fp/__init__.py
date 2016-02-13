@@ -429,7 +429,8 @@ def _setup_args(ctx, args, arg_types, tree):
         #    raise typy.TypeError("Duplicate argument: " + arg_id + ".", arg)
         variables[arg_id] = arg_type
 
-
+    # set up support for recursive functions
+    # requires a return type to have been provided
     return_type = ctx.return_type
     if ctx.return_type != Ellipsis:
         name = tree.name

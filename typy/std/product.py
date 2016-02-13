@@ -89,7 +89,7 @@ class tpl(typy.Type):
     @classmethod
     def syn_idx_Dict(self, ctx, e, inc_idx):
         keys, values = e.keys, e.values
-        idx = { }
+        idx = ordereddict.OrderedDict()
         for key, value in zip(keys, values):
             label = ctx.fn.static_env.eval_expr_ast(key)
             if isinstance(label, six.string_types):
@@ -121,33 +121,93 @@ class tpl(typy.Type):
             elt_translation.append(ctx.translate(value))
             idx_mapping.append(idx[label][0])
         arg_translation = ast.Tuple(elts=elt_translation)
-        lambda_translation = ast.Lambda(
-            args=ast.arguments(
-                args=[ast.Name(id='x', ctx=ast.Param())],
-                vararg=None,
-                kwarg=None,
-                defaults=[]),
-            body=ast.Tuple(
-                elts=list(
-                    ast.Subscript(
-                        value=ast.Name(
-                            id='x',
-                            ctx=ast.Load()),
-                        slice=ast.Index(
-                            value=ast.Num(n=n)),
-                        ctx=ast.Load())
-                    for n in idx_mapping
-                ),
-                ctx=ast.Load()
-            )
-        )
-        return ast.copy_location(ast.Call(
-            func=lambda_translation,
-            args=[arg_translation],
-            keywords=[],
-            starargs=[],
-            kwargs=None
-        ), e)
+
+        return ast.copy_location(_translation(idx_mapping, arg_translation), e)
+
+    def ana_Call_constructor(self, ctx, e):
+        id = e.func.id
+        if id != 'X':
+            raise typy.TypeError("tpl only supports the X constructor")
+        if e.starargs != None:
+            raise typy.TypeError("No support for starargs", e)
+        if e.kwargs != None:
+            raise typy.TypeError("No support for kwargs", e)
+
+        idx = self.idx
+        args = e.args
+        keywords = e.keywords
+
+        # check counts
+        n_idx = len(idx)
+        n_args, n_keywords = len(args), len(keywords)
+        n_elts = n_args + n_keywords
+        if n_elts < n_idx:
+            raise typy.TypeError("Too few elements.", e)
+        elif n_elts > n_idx:
+            raise typy.TypeError("Too many elements.", e)
+
+        # process non-keywords
+        for i, arg in enumerate(args):
+            try:
+                (_, ty) = idx[i]
+            except KeyError:
+                raise typy.TypeError("No component labeled " + str(i), arg)
+            ctx.ana(arg, ty)
+
+        # process keywords
+        for keyword in keywords:
+            label = keyword.arg
+            try:
+                (_, ty) = idx[label]
+            except KeyError:
+                raise typy.TypeError("No component labeled " + arg, arg)
+            value = keyword.value
+            ctx.ana(value, ty)
+
+    @classmethod
+    def syn_idx_Call_constructor(self, ctx, e, inc_idx):
+        id = e.func.id
+        if id != 'X':
+            raise typy.TypeError("tpl only supports the X constructor")
+        if e.starargs != None:
+            raise typy.TypeError("No support for starargs", e)
+        if e.kwargs != None:
+            raise typy.TypeError("No support for kwargs", e)
+
+        args = e.args
+        keywords = e.keywords
+
+        idx = []
+
+        # process non-keywords
+        for i, arg in enumerate(args):
+            idx.append((i, ctx.syn(arg)))
+
+        # process keywords
+        for keyword in keywords:
+            label = keyword.arg
+            ty = ctx.syn(keyword.value)
+            idx.append((label, ty))
+
+        return tuple(idx)
+
+    def translate_Call_constructor(self, ctx, e):
+        args, keywords = e.args, e.keywords
+        idx = self.idx
+
+        elt_translation = []
+        idx_mapping = []
+        for i, arg in enumerate(args):
+            elt_translation.append(ctx.translate(arg))
+            idx_mapping.append(idx[i][0])
+        for keyword in keywords:
+            label = keyword.arg
+            value = keyword.value
+            elt_translation.append(ctx.translate(value))
+            idx_mapping.append(idx[label][0])
+        arg_translation = ast.Tuple(elts=elt_translation)
+
+        return ast.copy_location(_translation(idx_mapping, arg_translation), e)
 
     def syn_Attribute(self, ctx, e):
         idx = self.idx
@@ -253,3 +313,32 @@ def _idx_to_str(idx):
         else:
             label_seen = True
         yield repr(label) + " : " + str(ty)
+
+def _translation(idx_mapping, arg_translation):
+    lambda_translation = ast.Lambda(
+        args=ast.arguments(
+            args=[ast.Name(id='x', ctx=ast.Param())],
+            vararg=None,
+            kwarg=None,
+            defaults=[]),
+        body=ast.Tuple(
+            elts=list(
+                ast.Subscript(
+                    value=ast.Name(
+                        id='x',
+                        ctx=ast.Load()),
+                    slice=ast.Index(
+                        value=ast.Num(n=n)),
+                    ctx=ast.Load())
+                for n in idx_mapping
+            ),
+            ctx=ast.Load()
+        )
+    )
+    return ast.Call(
+        func=lambda_translation,
+        args=[arg_translation],
+        keywords=[],
+        starargs=[],
+        kwargs=None
+    )

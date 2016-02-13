@@ -1812,7 +1812,47 @@ def test_tpl_Dict_duplicate_lbl():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestTplDictAttribute():
+class TestTplXIntro:
+    @pytest.fixture
+    def f(self):
+        @fp.fn
+        def f():
+            X() [: tpl[()]]
+            y1 = X() [: tpl]
+            y1 [: tpl[()]]
+            X(0, "test") [: tpl[Int, Str]]
+            y2 = X(0 [: Int], "test" [: Str]) [: tpl]
+            y2 [: tpl[Int, Str]]
+            X(a=0, b="test") [: tpl['a' : Int, 'b' : Str]]
+            y3 = X(a=0 [: Int], b="test" [: Str]) [: tpl]
+            y3 [: tpl['a' : Int, 'b' : Str]]
+            X(0, b="test") [: tpl[Int, 'b' : Str]]
+            y4 = X(0 [: Int], b="test" [: Str]) [: tpl]
+            y4 [: tpl[Int, 'b' : Str]]
+            y4
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fp.fn[(), tpl[Int, 'b' : Str]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                (lambda x: ())(())
+                y1 = (lambda x: ())(())
+                y1
+                (lambda x: (x[0], x[1]))((0, 'test'))
+                y2 = (lambda x: (x[0], x[1]))((0, 'test'))
+                y2
+                (lambda x: (x[0], x[1]))((0, 'test'))
+                y3 = (lambda x: (x[0], x[1]))((0, 'test'))
+                y3
+                (lambda x: (x[0], x[1]))((0, 'test'))
+                y4 = (lambda x: (x[0], x[1]))((0, 'test'))
+                y4
+                return y4""")
+
+class TestTplAttribute():
     @pytest.fixture
     def f(self):
         @fp.fn
@@ -1829,7 +1869,7 @@ class TestTplDictAttribute():
             def f(x):
                 return x[0]""")
 
-class TestTplDictSubscript():
+class TestTplSubscript():
     @pytest.fixture
     def f(self):
         @fp.fn
@@ -1845,3 +1885,4 @@ class TestTplDictSubscript():
         translation_eq(f, """
             def f(x):
                 return (x[0], x[1])""")
+
