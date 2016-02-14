@@ -6,6 +6,7 @@ import textwrap  # for stripping leading spaces from source code
 import six  # Python 2-3 compatibility, e.g. metaclasses
 
 import util  # various utilities used throughout typy
+import util.astx  # utility functions for working with asts
 
 class UsageError(Exception):
     pass
@@ -72,8 +73,8 @@ def _construct_ty(tycon, idx):
 class Type(object):
     """Base class for typy types.
 
-    An typy type is an instance of typy.Type.
-    An typy tycon is a subclass of typy.Type.
+    An typy type is an instance of Type.
+    An typy tycon is a subclass of Type.
     """
     def __init__(self, idx, from_construct_ty=False):
         if not from_construct_ty:
@@ -284,6 +285,14 @@ class FnType(Type):
         pass
 
     @classmethod
+    def push_bindings(cls, ctx, bindings):
+        raise NotSupportedError(cls, "class method", "push_bindings", None)
+
+    @classmethod
+    def pop_bindings(cls, ctx):
+        raise NotSupportedError(cls, "class method", "pop bindings", None)
+
+    @classmethod
     def preprocess_FunctionDef_toplevel(cls, fn, tree):
         pass 
 
@@ -291,15 +300,15 @@ class FnType(Type):
         raise NotSupportedError(self, "method", "ana_FunctionDef_toplevel", tree)
 
     @classmethod
-    def syn_idx_FunctionDef_toplevel(self, ctx, tree, inc_ty):
-        raise NotSupportedError(self, "class method", "ana_FunctionDef_toplevel", tree)
+    def syn_idx_FunctionDef_toplevel(cls, ctx, tree, inc_ty):
+        raise NotSupportedError(cls, "class method", "ana_FunctionDef_toplevel", tree)
 
     def translate_FunctionDef_toplevel(self, ctx, tree):
         raise NotSupportedError(self, "method", "translate_FunctionDef_toplevel", tree)
 
     @classmethod 
-    def syn_Name(self, ctx, e):
-        raise NotSupportedError(self, "class method", "syn_Name", e)
+    def syn_Name(cls, ctx, e):
+        raise NotSupportedError(cls, "class method", "syn_Name", e)
 
     def translate_Name(self, ctx, tree):
         raise NotSupportedError(self, "method", "translate_Name", tree)
@@ -597,6 +606,42 @@ class Context(object):
         value.delegate, value.ty = delegate, ty
         return ty 
 
+    def ana_pat(self, pat, ty):
+        if _is_intro_form(pat):
+            classname = pat.__class__.__name__
+            if classname == "Name":
+                classname = "Name_constructor"
+            elif classname == "Call":
+                classname = "Call_constructor"
+            ana_pat_methodname = 'ana_pat_' + classname
+            delegate = ty
+            method = getattr(delegate, ana_pat_methodname)
+            bindings = method(self, pat)
+            for name, ty in bindings.iteritems():
+                if not util.astx.is_identifier(name):
+                    raise UsageError("Binding " + str(name) + " is not an identifier.")
+                if not isinstance(ty, Type):
+                    raise UsageError("Binding for " + name + " has invalid type.")
+            pat.bindings = bindings
+            pat.ty = ty
+            return bindings
+        elif isinstance(pat, ast.Name):
+            id = pat.id
+            if id == "_":
+                return {}
+            else:
+                return {id : ty}
+        else:
+            raise TypeError("Invalid pattern form", pat)
+
+    def _push_bindings(self, bindings):
+        tc = tycon(self.fn.ascription)
+        tc.push_bindings(self, bindings)
+
+    def _pop_bindings(self):
+        tc = tycon(self.fn.ascription)
+        tc.pop_bindings(self)
+
     def ana(self, e, ty):
         if not isinstance(e, ast.expr):
             raise UsageError("Cannot analyze a non-expression.")
@@ -614,13 +659,56 @@ class Context(object):
             e.ty = ty
             e.delegate = ty
             e.translation_method_name = 'translate_%s' % classname
+        elif _is_match(e):
+            elts = e.left.elts
+            n_elts = len(elts)
+            if n_elts == 0:
+                raise TypeError("Scrutinee missing.", e)
+            elif n_elts > 1:
+                # TODO: turn it into a tuple
+                raise TypeError("Too many scrutinees.", e)
+            scrutinee = elts[0]
+            scrutinee_ty = self.syn(scrutinee)
+            rule_dict = e.comparators[0]
+            rules = zip(rule_dict.keys, rule_dict.values)
+            for (pat, branch) in rules:
+                bindings = self.ana_pat(pat, scrutinee_ty)
+                self._push_bindings(bindings)
+                self.ana(branch, ty)
+                self._pop_bindings()
+            e.delegate = scrutinee_ty
+            e.ty = ty
         else:
             syn_ty = self.syn(e)
             if ty != syn_ty:
                 raise TypeMismatchError(ty, syn_ty, e)
 
     def syn(self, e):
-        if isinstance(e, ast.Subscript):
+        if _is_match(e):
+            elts = e.left.elts
+            n_elts = len(elts)
+            if n_elts == 0:
+                raise TypeError("Scrutinee missing.", e)
+            elif n_elts > 1:
+                raise TypeError("Too many scrutinees.", e)
+            scrutinee = elts[0]
+            scrutinee_ty = self.syn(scrutinee)
+            rule_dict = e.comparators[0]
+            rules = zip(rule_dict.keys, rule_dict.values)
+            syn_ty = None
+            for (pat, branch) in rules:
+                bindings = self.ana_pat(pat, scrutinee_ty)
+                self._push_bindings(bindings)
+                branch_ty = self.syn(branch)
+                if syn_ty is None:
+                    syn_ty = branch_ty
+                else:
+                    if syn_ty != branch_ty:
+                        raise TypeError("Inconsistent branch types.", branch)
+                self._pop_bindings()
+            delegate = scrutinee_ty
+            ty = syn_ty
+        elif isinstance(e, ast.Subscript):
             value, slice_ = e.value, e.slice 
             ty = _process_ascription_slice(slice_, self.fn.static_env)
             if isinstance(ty, Type):
@@ -805,3 +893,11 @@ def _process_ascription_slice(slice_, static_env):
                 raise TypeError("Type ascription is not a type or incomplete type.",
                     upper)
     return None 
+
+def _is_match(e):
+    return (isinstance(e, ast.Compare) and
+            len(e.ops) == 1 and 
+            isinstance(e.ops[0], ast.Is) and
+            isinstance(e.left, ast.Set) and 
+            isinstance(e.comparators[0], ast.Dict))
+

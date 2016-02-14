@@ -8,58 +8,6 @@ import typy.util.astx as astx
 from _product import unit
 
 #
-# unit
-#
-
-#class unit_(typy.Type):
-#    @classmethod
-#    def init_idx(cls, idx):
-#        if idx != ():
-#            raise typy.TypeFormationError("Index of unit type must be ().")
-#        return idx
-
-#    def ana_Tuple(self, ctx, e):
-#        elts = e.elts
-#        if len(elts) != 0:
-#            raise typy.TypeError(
-#                "Non-empty tuple forms cannot be used to introduce values of type unit.",
-#                e)
-
-#    @classmethod
-#    def syn_idx_Tuple(self, ctx, e, inc_idx):
-#        elts = e.elts 
-#        if len(elts) != 0:
-#            raise typy.TypeError(
-#                "Non-empty tuple forms cannot be used to introduce values of type unit.",
-#                e)
-#        return ()
-
-#    def translate_Tuple(self, ctx, e):
-#        return ast.Name("None", ast.Load())
-
-#    def syn_Compare(self, ctx, e):
-#        left, ops, comparators = e.left, e.ops, e.comparators
-#        for op in ops:
-#            if not isinstance(op, (ast.Eq, ast.NotEq, ast.Is, ast.IsNot)):
-#                raise typy.TypeError(
-#                    "Unit type does not support this operator.", e)
-#        for e_ in typy.util.tpl_cons(left, comparators):
-#            if hasattr(e_, "match"): 
-#                continue # already synthesized
-#            ctx.ana(e_, self)
-#        return typy.std.Bool
-
-#    def translate_Compare(self, ctx, e):
-#        translation = astx.copy_node(e)
-#        translation.left = ctx.translate(e.left)
-#        translation.comparators = tuple(
-#            ctx.translate(comparator)
-#            for comparator in e.comparators)
-#        return translation
-
-#unit = unit_[()]
-
-#
 # fn
 #
 
@@ -113,6 +61,14 @@ class fn(typy.FnType):
         ctx.variables = typy.util.DictStack()
         ctx.variables.push({})
         ctx.return_type = None
+
+    @classmethod
+    def push_bindings(cls, ctx, bindings):
+        ctx.variables.push(bindings)
+
+    @classmethod
+    def pop_bindings(cls, ctx):
+        ctx.variables.pop()
 
     def ana_FunctionDef_toplevel(self, ctx, tree):
         args = tree.args

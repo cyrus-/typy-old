@@ -1,5 +1,6 @@
 """Utilities for working with python's standard ast library"""
 import ast 
+import re
 
 def copy_node(node, *args, **kwargs):
     """Shallow copies the provided ast node.
@@ -74,3 +75,9 @@ def builtin_call(name, args):
         keywords=[], 
         starargs=None, 
         kwargs=None)
+
+
+_name_re = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*$")
+def is_identifier(id):
+    return bool(_name_re.match(id))
+
