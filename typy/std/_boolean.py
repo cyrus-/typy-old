@@ -91,6 +91,5 @@ class boolean_(typy.Type):
             raise typy.TypeError("Boolean values only match 'True' and 'False'")
         return {}
 
-    # TODO: case/if operators
 boolean = boolean_[()]
 

@@ -2641,6 +2641,24 @@ class TestTplTupleIncIntro():
                 z2 = (x, y)
                 return z2""")
 
+class TestTplDictIntroEmpty:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            z [: tpl[()]] = {}
+            z
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), tpl[()]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                z = (lambda x: ())(())
+                return z""")
+
 class TestTplDictIntro():
     @pytest.fixture
     def f(self):
