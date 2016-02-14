@@ -70,3 +70,60 @@ def test_invalid_pattern_form():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
+class TestMultipleRulesAna:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {boolean} >> boolean
+            {x} is {y: True, y: y}
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[boolean, boolean]
+
+def test_pop():
+    @fn
+    def test(x):
+        {boolean}
+        {x} is {y: True, z: y}
+    
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_invalid_form():
+    @fn
+    def test(x):
+        {num}
+        {x} is {y: y} + 5
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestOperations:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {num}
+            ({x} is {y: y}) + 5
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[num, num]
+
+class TestBooleanPattern:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {boolean}
+            {{x} is {True: x, False: x}} is {
+                False: x,
+                _: x
+            }
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[boolean, boolean]
+
+

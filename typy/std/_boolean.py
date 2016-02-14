@@ -85,6 +85,12 @@ class boolean_(typy.Type):
             for value in e.values)
         return translation
 
+    def ana_pat_Name_constructor(self, ctx, pat):
+        id = pat.id
+        if id != "True" and id != "False":
+            raise typy.TypeError("Boolean values only match 'True' and 'False'")
+        return {}
+
     # TODO: case/if operators
 boolean = boolean_[()]
 
