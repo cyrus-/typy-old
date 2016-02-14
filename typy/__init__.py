@@ -1,21 +1,19 @@
 """typy: A programmable static type system as a Python library."""
-import ast # Python standard library's abstract syntax module
-import inspect # for accessing source code for functions
-import textwrap # for stripping leading spaces
+import ast  # Python standard library's abstract syntax module
+import inspect  # for accessing source code for functions
+import textwrap  # for stripping leading spaces from source code
 
-import six # Python 2-3 compatibility, e.g. metaclasses
-import util
-# TODO: semver
-# TODO: fix indentation
+import six  # Python 2-3 compatibility, e.g. metaclasses
+
+import util  # various utilities used throughout typy
 
 class UsageError(Exception):
-    pass 
+    pass
 
 class TypeError(Exception):
     def __init__(self, message, tree):
         Exception.__init__(self, message)
         self.tree = tree
-    # TODO: error pretty-printing
 
 class TypeMismatchError(TypeError):
     def __init__(self, expected, got, tree):
@@ -27,11 +25,11 @@ class TypeMismatchError(TypeError):
 
 class NotSupportedError(TypeError):
     def __init__(self, delegate, meth_category, meth_name, tree):
+        TypeError.__init__(self, meth_name + " not supported.", tree)
         self.delegate = delegate
         self.meth_category = meth_category
         self.meth_name = meth_name
         self.tree = tree
-        # TODO: base constructor call
 
 class TypeFormationError(Exception):
     pass
@@ -39,7 +37,7 @@ class TypeFormationError(Exception):
 class TypeInvariantError(Exception):
     def __init__(self, message, tree):
         Exception.__init__(self, message)
-        self.tree = tree 
+        self.tree = tree
 
 def warn(message, tree=None):
     # TODO: better warning handling
@@ -48,15 +46,19 @@ def warn(message, tree=None):
 
 class _TypeMetaclass(type): # here, type is Python's "type" builtin
     def __getitem__(self, idx):
-        if _contains_ellipsis(idx): return _construct_incty(self, idx)
-        else: return _construct_ty(self, idx)
+        if _contains_ellipsis(idx): 
+            return _construct_incty(self, idx)
+        else: 
+            return _construct_ty(self, idx)
 
 def _contains_ellipsis(idx):
-    if idx is Ellipsis: return True
+    if idx is Ellipsis: 
+        return True
     elif isinstance(idx, tuple):
         for item in idx:
-            if item is Ellipsis: return True
-    else: return False 
+            if item is Ellipsis: 
+                return True
+    return False 
 
 def _construct_incty(tycon, inc_idx):
     inc_idx = tycon.init_inc_idx(inc_idx)
@@ -84,8 +86,8 @@ class Type(object):
 
     def __eq__(self, other):
         return isinstance(other, Type) \
-             and tycon(self) is tycon(other) \
-             and self.idx == other.idx
+            and tycon(self) is tycon(other) \
+            and self.idx == other.idx
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -185,7 +187,7 @@ class Type(object):
     def syn_Compare(self, ctx, e):
         raise NotSupportedError(self, "method", "syn_Compare", e)
 
-    def translate_BinOp(self, ctx, e):
+    def translate_Compare(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Compare", e)
 
     # BoolOp
@@ -193,7 +195,7 @@ class Type(object):
     def syn_BoolOp(self, ctx, e):
         raise NotSupportedError(self, "method", "syn_BoolOp", e)
 
-    def translate_BinOp(self, ctx, e):
+    def translate_BoolOp(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_BoolOp", e)
 
     # Attribute
@@ -239,12 +241,13 @@ class IncompleteType(object):
         if issubclass(self.tycon, FnType):
             (ast, static_env) = _reflect_func(f)
             return Fn(ast, static_env, self)
-        else: raise TypeError("Incomplete non-FnType used as a top-level function decorator.")
+        else: 
+            raise TypeError("Incomplete non-FnType used as a top-level function decorator.")
 
     def __eq__(self, other):
         return isinstance(other, IncompleteType) \
-               and tycon(self) is tycon(other) \
-               and self.inc_idx == other.inc_idx
+            and tycon(self) is tycon(other) \
+            and self.inc_idx == other.inc_idx
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -277,7 +280,8 @@ class FnType(Type):
         return Fn(tree, static_env, self)
 
     @classmethod
-    def init_ctx(cls, ctx): pass
+    def init_ctx(cls, ctx): 
+        pass
 
     @classmethod
     def preprocess_FunctionDef_toplevel(cls, fn, tree):
@@ -306,169 +310,168 @@ class FnType(Type):
 
     @classmethod
     def check_FunctionDef(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_FunctionDef", tree)
+        raise NotSupportedError(cls, "class method", "check_FunctionDef", tree)
 
     def translate_FunctionDef(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_FunctionDef", tree)
+        raise NotSupportedError(self, "method", "translate_FunctionDef", tree)
 
     @classmethod
     def check_ClassDef(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_ClassDef", tree)
+        raise NotSupportedError(cls, "class method", "check_ClassDef", tree)
 
     def translate_ClassDef(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_ClassDef", tree)
+        raise NotSupportedError(self, "method", "translate_ClassDef", tree)
 
     @classmethod
     def check_Return(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Return", tree)
+        raise NotSupportedError(cls, "class method", "check_Return", tree)
 
     def translate_Return(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Return", tree)
+        raise NotSupportedError(self, "method", "translate_Return", tree)
 
     @classmethod
     def check_Delete(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Delete", tree)
+        raise NotSupportedError(cls, "class method", "check_Delete", tree)
 
     def translate_Delete(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Delete", tree)
+        raise NotSupportedError(self, "method", "translate_Delete", tree)
 
     @classmethod
     def check_Assign(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Assign", tree)
+        raise NotSupportedError(cls, "class method", "check_Assign", tree)
 
     def translate_Assign(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Assign", tree)
+        raise NotSupportedError(self, "method", "translate_Assign", tree)
 
     @classmethod
     def check_AugAssign(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_AugAssign", tree)
+        raise NotSupportedError(cls, "class method", "check_AugAssign", tree)
 
     def translate_AugAssign(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_AugAssign", tree)
+        raise NotSupportedError(self, "method", "translate_AugAssign", tree)
 
     @classmethod
     def check_Print(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Print", tree)
+        raise NotSupportedError(cls, "class method", "check_Print", tree)
 
     def translate_Print(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Print", tree)
+        raise NotSupportedError(self, "method", "translate_Print", tree)
 
     @classmethod
     def check_For(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_For", tree)
+        raise NotSupportedError(cls, "class method", "check_For", tree)
 
     def translate_For(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_For", tree)
+        raise NotSupportedError(self, "method", "translate_For", tree)
 
     @classmethod
     def check_While(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_While", tree)
+        raise NotSupportedError(cls, "class method", "check_While", tree)
 
     def translate_While(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_While", tree)
+        raise NotSupportedError(self, "method", "translate_While", tree)
 
     @classmethod
     def check_If(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_If", tree)
+        raise NotSupportedError(cls, "class method", "check_If", tree)
 
     def translate_If(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_If", tree)
+        raise NotSupportedError(self, "method", "translate_If", tree)
 
     @classmethod
     def check_With(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_With", tree)
+        raise NotSupportedError(cls, "class method", "check_With", tree)
 
     def translate_With(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_With", tree)
+        raise NotSupportedError(self, "method", "translate_With", tree)
 
     @classmethod
     def check_Raise(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Raise", tree)
+        raise NotSupportedError(cls, "class method", "check_Raise", tree)
 
     def translate_Raise(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Raise", tree)
+        raise NotSupportedError(self, "method", "translate_Raise", tree)
 
     @classmethod
     def check_TryExcept(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_TryExcept", tree)
+        raise NotSupportedError(cls, "class method", "check_TryExcept", tree)
 
     def translate_TryExcept(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_TryExcept", tree)
+        raise NotSupportedError(self, "method", "translate_TryExcept", tree)
 
     @classmethod
     def check_TryFinally(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_TryFinally", tree)
+        raise NotSupportedError(cls, "class method", "check_TryFinally", tree)
 
     def translate_TryFinally(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_TryFinally", tree)
+        raise NotSupportedError(self, "method", "translate_TryFinally", tree)
 
     @classmethod
     def check_Assert(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Assert", tree)
+        raise NotSupportedError(cls, "class method", "check_Assert", tree)
 
     def translate_Assert(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Assert", tree)
+        raise NotSupportedError(self, "method", "translate_Assert", tree)
 
     @classmethod
     def check_Import(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Import", tree)
+        raise NotSupportedError(cls, "class method", "check_Import", tree)
 
     def translate_Import(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Import", tree)
+        raise NotSupportedError(self, "method", "translate_Import", tree)
 
     @classmethod
     def check_ImportFrom(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_ImportFrom", tree)
+        raise NotSupportedError(cls, "class method", "check_ImportFrom", tree)
 
     def translate_ImportFrom(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_ImportFrom", tree)
+        raise NotSupportedError(self, "method", "translate_ImportFrom", tree)
 
     @classmethod
     def check_Exec(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Exec", tree)
+        raise NotSupportedError(cls, "class method", "check_Exec", tree)
 
     def translate_Exec(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Exec", tree)
+        raise NotSupportedError(self, "method", "translate_Exec", tree)
 
     @classmethod
     def check_Global(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Global", tree)
+        raise NotSupportedError(cls, "class method", "check_Global", tree)
 
     def translate_Global(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Global", tree)
+        raise NotSupportedError(self, "method", "translate_Global", tree)
 
     @classmethod
     def check_Expr(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Expr", tree)
+        raise NotSupportedError(cls, "class method", "check_Expr", tree)
 
     def translate_Expr(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Expr", tree)
+        raise NotSupportedError(self, "method", "translate_Expr", tree)
 
     @classmethod
     def check_Pass(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Pass", tree)
+        raise NotSupportedError(cls, "class method", "check_Pass", tree)
 
     def translate_Pass(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Pass", tree)
+        raise NotSupportedError(self, "method", "translate_Pass", tree)
 
     @classmethod
     def check_Break(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Break", tree)
+        raise NotSupportedError(cls, "class method", "check_Break", tree)
 
     def translate_Break(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Break", tree)
+        raise NotSupportedError(self, "method", "translate_Break", tree)
 
     @classmethod
     def check_Continue(cls, ctx, tree):
-      raise NotSupportedError(cls, "class method", "check_Continue", tree)
+        raise NotSupportedError(cls, "class method", "check_Continue", tree)
 
     def translate_Continue(self, ctx, tree):
-      raise NotSupportedError(self, "method", "translate_Continue", tree)
+        raise NotSupportedError(self, "method", "translate_Continue", tree)
 
     ################################################################################
     # End autogenerated section
     ################################################################################
-
 
 def _reflect_func(f): 
     source = textwrap.dedent(inspect.getsource(f))
@@ -481,8 +484,10 @@ class StaticEnv(object):
         self.globals = globals
 
     def __getitem__(self, item):
-        try: return self.closure[item]
-        except KeyError: return self.globals[item]
+        try: 
+            return self.closure[item]
+        except KeyError:
+            return self.globals[item]
 
     @classmethod
     def from_func(cls, f):
@@ -497,7 +502,8 @@ class StaticEnv(object):
 
 def _func_closure(f):
     closure = f.func_closure
-    if closure is None: return {}
+    if closure is None: 
+        return {}
     else:
         return dict(_get_cell_contents(f.func_code.co_freevars, closure))
 
@@ -514,7 +520,7 @@ class Fn(object):
         assert isinstance(tree, ast.AST)
         assert isinstance(static_env, StaticEnv)
         assert isinstance(ascription, Type) \
-                or isinstance(ascription, IncompleteType)
+            or isinstance(ascription, IncompleteType)
         assert issubclass(tycon(ascription), FnType)
         self.tree = tree
         self.static_env = static_env
@@ -526,7 +532,8 @@ class Fn(object):
         tc.preprocess_FunctionDef_toplevel(self, tree)
 
     def typecheck(self):
-        if self.typechecked: return
+        if self.typechecked: 
+            return
         tree, ascription = self.tree, self.ascription
         ctx = self.ctx = Context(self)
         tycon(ascription).init_ctx(ctx)
@@ -543,8 +550,9 @@ class Fn(object):
 
     def compile(self):
         self.typecheck()
-        if self.compiled: return
-        tree, ascription, ctx = self.tree, self.ascription, self.ctx
+        if self.compiled: 
+            return
+        tree, ctx = self.tree, self.ctx
         ty = tree.ty
         translation = ty.translate_FunctionDef_toplevel(ctx, tree)
         self.translation = translation
@@ -552,13 +560,13 @@ class Fn(object):
         return translation
 
     def __call__(self, *args):
-        # TODO: implement thisv
-        raise NotImplemented()
+        # TODO: implement this
+        raise NotImplementedError()
 
 class Context(object):
     def __init__(self, fn):
         self.fn = fn
-        self.data = { }
+        self.data = {}
 
     def check(self, stmt):
         # TODO: compare against py3 grammar
@@ -634,7 +642,6 @@ class Context(object):
                 ty = delegate.syn_Subscript(self, e)
                 e.translation_method_name = 'translate_Subscript'
         elif isinstance(e, ast.Name):
-            id = e.id
             delegate = tycon(self.fn.ascription)
             ty = delegate.syn_Name(self, e)
             if isinstance(ty, Type):
@@ -742,7 +749,14 @@ class Context(object):
                 if isinstance(tree, ast.Name):
                     delegate = self.fn.tree.ty
                     translation = delegate.translate_Name(self, tree)
-                elif isinstance(tree, (ast.Call, ast.Subscript, ast.Attribute, ast.BoolOp, ast.Compare, ast.BinOp, ast.UnaryOp)):
+                elif isinstance(tree, (
+                        ast.Call, 
+                        ast.Subscript, 
+                        ast.Attribute, 
+                        ast.BoolOp, 
+                        ast.Compare, 
+                        ast.BinOp, 
+                        ast.UnaryOp)):
                     delegate = tree.delegate
                     method = getattr(delegate, tree.translation_method_name)
                     translation = method(self, tree)
@@ -755,16 +769,27 @@ class Context(object):
             raise NotImplementedError("cannot translate this...")
         return translation
 
-_intro_forms = (ast.Lambda, ast.Dict, ast.Set, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp, ast.Num, ast.Str, ast.List, ast.Tuple)
+_intro_forms = (
+    ast.Lambda, 
+    ast.Dict, 
+    ast.Set, 
+    ast.ListComp, 
+    ast.SetComp, 
+    ast.DictComp, 
+    ast.GeneratorExp, 
+    ast.Num, 
+    ast.Str, 
+    ast.List, 
+    ast.Tuple)
 def _is_intro_form(e):
     return isinstance(e, _intro_forms) \
-                 or _is_Name_constructor(e) \
-                 or _is_Name_constructor_call(e)
+        or _is_Name_constructor(e) \
+        or _is_Call_constructor(e)
 
 def _is_Name_constructor(e):
     return isinstance(e, ast.Name) and e.id[0].isupper()
 
-def _is_Name_constructor_call(e):
+def _is_Call_constructor(e):
     return isinstance(e, ast.Call) and _is_Name_constructor(e.func)
 
 def _process_ascription_slice(slice_, static_env):

@@ -10,7 +10,7 @@ def copy_node(node, *args, **kwargs):
     cls = node.__class__
     new_node = cls()
 
-    set_attrs = { }
+    set_attrs = {}
 
     # non-keyword args
     for name, value in zip(cls._fields, args):
@@ -40,7 +40,7 @@ def deep_copy_node(node, *args, **kwargs):
     cls = node.__class__
     new_node = cls()
 
-    set_attrs = { }
+    set_attrs = {}
 
     # non-keyword args
     for name, value in zip(cls._fields, args):

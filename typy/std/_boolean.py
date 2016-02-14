@@ -4,9 +4,9 @@ import ast
 import typy
 import typy.util.astx as astx
 
-class Bool_(typy.Type):
+class boolean_(typy.Type):
     def __str__(self):
-        return "Bool"
+        return "boolean"
 
     @classmethod
     def init_idx(cls, idx):
@@ -16,9 +16,10 @@ class Bool_(typy.Type):
 
     @classmethod
     def init_inc_idx(cls, inc_idx):
-    	if inc_idx != () and inc_idx != Ellipsis:
-    		raise typy.TypeFormationError("Incomplete index of boolean type must be () or Ellipsis.")
-    	return inc_idx
+        if inc_idx != () and inc_idx != Ellipsis:
+            raise typy.TypeFormationError(
+                "Incomplete index of boolean type must be () or Ellipsis.")
+        return inc_idx
 
     def ana_Name_constructor(self, ctx, e):
         id = e.id
@@ -58,7 +59,8 @@ class Bool_(typy.Type):
             if not isinstance(op, (ast.Eq, ast.NotEq, ast.Is, ast.IsNot)):
                 raise typy.TypeError("Type bool does not support this operator.", op)
         for e_ in typy.util.tpl_cons(left, comparators):
-            if hasattr(e_, 'match'): continue # already synthesized
+            if hasattr(e_, 'match'): 
+                continue # already synthesized
             ctx.ana(e_, self)
         return self
 
@@ -84,5 +86,5 @@ class Bool_(typy.Type):
         return translation
 
     # TODO: case/if operators
-Bool = Bool_[()]
+boolean = boolean_[()]
 

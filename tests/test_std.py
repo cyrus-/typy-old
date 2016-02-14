@@ -1,29 +1,951 @@
 """typy standard library tests"""
+import ast
+
 import pytest
 
 from utils import * 
 
 import typy
-import typy.fp as fp
-import typy.std as std
+from typy.std import *
+
+# Type Formation
+class TestTypeFormation:
+    def test_boolean_index(self):
+        with pytest.raises(typy.TypeFormationError):
+            boolean_[0]
+
+    def test_stdfn_noargs(self):
+        fn_ty = fn[(), unit]
+        assert isinstance(fn_ty, typy.Type)
+        assert fn_ty.idx == ((), unit)
+
+    def test_stdfn_onearg(self):
+        fn_ty = fn[unit, unit]
+        assert isinstance(fn_ty, typy.Type)
+        assert fn_ty.idx == ((unit,), unit)
+
+    def test_stdfn_twoargs(self):
+        fn_ty = fn[unit, unit, unit]
+        assert isinstance(fn_ty, typy.Type)
+        assert fn_ty.idx == ((unit, unit), unit)
+
+    def test_stdfn_tupled_args(self):
+        fn_ty = fn[(unit, unit), unit]
+        assert isinstance(fn_ty, typy.Type)
+        assert fn_ty.idx == ((unit, unit), unit)
+
+    def test_stdfn_badidx_nottuple(self):
+        with pytest.raises(typy.TypeFormationError):
+            fn[0]
+
+    def test_stdfn_badidx_nottype(self):
+        with pytest.raises(typy.TypeFormationError):
+            fn[0, unit]
+
+    def test_stdfn_badidx_nottype2(self):
+        with pytest.raises(typy.TypeFormationError):
+            fn[(unit, 0), unit]
+
+    def test_stdfn_badidx_rtnottype(self):
+        with pytest.raises(typy.TypeFormationError):
+            fn[unit, 0]
+
+    def test_stdfn_badidx_too_short(self):
+        with pytest.raises(typy.TypeFormationError):
+            fn[unit]
+
+    def test_stdfn_incty_construction_all_elided(self):
+        fn_incty = fn[...]
+        assert isinstance(fn_incty, typy.IncompleteType)
+        assert fn_incty.inc_idx == Ellipsis 
+
+    def test_stdfn_incty_construction_noargs_rty_elided(self):
+        fn_incty = fn[(), ...]
+        assert isinstance(fn_incty, typy.IncompleteType)
+        assert fn_incty.inc_idx == ((), Ellipsis)
+
+    def test_stdfn_incty_construction_onearg_rty_elided(self):
+        fn_incty = fn[unit, ...]
+        assert isinstance(fn_incty, typy.IncompleteType)
+        assert fn_incty.inc_idx == ((unit,), Ellipsis)
+
+    def test_stdfn_incty_construction_twoargs_rty_elided(self):
+        fn_incty = fn[unit, unit, ...]
+        assert isinstance(fn_incty, typy.IncompleteType)
+        assert fn_incty.inc_idx == ((unit, unit), Ellipsis)
+
+    def test_stdfn_incty_construction_tupled_args_rty_elided(self):
+        fn_incty = fn[(unit, unit), ...]
+        assert isinstance(fn_incty, typy.IncompleteType)
+        assert fn_incty.inc_idx == ((unit, unit), Ellipsis)
+
+    def test_stdfn_incty_badidx_arg_elided(self):
+        with pytest.raises(typy.TypeFormationError):
+            fn[..., unit]
+
+    def test_stdfn_incty_badidx_arg_nottuple(self):
+        with pytest.raises(typy.TypeFormationError):
+            fn[0, ...]
+
+    def test_stdfn_incty_badidx_arg_nottype(self):
+        with pytest.raises(typy.TypeFormationError):
+            fn[(unit, 0), ...]
+
+# fn
+
+class TestStdFnDirectDecorator:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            pass
+        return f
+
+    def test_is_fn(self, f):
+        assert isinstance(f, typy.Fn)
+
+    def test_tree(self, f):
+        assert isinstance(f.tree, ast.FunctionDef)
+
+def test_stdfn_docstring():
+    fnty = fn[unit, unit]
+    @fnty
+    def f():
+        """This is a docstring."""
+    assert f.__doc__ == f.func_doc == """This is a docstring."""
+
+def test_stdfn_incty_docstring():
+    @fn
+    def f():
+        """This is a docstring."""
+    assert f.__doc__ == f.func_doc == """This is a docstring."""
+
+class TestStdFnArgCountCorrect:
+    @pytest.fixture
+    def fn_ty(self):
+        return fn[unit, unit]
+
+    @pytest.fixture
+    def f(self, fn_ty):
+        @fn_ty
+        def f(x):
+            """This is a docstring."""
+        return f
+
+    def test_type(self, f, fn_ty):
+        assert f.typecheck() == fn_ty
+
+    def test_translate(self, f):
+        translation_eq(f, """
+            def f(x):
+                return ()""")
+
+def test_stdfn_arg_count_incorrect():
+    fn_ty = fn[unit, unit]
+    @fn_ty
+    def test():
+        """This is a docstring."""
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestStdFnArgCountZero:
+    @pytest.fixture
+    def fn_ty(self): 
+        return fn[(), unit]
+
+    @pytest.fixture
+    def f(self, fn_ty):
+        @fn_ty
+        def f():
+            """This is a docstring."""
+        return f
+
+    def test_type(self, f, fn_ty):
+        assert f.typecheck() == fn_ty
+
+    def test_translate(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+def test_stdfn_arg_count_zero_incorrect():
+    fn_ty = fn[(), unit]
+    @fn_ty
+    def f(x):
+        """This is a docstring."""
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_stdfn_varargs_unsupported():
+    fn_ty = fn[unit, unit]
+    @fn_ty 
+    def f(*x):
+        """This is a docstring."""
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_stdfn_kwargs_unsupported():
+    fn_ty = fn[unit, unit]
+    @fn_ty 
+    def f(**x):
+        """This is a docstring."""
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_stdfn_defaults_unsupported():
+    fn_ty = fn[unit, unit]
+    @fn_ty 
+    def f(x=()):
+        """This is a docstring."""
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+class TestStdFnPass:
+    @pytest.fixture
+    def fn_ty(self): 
+        return fn[(), unit]
+
+    @pytest.fixture
+    def f(self, fn_ty):
+        @fn_ty
+        def f():
+            """This is a docstring."""
+            pass
+        return f
+
+    def test_type(self, fn_ty, f):
+        assert f.typecheck() == fn_ty
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+def test_stdfn_Pass_type():
+    fn_ty = fn[(), boolean]
+    @fn_ty
+    def f():
+        pass
+    with pytest.raises(typy.TypeMismatchError):
+        f.typecheck()
+
+class TestStdFnIncTyEmpty:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fn[(), ...]
+        @fn_ty
+        def f():
+            """This is a docstring."""
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+class TestStdFnIncTyPass:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fn[(), ...]
+        @fn_ty
+        def f():
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+class TestStdFnSig:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            """This is a docstring."""
+            {}
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+class TestStdFnSigR():
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            """This is a docstring."""
+            {} >> unit
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+class TestStdFnSigPass:
+    @pytest.fixture
+    def f(self):    
+        @fn
+        def f():
+            """This is a docstring."""
+            {}
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+class TestStdFnSigRPass:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            """This is a docstring."""
+            {} >> unit
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+class TestStdFnSigArgs:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {unit}
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(unit,), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return ()""")
+
+def test_stdfn_sig_args_too_many():
+    @fn
+    def test(x):
+        {unit, unit}
+        pass
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_stdfn_sig_args_too_few():
+    @fn
+    def test(x, y):
+        {unit}
+        pass
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestStdFnSigNamedArgs:
+    @pytest.fixture 
+    def f(self):
+        @fn
+        def f(x):
+            {x : unit}
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[unit, unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return ()""")
+
+def test_stdfn_sig_named_args_too_many():
+    @fn
+    def test(x):
+        {x : unit, y : unit}
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_stdfn_sig_named_args_too_few():
+    @fn
+    def test(x, y):
+        {x : unit}
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_stdfn_sig_named_args_wrong_names():
+    @fn
+    def test(x):
+        {y : unit}
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_stdfn_sig_named_args_wrong_names2():
+    @fn
+    def test(x, y):
+        {x : unit, z : unit}
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestStdFnSigcplxTypes:
+    @pytest.fixture
+    def f(self):
+        q = [unit, boolean]
+        @fn
+        def f(x, y):
+            {x : q[1], y : q[0]} >> q[0]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[boolean, unit, unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x, y):
+                return ()""")
+
+class TestRedundantSigs:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fn[(), ...]
+        @fn_ty 
+        def f():
+            {}
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+class TestRedundantSigs2:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fn[(unit, unit), unit]
+        @fn_ty
+        def f(x, y):
+            {unit, unit} >> unit
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(unit, unit), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x, y):
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+class TestRedundantSigs3:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fn[(), ...]
+        @fn_ty
+        def f():
+            {} >> unit
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+def test_redundant_sigs_4():
+    fn_ty = fn[(unit, unit), unit]
+    @fn_ty
+    def f(x, y):
+        {boolean, boolean}
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+class TestRedundantSigs5:
+    @pytest.fixture
+    def f(self):
+        fn_ty = fn[(boolean, boolean), unit]
+        @fn_ty
+        def f(x, y):
+            {boolean, boolean}
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(boolean, boolean), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x, y):
+                return ()""")
+
+def test_redundant_sigs_6():
+    fn_ty = fn[(unit, unit), ...]
+    @fn_ty
+    def test(x, y):
+        {boolean, unit}
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+# unit
+
+class TestUnitIntro:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            {} >> unit
+            ()
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+class TestUnitAscription:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            () [: unit]
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                return ()""")
+
+    #def test_eval(self, f):
+    #    assert f() == None 
+
+def test_unit_ascription_toomany():
+    @fn
+    def test():
+        (1, 2) [: unit]
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_unit_bad_ascription():
+    @fn
+    def test():
+        () [: boolean]
+    with pytest.raises(typy.NotSupportedError):
+        test.typecheck()
+
+def test_unit_bad_inc_ascription():
+    @fn
+    def test():
+        () [: boolean_[...]]
+    with pytest.raises(typy.NotSupportedError):
+        test.typecheck()
+
+def test_unit_bad_omitted_inc_ascription():
+    @fn
+    def test():
+        () [: boolean_]
+    with pytest.raises(typy.NotSupportedError):
+        test.typecheck()
+
+class TestUnitCompare:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x [: unit] = ()
+            x_eq_y = (x == () == ())
+            x_eq_y [: boolean]
+            x_neq_y = (x != () != ())
+            x_neq_y [: boolean]
+            x_is_y = (x is () is ())
+            x_is_y [: boolean]
+            x_isnot_y = (x is not () is not ())
+            x_isnot_y [: boolean]
+        return f
+
+    def test_type(self, f): 
+        assert f.typecheck() == fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = ()
+                x_eq_y = (x == () == ())
+                x_eq_y
+                x_neq_y = (x != () != ())
+                x_neq_y
+                x_is_y = (x is () is ())
+                x_is_y
+                x_isnot_y = (x is not () is not ())
+                return x_isnot_y""")
+
+def test_unit_Lt():
+    @fn
+    def f():
+        x [: unit] = ()
+        x < ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_unit_LtE():
+    @fn
+    def f():
+        x [: unit] = ()
+        x <= ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_unit_Gt():
+    @fn
+    def f():
+        x [: unit] = ()
+        x > ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_unit_GtE():
+    @fn
+    def f():
+        x [: unit] = ()
+        x >= ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_unit_In():
+    @fn
+    def f():
+        x [: unit] = ()
+        x in ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_unit_NotIn():
+    @fn
+    def f():
+        x [: unit] = ()
+        x not in ()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+# Variables
+
+class TestVariableLookup:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {x : boolean}
+            x
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[boolean, boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return x""")
+
+class TestVariableLookupAna:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {x : boolean} >> boolean
+            x
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[boolean, boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return x""")
+
+def test_variable_lookup_notfound():
+    @fn 
+    def test(x):
+        {x : boolean}
+        y
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+    
+class TestAssignSyn:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x = () [: unit]
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = ()
+                return x""")
+
+    #def test_eval(self, f):
+    #    assert f() == None
+
+class TestAssignAna:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x = () [: unit]
+            x = ()
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = ()
+                x = ()
+                return x""")
+
+    #def test_eval(self, f):
+    #    assert f() == ()
+
+def test_assign_bad():
+    @fn
+    def test(x):
+        {unit}
+        x = True [: boolean]  # noqa
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestAssignAscription:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x [: boolean] = True
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = True
+                return x""")
+
+class TestAssignAscriptionDbl:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x [: boolean] = True
+            x [: boolean] = True
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = True
+                x = True
+                return x""")
+
+def test_assign_ascription_dbl_inconsistent():
+    @fn
+    def test():
+        x [: boolean] = True 
+        x [: unit] = ()
+        x
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestAssignMultiple:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x [: boolean] = y = True
+            y
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = y = True
+                return y""")
+
+class TestAssignMultipleAscription:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x [: boolean] = y [: boolean] = True
+            y
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = y = True
+                return y""")
+
+def test_assign_multiple_ascription_bad():
+    @fn
+    def test():
+        x [: boolean] = y [: unit] = True
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_assign_multiple_ascription_bad_2():
+    @fn
+    def test(x):
+        {x : boolean}
+        x [: boolean] = y [: unit] = True
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_assign_multiple_ascription_bad_3():
+    @fn
+    def test(x):
+        {x : unit}
+        x [: boolean] = y [: boolean] = True
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestRecursiveFn:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x, y):
+            {boolean, boolean} >> boolean
+            f(x, y)
+        return f 
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(boolean, boolean), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x, y):
+                return f(x, y)""")
+
+def test_nonrecursive_fn():
+    @fn
+    def f():
+        {}
+        f()
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_shadow_fn_name():
+    @fn
+    def f(f):
+        {boolean} >> boolean
+        f
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
 
 #
-# Bool
+# boolean
 #
 
-from typy.std import Bool
-from typy.std.boolean import Bool_
+from typy.std import boolean
+from typy.std._boolean import boolean_
 
 class TestBooleanAscriptionTrue:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            True [: Bool]
+            True [: boolean]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Bool]
+        assert f.typecheck() == fn[(), boolean]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -33,13 +955,13 @@ class TestBooleanAscriptionTrue:
 class TestBooleanAscriptionFalse:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            False [: Bool]
+            False [: boolean]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Bool]
+        assert f.typecheck() == fn[(), boolean]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -49,37 +971,37 @@ class TestBooleanAscriptionFalse:
 class TestBooleanIncAscription:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            True [: Bool_]
+            True [: boolean_]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Bool]
+        assert f.typecheck() == fn[(), boolean]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return True""")
 
-def test_Bool_ascription_bad():
-    @fp.fn
+def test_boolean_ascription_bad():
+    @fn
     def test():
-        Bad [: Bool]
+        Bad [: boolean]
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
 class TestBooleanNot:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Bool] = True
+            x [: boolean] = True
             not x
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Bool]
+        assert f.typecheck() == fn[(), boolean]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -87,26 +1009,26 @@ class TestBooleanNot:
                 x = True
                 return (not x)""")
 
-def test_Bool_Invert():
-    @fp.fn
+def test_boolean_Invert():
+    @fn
     def test():
-        x [: Bool] = True
+        x [: boolean] = True
         ~x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Bool_UAdd():
-    @fp.fn
+def test_boolean_UAdd():
+    @fn
     def test():
-        x [: Bool] = True
+        x [: boolean] = True
         +x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Bool_USub():
-    @fp.fn
+def test_boolean_USub():
+    @fn
     def test():
-        x [: Bool] = True
+        x [: boolean] = True
         -x
     with pytest.raises(typy.TypeError):
         test.typecheck()
@@ -114,21 +1036,21 @@ def test_Bool_USub():
 class TestBooleanCompareOps:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Bool] = True
-            x_eq_y = (x == True)
-            x_eq_y [: Bool]
-            x_neq_y = (x != True)
-            x_neq_y [: Bool]
+            x [: boolean] = True
+            x_eq_y = (x == True) # noqa
+            x_eq_y [: boolean]
+            x_neq_y = (x != True) # noqa
+            x_neq_y [: boolean]
             x_is_y = (x is True)
-            x_is_y [: Bool]
+            x_is_y [: boolean]
             x_isnot_y = (x is not True)
             x_isnot_y
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Bool]
+        assert f.typecheck() == fn[(), boolean]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -143,56 +1065,56 @@ class TestBooleanCompareOps:
                 x_isnot_y = (x is not True)
                 return x_isnot_y""")
 
-def test_Bool_Lt():
-    @fp.fn
+def test_boolean_Lt():
+    @fn
     def test():
-        x [: Bool] = True
-        y [: Bool] = False
+        x [: boolean] = True
+        y [: boolean] = False
         x < y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Bool_LtE():
-    @fp.fn
+def test_boolean_LtE():
+    @fn
     def test():
-        x [: Bool] = True
-        y [: Bool] = False
+        x [: boolean] = True
+        y [: boolean] = False
         x <= y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Bool_Gt():
-    @fp.fn
+def test_boolean_Gt():
+    @fn
     def test():
-        x [: Bool] = True
-        y [: Bool] = False
+        x [: boolean] = True
+        y [: boolean] = False
         x > y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Bool_GtE():
-    @fp.fn
+def test_boolean_GtE():
+    @fn
     def test():
-        x [: Bool] = True
-        y [: Bool] = False
+        x [: boolean] = True
+        y [: boolean] = False
         x >= y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Bool_In():
-    @fp.fn
+def test_boolean_In():
+    @fn
     def test():
-        x [: Bool] = True
-        y [: Bool] = False
+        x [: boolean] = True
+        y [: boolean] = False
         x in y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Bool_NotIn():
-    @fp.fn
+def test_boolean_NotIn():
+    @fn
     def test():
-        x [: Bool] = True
-        y [: Bool] = False
+        x [: boolean] = True
+        y [: boolean] = False
         x not in y
     with pytest.raises(typy.TypeError):
         test.typecheck()
@@ -200,17 +1122,17 @@ def test_Bool_NotIn():
 class TestBooleanBoolOps:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Bool] = True
+            x [: boolean] = True
             x_and_y = (x and True and True and True)
-            x_and_y [: Bool]
+            x_and_y [: boolean]
             x_or_y = (x or True or True or True)
-            x_or_y [: Bool]
+            x_or_y [: boolean]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Bool]
+        assert f.typecheck() == fn[(), boolean]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -222,22 +1144,22 @@ class TestBooleanBoolOps:
                 return x_or_y""")
 
 #
-# Int
+# num
 #
 
-from typy.std import Int
-from typy.std.numeric import Int_
+from typy.std import num
+from typy.std._numeric import num_
 
 class TestIntegerIntro:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3 [: Int]
+            3 [: num]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Int]
+        assert f.typecheck() == fn[(), num]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -247,13 +1169,13 @@ class TestIntegerIntro:
 class TestIntegerIncIntro:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3 [: Int_]
+            3 [: num_]
         return f 
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Int]
+        assert f.typecheck() == fn[(), num]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -263,56 +1185,56 @@ class TestIntegerIncIntro:
 class TestIntegerLongIntro:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            1234567890123456789012345678901234567890123456789012345678901234567890 [: Int]
+            1234567890123456789012345678901234567890123456789012345678901234567890 [: num]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Int]
+        assert f.typecheck() == fn[(), num]
 
     def test_translation(self, f):  
         translation_eq(f, """
             def f():
                 return 1234567890123456789012345678901234567890123456789012345678901234567890L""")
 
-def test_Integer_ascription_on_Float():
-    @fp.fn
+def test_Integer_ascription_on_ieee():
+    @fn
     def test():
-        3.0 [: Int]
+        3.0 [: num]
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Integer_ascription_on_Complex():
-    @fp.fn
+def test_Integer_ascription_on_cplx():
+    @fn
     def test():
-        3.0j [: Int]
+        3.0j [: num]
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Integer_ascription_on_String():
-    @fp.fn
+def test_Integer_ascription_on_stringing():
+    @fn
     def test():
-        "3" [: Int]
+        "3" [: num]
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
 class TestIntegerUnaryOps:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x = 123 [: Int]
+            x = 123 [: num]
             x_plus = +x
-            x_plus [: Int]
+            x_plus [: num]
             x_minus = -x
-            x_minus [: Int]
+            x_minus [: num]
             x_invert = ~x
-            x_invert [: Int]
+            x_invert [: num]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Int]
+        assert f.typecheck() == fn[(), num]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -326,45 +1248,45 @@ class TestIntegerUnaryOps:
                 return x_invert""")
 
 def test_Integer_no_not():
-    @fp.fn
+    @fn
     def test():
-        not (3 [: Int])
+        not (3 [: num])
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
 class TestIntegerBinops:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x = 123 [: Int]
-            y = 456 [: Int]
+            x = 123 [: num]
+            y = 456 [: num]
             x_plus_y = x + y
-            x_plus_y [: Int]
+            x_plus_y [: num]
             x_minus_y = x - y
-            x_minus_y [: Int]
+            x_minus_y [: num]
             x_mult_y = x * y
-            x_mult_y [: Int]
+            x_mult_y [: num]
             x_mod_y = x % y
-            x_mod_y [: Int]
+            x_mod_y [: num]
             x_pow_y = x ** y
-            x_pow_y [: Int]
+            x_pow_y [: num]
             x_lshift_y = x << y
-            x_lshift_y [: Int]
+            x_lshift_y [: num]
             x_rshift_y = x >> y
-            x_rshift_y [: Int]
+            x_rshift_y [: num]
             x_bitor_y = x | y
-            x_bitor_y [: Int]
+            x_bitor_y [: num]
             x_bitxor_y = x ^ y
-            x_bitxor_y [: Int]
+            x_bitxor_y [: num]
             x_bitand_y = x & y
-            x_bitand_y [: Int]
+            x_bitand_y [: num]
             x_floordiv_y = x // y
-            x_floordiv_y [: Int]
+            x_floordiv_y [: num]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Int]
+        assert f.typecheck() == fn[(), num]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -394,11 +1316,11 @@ class TestIntegerBinops:
                 x_floordiv_y = (x // y)
                 return x_floordiv_y""")
 
-# see TestIntFloatDiv for Integer/Float division
-def test_Integer_Int_div():
-    @fp.fn
+# see TestnumieeeDiv for Integer/ieee division
+def test_Integer_num_div():
+    @fn
     def test():
-        x [: Int] = 3
+        x [: num] = 3
         x / x
     with pytest.raises(typy.TypeError):
         test.typecheck()
@@ -406,29 +1328,29 @@ def test_Integer_Int_div():
 class TestIntegerCompareOps:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x = 123 [: Int]
+            x = 123 [: num]
             x_eq_y = (x == 456 == 789)
-            x_eq_y [: Bool]
+            x_eq_y [: boolean]
             x_neq_y = (x != 456 != 789)
-            x_neq_y [: Bool]
+            x_neq_y [: boolean]
             x_lt_y = (x < 456 < 789)
-            x_lt_y [: Bool]
+            x_lt_y [: boolean]
             x_lte_y = (x <= 456 <= 789)
-            x_lte_y [: Bool]
+            x_lte_y [: boolean]
             x_gt_y = (x > 456 > 789)
-            x_gt_y [: Bool]
+            x_gt_y [: boolean]
             x_gte_y = (x >= 456 >= 789)
-            x_gte_y [: Bool]
+            x_gte_y [: boolean]
             x_is_y = (x is 456 is 789)
-            x_is_y [: Bool]
-            x_isnot_y = (x is not 456 is not 789)
-            x_isnot_y [: Bool]
+            x_is_y [: boolean]
+            x_isnot_y = (x is not 456 is not 789) 
+            x_isnot_y [: boolean]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Bool]
+        assert f.typecheck() == fn[(), boolean]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -451,91 +1373,91 @@ class TestIntegerCompareOps:
                 x_isnot_y = (x is not 456 is not 789)
                 return x_isnot_y""")
 
-def test_Int_In():
-    @fp.fn
+def test_num_In():
+    @fn
     def test():
-        x [: Int] = 123
-        y [: Int] = 456
+        x [: num] = 123
+        y [: num] = 456
         x in y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Int_NotIn():
-    @fp.fn
+def test_num_NotIn():
+    @fn
     def test():
-        x [: Int] = 123
-        y [: Int] = 456
+        x [: num] = 123
+        y [: num] = 456
         x not in y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Int_And():
-    @fp.fn
+def test_num_And():
+    @fn
     def test():
-        x [: Int] = 123
-        y [: Int] = 456
+        x [: num] = 123
+        y [: num] = 456
         x and y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Int_Or():
-    @fp.fn
+def test_num_Or():
+    @fn
     def test():
-        x [: Int] = 123
-        y [: Int] = 456
+        x [: num] = 123
+        y [: num] = 456
         x or y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
 #
-# Float
+# ieee
 #
 
-from typy.std import Float
-from typy.std.numeric import Float_
+from typy.std import ieee
+from typy.std._numeric import ieee_
 
-class TestFloatIntroF:
+class TestieeeIntroF:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3.0 [: Float]
+            3.0 [: ieee]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Float]
+        assert f.typecheck() == fn[(), ieee]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return 3.0""")
 
-class TestFloatIntroI:
+class TestieeeIntroI:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3 [: Float]
+            3 [: ieee]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Float]
+        assert f.typecheck() == fn[(), ieee]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return 3.0""")
 
-class TestFloatIntroL:
+class TestieeeIntroL:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            1234567890123456789012345678901234567890123456789012345678901234567890 [: Float]
+            1234567890123456789012345678901234567890123456789012345678901234567890 [: ieee]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Float]
+        assert f.typecheck() == fn[(), ieee]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -545,13 +1467,13 @@ class TestFloatIntroL:
 class TestIntegerIncIntroF:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3.0 [: Float_]
+            3.0 [: ieee_]
         return f 
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Float]
+        assert f.typecheck() == fn[(), ieee]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -561,63 +1483,65 @@ class TestIntegerIncIntroF:
 class TestIntegerIncIntroI:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3 [: Float_]
+            3 [: ieee_]
         return f 
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Float]
+        assert f.typecheck() == fn[(), ieee]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return 3.0""")
 
-class TestFloatIntroL:
+# ieee
+
+class TestieeeIncIntroL:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            1234567890123456789012345678901234567890123456789012345678901234567890 [: Float_]
+            1234567890123456789012345678901234567890123456789012345678901234567890 [: ieee_]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Float]
+        assert f.typecheck() == fn[(), ieee]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return 1.2345678901234567e+69""")
 
-def test_Float_ascription_on_Complex():
-    @fp.fn
+def test_ieee_ascription_on_cplx():
+    @fn
     def test():
-        3.0j [: Float]
+        3.0j [: ieee]
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Float_ascription_on_String():
-    @fp.fn
+def test_ieee_ascription_on_stringing():
+    @fn
     def test():
-        "3" [: Float]
+        "3" [: ieee]
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestFloatUnaryOps:
+class TestieeeUnaryOps:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x = 123 [: Float]
+            x = 123 [: ieee]
             x_plus = +x
-            x_plus [: Float]
+            x_plus [: ieee]
             x_minus = -x
-            x_minus [: Float]
+            x_minus [: ieee]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Float]
+        assert f.typecheck() == fn[(), ieee]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -628,46 +1552,46 @@ class TestFloatUnaryOps:
                 x_minus = (- x)
                 return x_minus""")
 
-def test_Float_no_not():
-    @fp.fn
+def test_ieee_no_not():
+    @fn
     def test():
-        not (3 [: Float])
+        not (3 [: ieee])
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Float_no_invert():
-    @fp.fn
+def test_ieee_no_invert():
+    @fn
     def test():
-        x [: Float] = 3
+        x [: ieee] = 3
         ~x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestFloatBinops:
+class TestieeeBinops:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x = 123 [: Float]
-            y = 456 [: Float]
+            x = 123 [: ieee]
+            y = 456 [: ieee]
             x_plus_y = x + y
-            x_plus_y [: Float]
+            x_plus_y [: ieee]
             x_minus_y = x - y
-            x_minus_y [: Float]
+            x_minus_y [: ieee]
             x_mult_y = x * y
-            x_mult_y [: Float]
+            x_mult_y [: ieee]
             x_mod_y = x % y
-            x_mod_y [: Float]
+            x_mod_y [: ieee]
             x_pow_y = x ** y
-            x_pow_y [: Float]
+            x_pow_y [: ieee]
             x_div_y = x / y
-            x_div_y [: Float]
+            x_div_y [: ieee]
             x_floordiv_y = x // y
-            x_floordiv_y [: Float]
+            x_floordiv_y [: ieee]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Float]
+        assert f.typecheck() == fn[(), ieee]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -689,72 +1613,72 @@ class TestFloatBinops:
                 x_floordiv_y = (x // y)
                 return x_floordiv_y""")
 
-def test_Float_no_lshift():
-    @fp.fn
+def test_ieee_no_lshift():
+    @fn
     def test():
-        x [: Float] = 3
+        x [: ieee] = 3
         x << x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Float_no_rshift():
-    @fp.fn
+def test_ieee_no_rshift():
+    @fn
     def test():
-        x [: Float] = 3
+        x [: ieee] = 3
         x >> x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Float_no_bitor():
-    @fp.fn
+def test_ieee_no_bitor():
+    @fn
     def test():
-        x [: Float] = 3
+        x [: ieee] = 3
         x | x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Float_no_bitxor():
-    @fp.fn
+def test_ieee_no_bitxor():
+    @fn
     def test():
-        x [: Float] = 3
+        x [: ieee] = 3
         x ^ x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Float_no_bitand():
-    @fp.fn
+def test_ieee_no_bitand():
+    @fn
     def test():
-        x [: Float] = 3
+        x [: ieee] = 3
         x & x
     with pytest.raises(typy.TypeError):
         test.typecheck()
  
-class TestFloatCompareOps:
+class TestieeeCompareOps:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x = 123 [: Float]
+            x = 123 [: ieee]
             x_eq_y = (x == 456 == 789)
-            x_eq_y [: Bool]
+            x_eq_y [: boolean]
             x_neq_y = (x != 456 != 789)
-            x_neq_y [: Bool]
+            x_neq_y [: boolean]
             x_lt_y = (x < 456 < 789)
-            x_lt_y [: Bool]
+            x_lt_y [: boolean]
             x_lte_y = (x <= 456 <= 789)
-            x_lte_y [: Bool]
+            x_lte_y [: boolean]
             x_gt_y = (x > 456 > 789)
-            x_gt_y [: Bool]
+            x_gt_y [: boolean]
             x_gte_y = (x >= 456 >= 789)
-            x_gte_y [: Bool]
+            x_gte_y [: boolean]
             x_is_y = (x is 456 is 789)
-            x_is_y [: Bool]
-            x_isnot_y = (x is not 456 is not 789)
-            x_isnot_y [: Bool]
+            x_is_y [: boolean]
+            x_isnot_y = (x is not 456 is not 789) 
+            x_isnot_y [: boolean]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Bool]
+        assert f.typecheck() == fn[(), boolean]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -777,53 +1701,53 @@ class TestFloatCompareOps:
                 x_isnot_y = (x is not 456.0 is not 789.0)
                 return x_isnot_y""")
 
-def test_Float_In():
-    @fp.fn
+def test_ieee_In():
+    @fn
     def test():
-        x [: Float] = 123
-        y [: Float] = 456
+        x [: ieee] = 123
+        y [: ieee] = 456
         x in y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Float_NotIn():
-    @fp.fn
+def test_ieee_NotIn():
+    @fn
     def test():
-        x [: Float] = 123
-        y [: Float] = 456
+        x [: ieee] = 123
+        y [: ieee] = 456
         x not in y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Float_And():
-    @fp.fn
+def test_ieee_And():
+    @fn
     def test():
-        x [: Float] = 123
-        y [: Float] = 456
+        x [: ieee] = 123
+        y [: ieee] = 456
         x and y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Float_Or():
-    @fp.fn
+def test_ieee_Or():
+    @fn
     def test():
-        x [: Float] = 123
-        y [: Float] = 456
+        x [: ieee] = 123
+        y [: ieee] = 456
         x or y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestIntFloatDiv:
+class TestNumIEEEDiv:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Int] = 3
+            x [: num] = 3
             x / 2
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Float]
+        assert f.typecheck() == fn[(), ieee]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -832,181 +1756,181 @@ class TestIntFloatDiv:
                 return (x / 2.0)""")
 
 #
-# Complex
+# cplx
 #
 
-from typy.std import Complex
-from typy.std.numeric import Complex_
+from typy.std import cplx
+from typy.std._numeric import cplx_
 
-class TestComplexIntroI:
+class TestcplxIntroI:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3 [: Complex]
+            3 [: cplx]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return (3+0j)""")
 
-class TestComplexIntroF:
+class TestcplxIntroF:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3.0 [: Complex]
+            3.0 [: cplx]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return (3+0j)""")
 
-class TestComplexIntroL:
+class TestcplxIntroL:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            1234567890123456789012345678901234567890123456789012345678901234567890 [: Complex]
+            1234567890123456789012345678901234567890123456789012345678901234567890 [: cplx]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return (1.2345678901234567e+69+0j)""")
 
-class TestComplexIntroC:
+class TestcplxIntroC:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3j [: Complex]
+            3j [: cplx]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return 3j""")
 
-class TestComplexIncIntroI:
+class TestcplxIncIntroI:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3 [: Complex_]
+            3 [: cplx_]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return (3+0j)""")
 
-class TestComplexIncIntroF:
+class TestcplxIncIntroF:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3.0 [: Complex_]
+            3.0 [: cplx_]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return (3+0j)""")
 
-class TestComplexIncIntroL:
+class TestcplxIncIntroL:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            1234567890123456789012345678901234567890123456789012345678901234567890 [: Complex_]
+            1234567890123456789012345678901234567890123456789012345678901234567890 [: cplx_]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return (1.2345678901234567e+69+0j)""")
 
-class TestComplexIncIntroC:
+class TestcplxIncIntroC:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            3j [: Complex_]
+            3j [: cplx_]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return 3j""")
 
-def test_Complex_Intro_tuple_short():
-    @fp.fn
+def test_cplx_Intro_tuple_short():
+    @fn
     def f():
-        (0,) [: Complex]
+        (0,) [: cplx]
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
-def test_Complex_Intro_tuple_long():
-    @fp.fn
+def test_cplx_Intro_tuple_long():
+    @fn
     def f():
-        (0, 0, 0) [: Complex]
+        (0, 0, 0) [: cplx]
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
-class TestComplexIntroTuple:
+class TestcplxIntroTuple:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            (1, 0) [: Complex] # II
-            (1, 0) [: Complex_]
-            (2.0, 3) [: Complex] # FI
-            (2.0, 3) [: Complex_]
-            (3.0, 3.0) [: Complex] # FF
-            (3.0, 3.0) [: Complex_]
-            (4, 3j) [: Complex] # IC
-            (4, 3j) [: Complex_]
-            x [: Int] = 1
-            (x, 5) [: Complex]
-            (x, 6) [: Complex_]
-            (7, x) [: Complex]
-            (8, x) [: Complex_]
-            y [: Float] = 1
-            (y, 9) [: Complex]
-            (y, 10) [: Complex_]
-            (11, y) [: Complex]
-            (12, y) [: Complex_]
+            (1, 0) [: cplx] # II
+            (1, 0) [: cplx_]
+            (2.0, 3) [: cplx] # FI
+            (2.0, 3) [: cplx_]
+            (3.0, 3.0) [: cplx] # FF
+            (3.0, 3.0) [: cplx_]
+            (4, 3j) [: cplx] # IC
+            (4, 3j) [: cplx_]
+            x [: num] = 1
+            (x, 5) [: cplx]
+            (x, 6) [: cplx_]
+            (7, x) [: cplx]
+            (8, x) [: cplx_]
+            y [: ieee] = 1
+            (y, 9) [: cplx]
+            (y, 10) [: cplx_]
+            (11, y) [: cplx]
+            (12, y) [: cplx_]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1030,43 +1954,43 @@ class TestComplexIntroTuple:
                 __builtin__.complex(11.0, y)
                 return __builtin__.complex(12.0, y)""")
 
-def test_Complex_Intro_tuple_rl_bad():
-    @fp.fn
+def test_cplx_Intro_tuple_rl_bad():
+    @fn
     def f():
-        x [: Bool] = True
-        (x, 0) [: Complex]
+        x [: boolean] = True
+        (x, 0) [: cplx]
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
-def test_Complex_Intro_tuple_im_bad():
-    @fp.fn
+def test_cplx_Intro_tuple_im_bad():
+    @fn
     def f():
-        x [: Bool] = True
-        (0, x) [: Complex]
+        x [: boolean] = True
+        (0, x) [: cplx]
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
-def test_Complex_ascription_on_String():
-    @fp.fn
+def test_cplx_ascription_on_stringing():
+    @fn
     def test():
-        "3" [: Complex]
+        "3" [: cplx]
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestComplexUnaryOps:
+class TestcplxUnaryOps:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x = 123 [: Complex]
+            x = 123 [: cplx]
             x_plus = +x
-            x_plus [: Complex]
+            x_plus [: cplx]
             x_minus = -x
-            x_minus [: Complex]
+            x_minus [: cplx]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1077,44 +2001,44 @@ class TestComplexUnaryOps:
                 x_minus = (- x)
                 return x_minus""")
 
-def test_Complex_no_not():
-    @fp.fn
+def test_cplx_no_not():
+    @fn
     def test():
-        not (3 [: Complex])
+        not (3 [: cplx])
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_no_invert():
-    @fp.fn
+def test_cplx_no_invert():
+    @fn
     def test():
-        x [: Complex] = 3
+        x [: cplx] = 3
         ~x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestFloatBinopsCC:
+class TestieeeBinopsCC:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x = 123 [: Complex]
-            y = 456 [: Complex]
+            x = 123 [: cplx]
+            y = 456 [: cplx]
             x_plus_y = x + y
-            x_plus_y [: Complex]
+            x_plus_y [: cplx]
             x_minus_y = x - y
-            x_minus_y [: Complex]
+            x_minus_y [: cplx]
             x_mult_y = x * y
-            x_mult_y [: Complex]
+            x_mult_y [: cplx]
             x_pow_y = x ** y
-            x_pow_y [: Complex]
+            x_pow_y [: cplx]
             x_div_y = x / y
-            x_div_y [: Complex]
+            x_div_y [: cplx]
             x_floordiv_y = x // y
-            x_floordiv_y [: Complex]
+            x_floordiv_y [: cplx]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1134,72 +2058,72 @@ class TestFloatBinopsCC:
                 x_floordiv_y = (x // y)
                 return x_floordiv_y""")
 
-def test_Complex_no_mod():
-    @fp.fn
+def test_cplx_no_mod():
+    @fn
     def test():
-        x [: Complex] = 3
+        x [: cplx] = 3
         x % x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_no_lshift():
-    @fp.fn
+def test_cplx_no_lshift():
+    @fn
     def test():
-        x [: Complex] = 3
+        x [: cplx] = 3
         x << x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_no_rshift():
-    @fp.fn
+def test_cplx_no_rshift():
+    @fn
     def test():
-        x [: Complex] = 3
+        x [: cplx] = 3
         x >> x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_no_bitor():
-    @fp.fn
+def test_cplx_no_bitor():
+    @fn
     def test():
-        x [: Complex] = 3
+        x [: cplx] = 3
         x | x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_no_bitxor():
-    @fp.fn
+def test_cplx_no_bitxor():
+    @fn
     def test():
-        x [: Complex] = 3
+        x [: cplx] = 3
         x ^ x
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_no_bitand():
-    @fp.fn
+def test_cplx_no_bitand():
+    @fn
     def test():
-        x [: Complex] = 3
+        x [: cplx] = 3
         x & x
     with pytest.raises(typy.TypeError):
         test.typecheck()
  
-class TestComplexCompareOps:
+class TestcplxCompareOps:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x = 123 [: Complex]
+            x = 123 [: cplx]
             x_eq_y = (x == 456 == 789)
-            x_eq_y [: Bool]
+            x_eq_y [: boolean]
             x_neq_y = (x != 456 != 789)
-            x_neq_y [: Bool]
+            x_neq_y [: boolean]
             x_is_y = (x is 456 is 789)
-            x_is_y [: Bool]
-            x_isnot_y = (x is not 456 is not 789)
-            x_isnot_y [: Bool]
+            x_is_y [: boolean]
+            x_isnot_y = (x is not 456 is not 789) 
+            x_isnot_y [: boolean]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Bool]
+        assert f.typecheck() == fn[(), boolean]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1214,90 +2138,90 @@ class TestComplexCompareOps:
                 x_isnot_y = (x is not (456+0j) is not (789+0j))
                 return x_isnot_y""")
 
-def test_Complex_Lt():
-    @fp.fn
+def test_cplx_Lt():
+    @fn
     def test():
-        x [: Complex] = 123
-        y [: Complex] = 456
+        x [: cplx] = 123
+        y [: cplx] = 456
         x < y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_LtE():
-    @fp.fn
+def test_cplx_LtE():
+    @fn
     def test():
-        x [: Complex] = 123
-        y [: Complex] = 456
+        x [: cplx] = 123
+        y [: cplx] = 456
         x <= y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_Gt():
-    @fp.fn
+def test_cplx_Gt():
+    @fn
     def test():
-        x [: Complex] = 123
-        y [: Complex] = 456
+        x [: cplx] = 123
+        y [: cplx] = 456
         x > y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_GtE():
-    @fp.fn
+def test_cplx_GtE():
+    @fn
     def test():
-        x [: Complex] = 123
-        y [: Complex] = 456
+        x [: cplx] = 123
+        y [: cplx] = 456
         x >= y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_In():
-    @fp.fn
+def test_cplx_In():
+    @fn
     def test():
-        x [: Complex] = 123
-        y [: Complex] = 456
+        x [: cplx] = 123
+        y [: cplx] = 456
         x in y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_NotIn():
-    @fp.fn
+def test_cplx_NotIn():
+    @fn
     def test():
-        x [: Complex] = 123
-        y [: Complex] = 456
+        x [: cplx] = 123
+        y [: cplx] = 456
         x not in y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_And():
-    @fp.fn
+def test_cplx_And():
+    @fn
     def test():
-        x [: Complex] = 123
-        y [: Complex] = 456
+        x [: cplx] = 123
+        y [: cplx] = 456
         x and y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_Complex_Or():
-    @fp.fn
+def test_cplx_Or():
+    @fn
     def test():
-        x [: Complex] = 123
-        y [: Complex] = 456
+        x [: cplx] = 123
+        y [: cplx] = 456
         x or y
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestComplexComponents():
+class TestcplxComponents():
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Complex] = 456
-            r [: Float] = x.real
+            x [: cplx] = 456
+            r [: ieee] = x.real
             x.imag
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Float]
+        assert f.typecheck() == fn[(), ieee]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1306,17 +2230,17 @@ class TestComplexComponents():
                 r = x.real
                 return x.imag""")
 
-class TestComplexConjugate():
+class TestcplxConjugate():
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Complex] = 456
+            x [: cplx] = 456
             x.conjugate()
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1331,14 +2255,14 @@ class TestComplexConjugate():
 class TestConvertIF():
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Int] = 456
+            x [: num] = 456
             x.f
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Float]
+        assert f.typecheck() == fn[(), ieee]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1349,14 +2273,14 @@ class TestConvertIF():
 class TestConvertIC():
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Int] = 456
+            x [: num] = 456
             x.c
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1367,14 +2291,14 @@ class TestConvertIC():
 class TestConvertFC():
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Float] = 456
+            x [: ieee] = 456
             x.c
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Complex]
+        assert f.typecheck() == fn[(), cplx]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1383,88 +2307,88 @@ class TestConvertFC():
                 return __builtin__.complex(x)""")
 
 #
-# Str
+# string
 # 
 
-from typy.std import Str
-from typy.std.string import Str_
+from typy.std import string
+from typy.std._string import string_
 
-class TestStringIntro:
+class TeststringingIntro:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            "test" [: Str]
+            "test" [: string]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Str]
+        assert f.typecheck() == fn[(), string]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return 'test'""")
 
-class TestStringIncIntro:
+class TeststringingIncIntro:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            "test" [: Str_]
+            "test" [: string_]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Str]
+        assert f.typecheck() == fn[(), string]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return 'test'""")
 
-def test_String_num_Intro():
-    @fp.fn
+def test_stringing_num_Intro():
+    @fn
     def test(self):
-        123 [: Str]
+        123 [: string]
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestStringAdd:
+class TeststringingAdd:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            ("test" [: Str]) + "test"
+            ("test" [: string]) + "test"
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Str]
+        assert f.typecheck() == fn[(), string]
 
     def test_translation(self, f):
         translation_eq(f, """
             def f():
                 return ('test' + 'test')""")
 
-class TestStringCompare:
+class TeststringingCompare:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x = "abc" [: Str] == "def" == "ghi"
-            x [: Bool]
-            x = "abc" [: Str] != "def" != "ghi"
-            x [: Bool]
-            x = "abc" [: Str] is "def" is "ghi"
-            x [: Bool]
-            x = "abc" [: Str] is not "def" is not "ghi"
-            x [: Bool]
-            x = "abc" [: Str] in "def" in "ghi"
-            x [: Bool]
-            x = "abc" [: Str] not in "def" not in "ghi"
-            x [: Bool]
+            x = "abc" [: string] == "def" == "ghi"
+            x [: boolean]
+            x = "abc" [: string] != "def" != "ghi"
+            x [: boolean]
+            x = "abc" [: string] is "def" is "ghi"
+            x [: boolean]
+            x = "abc" [: string] is not "def" is not "ghi" 
+            x [: boolean]
+            x = "abc" [: string] in "def" in "ghi"
+            x [: boolean]
+            x = "abc" [: string] not in "def" not in "ghi"
+            x [: boolean]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Bool]
+        assert f.typecheck() == fn[(), boolean]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1482,38 +2406,38 @@ class TestStringCompare:
                 x = ('abc' not in 'def' not in 'ghi')
                 return x""") 
 
-class TestStringSubscript:
+class TeststringingSubscript:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Str] = "abcdefg"
+            x [: string] = "abcdefg"
             y = x[0]
-            y [: Str]
+            y [: string]
             y = x[0:1]
-            y [: Str]
+            y [: string]
             y = x[0:1:2]
-            y [: Str]
+            y [: string]
             y = x[0:]
-            y [: Str]
+            y [: string]
             # no x[:1] because that's ascription syntax
             # can always use x[0:1] for this
             y = x[0:1:]
-            y [: Str]
+            y [: string]
             y = x[0::1]
-            y [: Str]
+            y [: string]
             y = x[:0:1]
-            y [: Str]
+            y [: string]
             y = x[0::]
-            y [: Str]
+            y [: string]
             y = x[:0:]
-            y [: Str]
+            y [: string]
             y = x[::0]
-            y [: Str]
+            y [: string]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), Str]
+        assert f.typecheck() == fn[(), string]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1553,56 +2477,56 @@ def test_tpl_formation_unit():
     assert tpl[()].idx == OD(())
 
 def test_tpl_formation_single_ty():
-    assert isinstance(tpl[Int], typy.Type)
-    assert tpl[Int].idx == OD(((0, (0, Int)),))
+    assert isinstance(tpl[num], typy.Type)
+    assert tpl[num].idx == OD(((0, (0, num)),))
 
 def test_tpl_formation_two_ty():
-    assert isinstance(tpl[Int, Int], typy.Type)
-    assert tpl[Int, Int].idx == OD((
-        (0, (0, Int)),
-        (1, (1, Int))
+    assert isinstance(tpl[num, num], typy.Type)
+    assert tpl[num, num].idx == OD((
+        (0, (0, num)),
+        (1, (1, num))
     ))
 
 def test_tpl_formation_single_noty():
     with pytest.raises(typy.TypeFormationError):
-        tpl["Int"]
+        tpl["num"]
 
 def test_tpl_formation_two_noty():
     with pytest.raises(typy.TypeFormationError):
-        tpl[Int, "Int"]
+        tpl[num, "num"]
 
 def test_tpl_formation_single_label():
-    assert tpl["lbl0" : Int].idx == OD((
-        ("lbl0", (0, Int)),
+    assert tpl["lbl0" : num].idx == OD((
+        ("lbl0", (0, num)),
     ))
 
 def test_tpl_formation_two_labels():
-    assert tpl["lbl0": Int, "lbl1": Str].idx == OD((
-        ("lbl0", (0, Int)),
-        ("lbl1", (1, Str))
+    assert tpl["lbl0": num, "lbl1": string].idx == OD((
+        ("lbl0", (0, num)),
+        ("lbl1", (1, string))
     ))
 
 def test_tpl_formation_duplicate_labels():
     with pytest.raises(typy.TypeFormationError):
-        tpl["lbl0": Int, "lbl0": Str]
+        tpl["lbl0": num, "lbl0": string]
 
 def test_tpl_formation_empty_lbl():
     with pytest.raises(typy.TypeFormationError):
-        tpl["": Int]
+        tpl["": num]
 
-def test_tpl_formation_Int_labels():
-    assert tpl[1 : Int, 0 : Int].idx == OD((
-        (1, (0, Int)),
-        (0, (1, Int))
+def test_tpl_formation_num_labels():
+    assert tpl[1 : num, 0 : num].idx == OD((
+        (1, (0, num)),
+        (0, (1, num))
     ))
 
 def test_tpl_formation_neg_label():
     with pytest.raises(typy.TypeFormationError):
-        tpl[-1 : Int]
+        tpl[-1 : num]
 
-def test_tpl_formation_non_String_label():
+def test_tpl_formation_non_stringing_label():
     with pytest.raises(typy.TypeFormationError):
-        tpl[None : Int]
+        tpl[None : num]
 
 def test_tpl_formation_non_type_component():
     with pytest.raises(typy.TypeFormationError):
@@ -1613,18 +2537,18 @@ def test_tpl_inc_ty_formation():
 
 def test_tpl_inc_ty_formation_bad():
     with pytest.raises(typy.TypeFormationError):
-        tpl[..., 'lbl0' : Int]
+        tpl[..., 'lbl0' : num]
 
 class TestTplTupleIntroUnit:
     @pytest.fixture
     def f(self):
-        @fp.fn 
+        @fn 
         def f():
             () [: tpl[()]]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), tpl[()]]
+        assert f.typecheck() == fn[(), tpl[()]]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1634,13 +2558,13 @@ class TestTplTupleIntroUnit:
 class TestTplTupleIncIntroUnit:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
             () [: tpl]
         return f 
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), tpl[()]]
+        assert f.typecheck() == fn[(), tpl[()]]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1650,19 +2574,19 @@ class TestTplTupleIncIntroUnit:
 class TestTplTupleIntro:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Str] = "test"
-            y [: Int] = 0
-            z1 [: tpl[Str]] = (x,)
-            z2 [: tpl[Str, Int]] = (x, y)
-            z3 [: tpl['lbl0': Str]] = (x,)
-            z4 [: tpl['lbl0': Str, 'lbl1': Int]] = (x, y)
+            x [: string] = "test"
+            y [: num] = 0
+            z1 [: tpl[string]] = (x,)
+            z2 [: tpl[string, num]] = (x, y)
+            z3 [: tpl['lbl0': string]] = (x,)
+            z4 [: tpl['lbl0': string, 'lbl1': num]] = (x, y)
             z4
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), tpl['lbl0': Str, 'lbl1': Int]]
+        assert f.typecheck() == fn[(), tpl['lbl0': string, 'lbl1': num]]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1676,19 +2600,19 @@ class TestTplTupleIntro:
                 return z4""")
 
 def test_tpl_Tuple_Intro_few():
-    @fp.fn
+    @fn
     def test():
-        x [: Str] = "test"
-        z [: tpl[Str, Int]] = (x,)
+        x [: string] = "test"
+        z [: tpl[string, num]] = (x,)
         z
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
 def test_tpl_Tuple_Intro_many():
-    @fp.fn
+    @fn
     def test():
-        x [: Str] = "test"
-        z [: tpl[Str, Str, Int]] = (x, x)
+        x [: string] = "test"
+        z [: tpl[string, string, num]] = (x, x)
         z
     with pytest.raises(typy.TypeError):
         test.typecheck()
@@ -1696,17 +2620,17 @@ def test_tpl_Tuple_Intro_many():
 class TestTplTupleIncIntro():
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Str] = "test"
-            y [: Int] = 0
-            z1 [: tpl]  = () 
+            x [: string] = "test"
+            y [: num] = 0
+            z1 [: tpl] = () 
             z2 [: tpl] = (x, y)
             z2
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), tpl[Str, Int]]
+        assert f.typecheck() == fn[(), tpl[string, num]]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1720,16 +2644,16 @@ class TestTplTupleIncIntro():
 class TestTplDictIntro():
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            z1 [: tpl[Str, Int]] = {0 : "test", 1 : 0}
-            z2 [: tpl['lbl0' : Str, 'lbl1' : Int]] = {'lbl0': "test", 'lbl1': 0}
-            z3 [: tpl['lbl0' : Str, 'lbl1' : Int]] = {'lbl1': 0, 'lbl0': "test"}
+            z1 [: tpl[string, num]] = {0 : "test", 1 : 0}
+            z2 [: tpl['lbl0' : string, 'lbl1' : num]] = {'lbl0': "test", 'lbl1': 0}
+            z3 [: tpl['lbl0' : string, 'lbl1' : num]] = {'lbl1': 0, 'lbl0': "test"}
             z3
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), tpl['lbl0' : Str, 'lbl1' : Int]]
+        assert f.typecheck() == fn[(), tpl['lbl0' : string, 'lbl1' : num]]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1740,32 +2664,32 @@ class TestTplDictIntro():
                 return z3""")
 
 def test_tpl_Dict_Intro_few():
-    @fp.fn
+    @fn
     def test():
-        z1 [: tpl[Str, Int]] = {0 : "test"}
+        z1 [: tpl[string, num]] = {0 : "test"}
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
 def test_tpl_Dict_Intro_many():
-    @fp.fn 
+    @fn 
     def test():
-        z1 [: tpl[Str, Int]] = {0 : "test", 1 : 0, 2 : 0}
+        z1 [: tpl[string, num]] = {0 : "test", 1 : 0, 2 : 0}
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
 class TestTplDictIncIntro():
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
-            x [: Str] = "test"
-            y [: Int] = 0
+            x [: string] = "test"
+            y [: num] = 0
             z1 [: tpl] = {'lbl0' : x, 'lbl1' : y}
             z1
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), tpl['lbl0' : Str, 'lbl1' : Int]]
+        assert f.typecheck() == fn[(), tpl['lbl0' : string, 'lbl1' : num]]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1776,37 +2700,37 @@ class TestTplDictIncIntro():
                 return z1""")
 
 def test_tpl_Dict_empty_lbl():
-    @fp.fn
+    @fn
     def test():
-        x [: Str] = "test"
+        x [: string] = "test"
         z1 [: tpl] = {'' : x}
         z1
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
 def test_tpl_Dict_neg_lbl():
-    @fp.fn
+    @fn
     def test():
-        x [: Str] = "test"
+        x [: string] = "test"
         z1 [: tpl] = {-1 : x}
         z1
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
 def test_tpl_Dict_bad_lbl():
-    @fp.fn 
+    @fn 
     def test():
-        x [: Str] = "test"
+        x [: string] = "test"
         z1 [: tpl] = {None : x}
         z1
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
 def test_tpl_Dict_duplicate_lbl():
-    @fp.fn
+    @fn
     def test():
-        x [: Str] = "test"
-        y [: Int] = 0
+        x [: string] = "test"
+        y [: num] = 0
         z1 [: tpl] = {"lbl0": x, "lbl0": y}
         z1
     with pytest.raises(typy.TypeError):
@@ -1815,25 +2739,25 @@ def test_tpl_Dict_duplicate_lbl():
 class TestTplXIntro:
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f():
             X() [: tpl[()]]
             y1 = X() [: tpl]
             y1 [: tpl[()]]
-            X(0, "test") [: tpl[Int, Str]]
-            y2 = X(0 [: Int], "test" [: Str]) [: tpl]
-            y2 [: tpl[Int, Str]]
-            X(a=0, b="test") [: tpl['a' : Int, 'b' : Str]]
-            y3 = X(a=0 [: Int], b="test" [: Str]) [: tpl]
-            y3 [: tpl['a' : Int, 'b' : Str]]
-            X(0, b="test") [: tpl[Int, 'b' : Str]]
-            y4 = X(0 [: Int], b="test" [: Str]) [: tpl]
-            y4 [: tpl[Int, 'b' : Str]]
+            X(0, "test") [: tpl[num, string]]
+            y2 = X(0 [: num], "test" [: string]) [: tpl]
+            y2 [: tpl[num, string]]
+            X(a=0, b="test") [: tpl['a' : num, 'b' : string]]
+            y3 = X(a=0 [: num], b="test" [: string]) [: tpl]
+            y3 [: tpl['a' : num, 'b' : string]]
+            X(0, b="test") [: tpl[num, 'b' : string]]
+            y4 = X(0 [: num], b="test" [: string]) [: tpl]
+            y4 [: tpl[num, 'b' : string]]
             y4
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[(), tpl[Int, 'b' : Str]]
+        assert f.typecheck() == fn[(), tpl[num, 'b' : string]]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1855,14 +2779,14 @@ class TestTplXIntro:
 class TestTplAttribute():
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f(x):
-            {x : tpl['lbl0' : Str]}
+            {x : tpl['lbl0' : string]}
             x.lbl0
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[tpl['lbl0' : Str], Str]
+        assert f.typecheck() == fn[tpl['lbl0' : string], string]
 
     def test_translation(self, f):
         translation_eq(f, """
@@ -1872,14 +2796,14 @@ class TestTplAttribute():
 class TestTplSubscript():
     @pytest.fixture
     def f(self):
-        @fp.fn
+        @fn
         def f(x):
-            {x : tpl[Str, 'lbl1' : Int]}
+            {x : tpl[string, 'lbl1' : num]}
             (x[0], x['lbl1']) [: tpl]
         return f
 
     def test_type(self, f):
-        assert f.typecheck() == fp.fn[tpl[Str, 'lbl1' : Int], tpl[Str, Int]]
+        assert f.typecheck() == fn[tpl[string, 'lbl1' : num], tpl[string, num]]
 
     def test_translation(self, f):
         translation_eq(f, """

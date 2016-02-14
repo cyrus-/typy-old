@@ -1,61 +1,63 @@
-"""typy functional programming primitives"""
+"""typy functions"""
 import ast
 
 import typy
 import typy.util 
 import typy.util.astx as astx
-import typy.std
+
+from _product import unit
 
 #
 # unit
 #
 
-class unit_(typy.Type):
-    @classmethod
-    def init_idx(cls, idx):
-        if idx != ():
-            raise typy.TypeFormationError("Index of unit type must be ().")
-        return idx
+#class unit_(typy.Type):
+#    @classmethod
+#    def init_idx(cls, idx):
+#        if idx != ():
+#            raise typy.TypeFormationError("Index of unit type must be ().")
+#        return idx
 
-    def ana_Tuple(self, ctx, e):
-        elts = e.elts
-        if len(elts) != 0:
-            raise typy.TypeError(
-                "Non-empty tuple forms cannot be used to introduce values of type unit.",
-                e)
+#    def ana_Tuple(self, ctx, e):
+#        elts = e.elts
+#        if len(elts) != 0:
+#            raise typy.TypeError(
+#                "Non-empty tuple forms cannot be used to introduce values of type unit.",
+#                e)
 
-    @classmethod
-    def syn_idx_Tuple(self, ctx, e, inc_idx):
-        elts = e.elts 
-        if len(elts) != 0:
-            raise typy.TypeError(
-                "Non-empty tuple forms cannot be used to introduce values of type unit.",
-                e)
-        return ()
+#    @classmethod
+#    def syn_idx_Tuple(self, ctx, e, inc_idx):
+#        elts = e.elts 
+#        if len(elts) != 0:
+#            raise typy.TypeError(
+#                "Non-empty tuple forms cannot be used to introduce values of type unit.",
+#                e)
+#        return ()
 
-    def translate_Tuple(self, ctx, e):
-        return ast.Name("None", ast.Load())
+#    def translate_Tuple(self, ctx, e):
+#        return ast.Name("None", ast.Load())
 
-    def syn_Compare(self, ctx, e):
-        left, ops, comparators = e.left, e.ops, e.comparators
-        for op in ops:
-            if not isinstance(op, (ast.Eq, ast.NotEq, ast.Is, ast.IsNot)):
-                raise typy.TypeError(
-                    "Unit type does not support this operator.", e)
-        for e_ in typy.util.tpl_cons(left, comparators):
-            if hasattr(e_, "match"): continue # already synthesized
-            ctx.ana(e_, self)
-        return typy.std.Bool
+#    def syn_Compare(self, ctx, e):
+#        left, ops, comparators = e.left, e.ops, e.comparators
+#        for op in ops:
+#            if not isinstance(op, (ast.Eq, ast.NotEq, ast.Is, ast.IsNot)):
+#                raise typy.TypeError(
+#                    "Unit type does not support this operator.", e)
+#        for e_ in typy.util.tpl_cons(left, comparators):
+#            if hasattr(e_, "match"): 
+#                continue # already synthesized
+#            ctx.ana(e_, self)
+#        return typy.std.Bool
 
-    def translate_Compare(self, ctx, e):
-        translation=astx.copy_node(e)
-        translation.left = ctx.translate(e.left)
-        translation.comparators = tuple(
-            ctx.translate(comparator)
-            for comparator in e.comparators)
-        return translation
+#    def translate_Compare(self, ctx, e):
+#        translation = astx.copy_node(e)
+#        translation.left = ctx.translate(e.left)
+#        translation.comparators = tuple(
+#            ctx.translate(comparator)
+#            for comparator in e.comparators)
+#        return translation
 
-unit = unit_[()]
+#unit = unit_[()]
 
 #
 # fn
@@ -113,7 +115,7 @@ class fn(typy.FnType):
         ctx.return_type = None
 
     def ana_FunctionDef_toplevel(self, ctx, tree):
-        name, args = tree.name, tree.args
+        args = tree.args
         body = tree._post_docstring_body
         tree._post_sig_body = body # will update below if needed
         (arg_types, return_type) = self.idx
@@ -123,7 +125,7 @@ class fn(typy.FnType):
         arg_names = _get_arg_names(args)
         if len(body) > 0:
             sig_idx = _process_function_signature(body[0], arg_names, ctx.fn.static_env)
-            if sig_idx != None:
+            if sig_idx is not None:
                 if (sig_idx[0] != self.idx[0]) \
                         or (sig_idx[1] != Ellipsis and sig_idx[1] != self.idx[1]):
                     raise typy.TypeError(
@@ -135,7 +137,8 @@ class fn(typy.FnType):
             if return_type != unit:
                 raise typy.TypeError(
                     "Empty function bodies must have unit return type.", tree)
-            else: return
+            else: 
+                return
 
         all_but_last_stmt = body[0:-1]
         last_stmt = body[-1]
@@ -152,7 +155,7 @@ class fn(typy.FnType):
 
     @classmethod
     def syn_idx_FunctionDef_toplevel(cls, ctx, tree, inc_ty):
-        name, args = tree.name, tree.args 
+        args = tree.args 
         body = tree._post_docstring_body
         tree._post_sig_body = body # will update below if needed
         inc_idx = inc_ty.inc_idx
@@ -164,7 +167,7 @@ class fn(typy.FnType):
         else:
             sig_idx = _process_function_signature(body[0], arg_names, ctx.fn.static_env)
             if inc_idx == Ellipsis:
-                if sig_idx == None:
+                if sig_idx is None:
                     if len(arg_names) == 0:
                         inc_idx = ((), Ellipsis)
                     else:
@@ -173,7 +176,7 @@ class fn(typy.FnType):
                     inc_idx = sig_idx
                     body = tree._post_sig_body = body[1:]
             else:
-                if sig_idx != None:
+                if sig_idx is not None:
                     if inc_idx[0] != sig_idx[0]:
                         raise typy.TypeError(
                             "Argument signature and argument ascription do not match.", 
@@ -216,18 +219,18 @@ class fn(typy.FnType):
         return (arg_types, ctx.return_type)
 
     def translate_FunctionDef_toplevel(self, ctx, tree):
-        body_translation = [ ]
+        body_translation = []
         body = tree._post_sig_body
-            
+        
         if len(body) == 0:
-            body_translation.append(ast.Pass())
+            body_translation.append(ast.Return(ast.Tuple(elts=[], ctx=ast.Load())))
         else:
             all_but_last_stmt = body[0:-1]
             last_stmt = body[-1]
             for stmt in all_but_last_stmt:
                 body_translation.append(ctx.translate(stmt))
             if isinstance(last_stmt, ast.Pass):
-                body_translation.append(ast.Pass())
+                body_translation.append(ast.Return(ast.Tuple(elts=[], ctx=ast.Load())))
             elif isinstance(last_stmt, ast.Expr):
                 body_translation.append(ast.Return(ctx.translate(last_stmt.value)))
 
@@ -261,7 +264,7 @@ class fn(typy.FnType):
     def check_Assign(cls, ctx, stmt):
         targets, value = stmt.targets, stmt.value
         asc_ty = _process_targets(ctx, targets)
-        if asc_ty == None:
+        if asc_ty is None:
             ty = ctx.syn(value)
         elif isinstance(asc_ty, typy.Type):
             ty = asc_ty 
@@ -274,7 +277,7 @@ class fn(typy.FnType):
 
     def translate_Assign(self, ctx, stmt):
         targets, value = stmt.targets, stmt.value
-        target_translation = [ ]
+        target_translation = []
         for target in targets:
             if isinstance(target, ast.Name):
                 target_translation.append(astx.copy_node(target))
@@ -292,10 +295,10 @@ class fn(typy.FnType):
 
     def syn_Call(self, ctx, e):
         args, keywords, starargs, kwargs = e.args, e.keywords, e.starargs, e.kwargs
-        if len(keywords) != 0 or kwargs != None:
+        if len(keywords) != 0 or kwargs is not None:
             raise typy.TypeError("Keyword arguments are not supported.",
                 e)
-        if starargs != None:
+        if starargs is not None:
             raise typy.TypeError("Star arguments are not supported.",
                 e)
         arg_types, return_type = self.idx
@@ -328,9 +331,10 @@ def _normalize_fn_idx(idx):
         return_type = idx[1]
         if not isinstance(arg_types, tuple):
             if isinstance(arg_types, typy.Type):
-              idx = ((arg_types,), return_type)
-            else: raise typy.TypeFormationError(
-                "Argument signature is not a tuple.") 
+                idx = ((arg_types,), return_type)
+            else: 
+                raise typy.TypeFormationError(
+                    "Argument signature is not a tuple.") 
     elif len_idx > 2:
         arg_types = idx[0:-1]
         return_type = idx[-1]
@@ -365,7 +369,8 @@ def _process_function_signature(stmt, arg_names, static_env):
             return None
     else:
         return None
-    if arg_types is None: return None
+    if arg_types is None: 
+        return None
     return (arg_types, return_type)
 
 def _process_argument_signature(value, arg_names, static_env):
@@ -384,7 +389,7 @@ def _process_argument_signature(value, arg_names, static_env):
             sig_arg_name = key.id
             if sig_arg_name != arg_name:
                 raise typy.TypeError(
-                    "Function specifies argument name {0}, but function signature specifies argument name {1}."
+                    "Function specifies argument name {0}, but function signature specifies argument name {1}." # noqa
                     .format(arg_name, key), key)
             arg_types.append(static_env.eval_expr_ast(value))
     elif isinstance(value, ast.Set):
@@ -424,9 +429,9 @@ def _setup_args(ctx, args, arg_types, tree):
         if not isinstance(arg, ast.Name):
             raise typy.TypeError("Argument must be an identifier.", arg)
         arg_id = arg.id
-        # ... the Python parser checks dupes itself
-        #if arg_id in variables:
-        #    raise typy.TypeError("Duplicate argument: " + arg_id + ".", arg)
+        # ... the Python parser checks dupes itself, but in case of manual entry
+        if arg_id in variables:
+            raise typy.TypeError("Duplicate argument: " + arg_id + ".", arg)
         variables[arg_id] = arg_type
 
     # set up support for recursive functions
@@ -446,7 +451,8 @@ def _process_targets(ctx, targets):
             variables = ctx.variables
             try:
                 ctx_ty = variables[id]
-            except KeyError: pass
+            except KeyError: 
+                pass
             else:
                 if asc_ty is None:
                     asc_ty = ctx_ty
@@ -465,15 +471,19 @@ def _process_targets(ctx, targets):
                         if isinstance(cur_asc_ty, typy.Type):
                             try:
                                 ctx_ty = variables[id]
-                            except KeyError: pass
+                            except KeyError: 
+                                pass
                             else:
                                 if cur_asc_ty != ctx_ty:
                                     raise typy.TypeError(
-                                        "Variable {0} has conflicting types.".format(target_value.id), target)
-                            if asc_ty is None: asc_ty = cur_asc_ty
+                                        "Variable {0} has conflicting types.".format(
+                                            target_value.id), target)
+                            if asc_ty is None: 
+                                asc_ty = cur_asc_ty
                             elif asc_ty != cur_asc_ty:
                                 raise typy.TypeError(
-                                    "Variable {0} has conflicting types.".format(target_value.id), target)
+                                    "Variable {0} has conflicting types.".format(
+                                        target_value.id), target)
                         else:
                             if issubclass(cur_asc_ty, typy.Type):
                                 cur_asc_ty = cur_asc_ty[...]
@@ -485,12 +495,14 @@ def _process_targets(ctx, targets):
                                     if asc_ty is None:
                                         asc_ty = cur_asc_ty
                                     elif asc_ty != cur_asc_ty:
-                                        raise typy.TypeError("Variable {0} has conflicting types.", upper)
+                                        raise typy.TypeError("Variable {0} has conflicting types.", 
+                                            upper)
                                 else:
                                     raise typy.TypeError("Variable already has a type.", upper)
                             else:
                                 raise typy.TypeError(
-                                    "Variable type ascription is not a type or incomplete type.", upper)
+                                    "Variable type ascription is not a type or incomplete type.",
+                                    upper)
         else:
             raise typy.TypeError(
                 "Form not supported for assignment.", target)

@@ -4,12 +4,12 @@ import ast
 import typy
 import typy.util
 import typy.util.astx as astx
-import typy.std.boolean
-import typy.std.numeric
+import _boolean as _boolean
+import _numeric as _numeric
 
-class Str_(typy.Type):
+class string_(typy.Type):
     def __str__(self):
-        return "Str"
+        return "string"
 
     @classmethod
     def init_idx(cls, idx):
@@ -53,9 +53,10 @@ class Str_(typy.Type):
             if not isinstance(op, (ast.Eq, ast.NotEq, ast.Is, ast.IsNot, ast.In, ast.NotIn)):
                 raise typy.TypeError("Invalid comparison operator on strings.", e)
         for e_ in typy.util.tpl_cons(left, comparators):
-            if hasattr(e_, 'match'): continue # already synthesized
+            if hasattr(e_, 'match'): 
+                continue # already synthesized
             ctx.ana(e_, self)
-        return typy.std.boolean.Bool
+        return _boolean.boolean
 
     def translate_Compare(self, ctx, e):
         translation = astx.copy_node(e)
@@ -68,19 +69,19 @@ class Str_(typy.Type):
     def syn_Subscript(self, ctx, e):
         slice_ = e.slice 
         if isinstance(slice_, ast.Ellipsis):
-            raise typy.TypeError("String slice cannot be an Ellipsis.", e)
+            raise typy.TypeError("stringing slice cannot be an Ellipsis.", e)
         elif isinstance(slice_, ast.ExtSlice):
-            raise typy.TypeError("String slice can only have one dimension.", e)
+            raise typy.TypeError("stringing slice can only have one dimension.", e)
         elif isinstance(slice_, ast.Index):
-            ctx.ana(slice_.value, typy.std.numeric.Int)
-        else: #if isinstance(slice_, ast.Slice):
+            ctx.ana(slice_.value, _numeric.num)
+        else: # if isinstance(slice_, ast.Slice):
             lower, upper, step = slice_.lower, slice_.upper, slice_.step
             if lower is not None:
-                ctx.ana(lower, typy.std.numeric.Int)
+                ctx.ana(lower, _numeric.num)
             if upper is not None:
-                ctx.ana(upper, typy.std.numeric.Int)
+                ctx.ana(upper, _numeric.num)
             if not _is_None(step):
-                ctx.ana(step, typy.std.numeric.Int)
+                ctx.ana(step, _numeric.num)
         return self
 
     def translate_Subscript(self, ctx, e):
@@ -106,10 +107,14 @@ def _is_None(node):
     # for some reason, 
     #
     #   > ast.dump(ast.parse(x[0:1:]))
-    #   Module(body=[Expr(value=Subscript(value=Name(id='x', ctx=Load()), slice=Slice(lower=Num(n=0), upper=None, step=Name(id='None', ctx=Load())), ctx=Load()))])
+    #   Module(body=[Expr(value=Subscript(value=Name(id='x', ctx=Load()), 
+    #       slice=Slice(lower=Num(n=0), upper=None, 
+    #       step=Name(id='None', ctx=Load())), ctx=Load()))])
     #
-    # notice that the step value is not 'None' but the Name that contains 'None'. Need to special case this.
+    # notice that the step value is not 'None' but the Name that contains 'None'. 
+    # Need to special case this.
     #
     return node is None or (isinstance(node, ast.Name) and node.id == 'None')
 
-Str = Str_[()]
+string = string_[()]
+

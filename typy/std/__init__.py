@@ -1,6 +1,8 @@
 """typy standard library"""
 
-from boolean import Bool
-from numeric import Int, Float, Complex
-from string import Str
-from product import tpl
+from _fn import fn # noqa
+from _boolean import boolean # noqa
+from _numeric import num, ieee, cplx # noqa
+from _string import string # noqa
+from _product import tpl, unit # noqa
+

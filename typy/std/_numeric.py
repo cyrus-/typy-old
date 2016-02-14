@@ -1,26 +1,30 @@
-"""typy numeric types that behave like the corresponding Python types"""
+"""typy numeric types"""
 import ast 
 
 import typy
 import typy.util
 import typy.util.astx as astx
-import typy.std.boolean
-import typy.fp
+import _boolean
+import _fn
 
-class Int_(typy.Type):
+# 
+# num
+#
+
+class num_(typy.Type):
     def __str__(self):
-        return "Int"
+        return "num"
 
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
-            raise typy.TypeFormationError("Index of int_ type must be ().")
+            raise typy.TypeFormationError("Index of num_ type must be ().")
         return idx
 
     @classmethod
     def init_inc_idx(cls, inc_idx):
         if inc_idx != () and inc_idx != Ellipsis:
-            raise typy.TypeFormationError("Incomplete index of int_ type must be () or Ellipsis.")
+            raise typy.TypeFormationError("Incomplete index of num_ type must be () or Ellipsis.")
         return inc_idx
 
     def ana_Num(self, ctx, e):
@@ -43,9 +47,9 @@ class Int_(typy.Type):
 
     def syn_UnaryOp(self, ctx, e):
         if not isinstance(e.op, ast.Not):
-          return self
+            return self
         else:
-            raise typy.TypeError("Invalid unary operator 'not' for operand of type int.", e)
+            raise typy.TypeError("Invalid unary operator 'not' for operand of type num.", e)
 
     def translate_UnaryOp(self, ctx, e):
         translation = astx.copy_node(e)
@@ -55,8 +59,8 @@ class Int_(typy.Type):
     def syn_BinOp(self, ctx, e):
         op = e.op
         if isinstance(op, ast.Div):
-            ctx.ana(e.right, Float)
-            return Float
+            ctx.ana(e.right, ieee)
+            return ieee
         else:
             ctx.ana(e.right, self)
             return self
@@ -71,11 +75,12 @@ class Int_(typy.Type):
         left, ops, comparators = e.left, e.ops, e.comparators
         for op in ops:
             if isinstance(op, (ast.In, ast.NotIn)):
-                raise typy.TypeError("Type int does not support this operator.", op)
+                raise typy.TypeError("Type num does not support this operator.", op)
         for e_ in typy.util.tpl_cons(left, comparators):
-            if hasattr(e_, 'match'): continue # already synthesized
+            if hasattr(e_, 'match'):
+                continue # already synthesized
             ctx.ana(e_, self)
-        return typy.std.boolean.Bool
+        return _boolean.boolean
 
     def translate_Compare(self, ctx, e):
         translation = astx.copy_node(e)
@@ -88,9 +93,9 @@ class Int_(typy.Type):
     def syn_Attribute(self, ctx, e):
         attr = e.attr
         if attr == 'f':
-            return Float
+            return ieee
         elif attr == 'c':
-            return Complex
+            return cplx
         else:
             raise typy.TypeError("Invalid attribute.", e)
 
@@ -104,35 +109,38 @@ class Int_(typy.Type):
         return ast.copy_location(
             astx.builtin_call(name, [ctx.translate(value)]),
             value)
+num = num_[()]
 
-Int = Int_[()]
+#
+# ieee
+# 
 
-class Float_(typy.Type):
+class ieee_(typy.Type):
     def __str__(self):
-        return "Float"
+        return "ieee"
 
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
-            raise typy.TypeFormationError("Index of float_ type must be ().")
+            raise typy.TypeFormationError("Index of ieee_ type must be ().")
         return idx
 
     @classmethod
     def init_inc_idx(cls, inc_idx):
         if inc_idx != () and inc_idx != Ellipsis:
-            raise typy.TypeFormationError("Incomplete index of float_ type must be () or Ellipsis.")
+            raise typy.TypeFormationError("Incomplete index of ieee_ type must be () or Ellipsis.")
         return inc_idx
 
     def ana_Num(self, ctx, e):
         if not isinstance(e.n, (int, long, float)):
             raise typy.TypeError(
-                "Complex literal cannot be used to introduce value of type 'float'.", e)
+                "cplx literal cannot be used to introduce value of type 'ieee'.", e)
 
     @classmethod
     def syn_idx_Num(cls, ctx, e, inc_idx):
         if not isinstance(e.n, (int, long, float)):
             raise typy.TypeError(
-                "Complex literal cannot be used to introduce value of type 'float'.", e)
+                "cplx literal cannot be used to introduce value of type 'ieee'.", e)
         return ()
 
     def translate_Num(self, ctx, e):
@@ -142,7 +150,7 @@ class Float_(typy.Type):
 
     def syn_UnaryOp(self, ctx, e):
         if isinstance(e.op, (ast.Not, ast.Invert)):
-            raise typy.TypeError("Invalid unary operator for operand of type float.", e)
+            raise typy.TypeError("Invalid unary operator for operand of type ieee.", e)
         else:
             return self
             
@@ -153,7 +161,7 @@ class Float_(typy.Type):
 
     def syn_BinOp(self, ctx, e):
         if isinstance(e.op, (ast.LShift, ast.RShift, ast.BitOr, ast.BitXor, ast.BitAnd)):
-            raise typy.TypeError("Cannot use bitwise operators on floats.", e)
+            raise typy.TypeError("Cannot use bitwise operators on ieee values.", e)
         ctx.ana(e.right, self)
         return self
 
@@ -167,11 +175,12 @@ class Float_(typy.Type):
         left, ops, comparators = e.left, e.ops, e.comparators
         for op in ops:
             if isinstance(op, (ast.In, ast.NotIn)):
-                raise typy.TypeError("Type float does not support this operator.", op)
+                raise typy.TypeError("Type ieee does not support this operator.", op)
         for e_ in typy.util.tpl_cons(left, comparators):
-            if hasattr(e_, 'match'): continue # already synthesized
+            if hasattr(e_, 'match'): 
+                continue # already synthesized
             ctx.ana(e_, self)
-        return typy.std.boolean.Bool
+        return _boolean.boolean
 
     def translate_Compare(self, ctx, e):
         translation = astx.copy_node(e)
@@ -183,7 +192,7 @@ class Float_(typy.Type):
 
     def syn_Attribute(self, ctx, e):
         if e.attr == 'c':
-            return Complex
+            return cplx
         else:
             raise typy.TypeError("Invalid attribute.", e)
 
@@ -192,22 +201,26 @@ class Float_(typy.Type):
         return ast.copy_location(
             astx.builtin_call('complex', [ctx.translate(value)]),
             value)
-Float = Float_[()]
+ieee = ieee_[()]
 
-class Complex_(typy.Type):
+#
+# cplx
+#
+
+class cplx_(typy.Type):
     def __str__(self):
-        return "Complex"
+        return "cplx"
 
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
-            raise typy.TypeFormationError("Index of complex_ type must be ().")
+            raise typy.TypeFormationError("Index of cplx_ type must be ().")
         return idx
 
     @classmethod
     def init_inc_idx(cls, inc_idx):
         if inc_idx != () and inc_idx != Ellipsis:
-            raise typy.TypeFormationError("Incomplete index of complex_ type must be () or Ellipsis.")
+            raise typy.TypeFormationError("Incomplete index of cplx_ type must be () or Ellipsis.")
         return inc_idx
 
     def ana_Num(self, ctx, e):
@@ -232,31 +245,31 @@ class Complex_(typy.Type):
         elts = e.elts
         if len(elts) != 2:
             raise typy.TypeError(
-                "Using a tuple to introduce a value of type complex requires two elements.",
+                "Using a tuple to introduce a value of type cplx requires two elements.",
                 e)
         rl, im = elts[0], elts[1]
 
         if isinstance(rl, ast.Num):
-            ctx.ana(rl, Float)
+            ctx.ana(rl, ieee)
         else:
             rl_ty = ctx.syn(rl)
-            if rl_ty != Int and rl_ty != Float:
+            if rl_ty != num and rl_ty != ieee:
                 raise typy.TypeError(
-                    "Real component must be be integer or float.", rl)
+                    "Real component must be be num or ieee.", rl)
 
         if not isinstance(im, ast.Num):
             im_ty = ctx.syn(im)
-            if im_ty != Int and im_ty != Float:
+            if im_ty != num and im_ty != ieee:
                 raise typy.TypeError(
-                    "Imaginary component must be a complex literal, or an expressin of type 'int' or 'float'.",
+                    "Imaginary component must be a complex literal, or an expressin of type 'num' or 'ieee'.", # noqa
                     im)
 
     def ana_Tuple(self, ctx, e):
-        Complex_._process_Tuple(ctx, e)
+        cplx_._process_Tuple(ctx, e)
 
     @classmethod
     def syn_idx_Tuple(cls, ctx, e, inc_idx):
-        Complex_._process_Tuple(ctx, e)
+        cplx_._process_Tuple(ctx, e)
         return ()
 
     def translate_Tuple(self, ctx, e):
@@ -278,13 +291,13 @@ class Complex_(typy.Type):
         # __builtin__.complex([[rl_trans]], [[im_trans]])
         return ast.copy_location(
             astx.builtin_call('complex', [rl_trans, im_trans]), 
-        e)
+            e)
 
     def syn_UnaryOp(self, ctx, e):
         if not isinstance(e.op, (ast.Not, ast.Invert)):
-          return self
+            return self
         else:
-            raise typy.TypeError("Invalid unary operator for operand of type float.", e)
+            raise typy.TypeError("Invalid unary operator for operand of type cplx.", e)
 
     def translate_UnaryOp(self, ctx, e):
         translation = astx.copy_node(e)
@@ -293,7 +306,7 @@ class Complex_(typy.Type):
 
     def syn_BinOp(self, ctx, e):
         if isinstance(e.op, (ast.LShift, ast.RShift, ast.BitOr, ast.BitXor, ast.BitAnd)):
-            raise typy.TypeError("Cannot use bitwise operators on floats.", e)
+            raise typy.TypeError("Cannot use bitwise operators on cplx values.", e)
         if isinstance(e.op, ast.Mod):
             raise typy.TypeError("Cannot take the modulus of a complex number.", e)
 
@@ -316,9 +329,10 @@ class Complex_(typy.Type):
             elif isinstance(op, (ast.In, ast.NotIn)):
                 raise typy.TypeError("Type complex does not support this operator.", op)
         for e_ in typy.util.tpl_cons(left, comparators):
-            if hasattr(e_, 'match'): continue # already synthesized
+            if hasattr(e_, 'match'): 
+                continue # already synthesized
             ctx.ana(e_, self)
-        return typy.std.boolean.Bool
+        return _boolean.boolean
 
     def translate_Compare(self, ctx, e):
         translation = astx.copy_node(e)
@@ -331,9 +345,9 @@ class Complex_(typy.Type):
     def syn_Attribute(self, ctx, e):
         attr = e.attr
         if attr == "real" or attr == "imag":
-            return Float
+            return ieee
         elif attr == "conjugate":
-            return typy.fp.fn[(), self]
+            return _fn.fn[(), self]
         else:
             raise typy.TypeError("Invalid attribute: " + attr, e)
 
@@ -342,10 +356,10 @@ class Complex_(typy.Type):
         translation.value = ctx.translate(e.value)
         return translation
 
-Complex = Complex_[()]
+cplx = cplx_[()]
 
 # MAYBE: ~x on complex equivalent to x.conjugate()?
 # MAYBE: x.conj equivalent to x.conjugate?
-# MAYBE: float to integer helper?
-# MAYBE: expose .bitwidth method of int
+# TODO: float to integer helper?
+# TODO: expose .bitwidth method of int
 # TODO: wrap builtin functions

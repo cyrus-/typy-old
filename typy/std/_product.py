@@ -8,6 +8,63 @@ import typy
 import typy.util
 import typy.util.astx as astx
 
+import _boolean
+
+#
+# unit
+#
+
+#class unit_(typy.Type):
+#    @classmethod
+#    def init_idx(cls, idx):
+#        if idx != ():
+#            raise typy.TypeFormationError("Index of unit type must be ().")
+#        return idx
+
+#    def ana_Tuple(self, ctx, e):
+#        elts = e.elts
+#        if len(elts) != 0:
+#            raise typy.TypeError(
+#                "Non-empty tuple forms cannot be used to introduce values of type unit.",
+#                e)
+
+#    @classmethod
+#    def syn_idx_Tuple(self, ctx, e, inc_idx):
+#        elts = e.elts 
+#        if len(elts) != 0:
+#            raise typy.TypeError(
+#                "Non-empty tuple forms cannot be used to introduce values of type unit.",
+#                e)
+#        return ()
+
+#    def translate_Tuple(self, ctx, e):
+#        return ast.Name("None", ast.Load())
+
+#    def syn_Compare(self, ctx, e):
+#        left, ops, comparators = e.left, e.ops, e.comparators
+#        for op in ops:
+#            if not isinstance(op, (ast.Eq, ast.NotEq, ast.Is, ast.IsNot)):
+#                raise typy.TypeError(
+#                    "Unit type does not support this operator.", e)
+#        for e_ in typy.util.tpl_cons(left, comparators):
+#            if hasattr(e_, "match"): continue # already synthesized
+#            ctx.ana(e_, self)
+#        return typy.std.Bool
+
+#    def translate_Compare(self, ctx, e):
+#        translation=astx.copy_node(e)
+#        translation.left = ctx.translate(e.left)
+#        translation.comparators = tuple(
+#            ctx.translate(comparator)
+#            for comparator in e.comparators)
+#        return translation
+
+#unit = unit_[()]
+
+#
+# tpl
+#
+
 class tpl(typy.Type):
     @classmethod
     def init_idx(cls, idx):
@@ -39,7 +96,7 @@ class tpl(typy.Type):
                 "Too few components provided.", e)
         elif n_elts > n_idx:
             raise typy.TypeError(
-                "Too many components provided.", elts[n_elts])
+                "Too many components provided.", elts[n_idx])
 
         for elt, (_, ty) in zip(elts, idx.itervalues()):
             ctx.ana(elt, ty)
@@ -128,9 +185,9 @@ class tpl(typy.Type):
         id = e.func.id
         if id != 'X':
             raise typy.TypeError("tpl only supports the X constructor")
-        if e.starargs != None:
+        if e.starargs is not None:
             raise typy.TypeError("No support for starargs", e)
-        if e.kwargs != None:
+        if e.kwargs is not None:
             raise typy.TypeError("No support for kwargs", e)
 
         idx = self.idx
@@ -169,9 +226,9 @@ class tpl(typy.Type):
         id = e.func.id
         if id != 'X':
             raise typy.TypeError("tpl only supports the X constructor")
-        if e.starargs != None:
+        if e.starargs is not None:
             raise typy.TypeError("No support for starargs", e)
-        if e.kwargs != None:
+        if e.kwargs is not None:
             raise typy.TypeError("No support for kwargs", e)
 
         args = e.args
@@ -248,6 +305,30 @@ class tpl(typy.Type):
             slice=ast.Num(n=n),
             ctx=ast.Load()
         ), e)
+
+    def syn_Compare(self, ctx, e):
+        left, ops, comparators = e.left, e.ops, e.comparators
+        for op in ops:
+            if isinstance(op, (ast.Eq, ast.NotEq)):
+                if not len(self.idx) == 0:
+                    raise typy.TypeError("Can only compare unit values for equality.", e)
+            elif not isinstance(op, (ast.Is, ast.IsNot)):
+                raise typy.TypeError("Invalid comparison operator.", op)
+
+        for e_ in typy.util.tpl_cons(left, comparators):
+            if hasattr(e_, "match"): 
+                continue # already synthesized
+            ctx.ana(e_, self)
+
+        return _boolean.boolean
+
+    def translate_Compare(self, ctx, e):
+        translation = astx.copy_node(e)
+        translation.left = ctx.translate(e.left)
+        translation.comparators = tuple(
+            ctx.translate(comparator)
+            for comparator in e.comparators)
+        return translation
 
     # TODO: x + y
     # TODO: x - "label"
@@ -342,3 +423,5 @@ def _translation(idx_mapping, arg_translation):
         starargs=[],
         kwargs=None
     )
+
+unit = tpl[()]

@@ -6,7 +6,6 @@ To run:
 import pytest
 import ast
 
-import typy
 from typy import Type, TypeFormationError, tycon, is_tycon, IncompleteType, FnType, Fn, StaticEnv
 
 # Test type construction and index validation
@@ -105,6 +104,7 @@ g = 0
 a = 0
 def test_fnty_static_env():
     a = 1
+    
     @fnty
     def test():
         return a

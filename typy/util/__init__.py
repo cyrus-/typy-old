@@ -3,7 +3,7 @@
 class DictStack(object):
     def __init__(self, stack=None):
         if stack is None:
-            stack = [ ]
+            stack = []
         self.stack = stack 
 
     def push(self, d):
@@ -29,7 +29,8 @@ class DictStack(object):
 
     def __contains__(self, key):
         for d in reversed(self.stack):
-            if key in d: return True
+            if key in d: 
+                return True
         return False 
 
 def tpl_cons(hd, tl):
