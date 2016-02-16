@@ -91,5 +91,12 @@ class boolean_(typy.Type):
             raise typy.TypeError("Boolean values only match 'True' and 'False'")
         return {}
 
+    def translate_pat_Name_constructor(self, ctx, pat, scrutinee):
+        id = pat.id
+        if id == "True":
+            return (scrutinee, {})
+        elif id == "False":
+            return (ast.UnaryOp(op=ast.Not(), operand=scrutinee), {})
+
 boolean = boolean_[()]
 

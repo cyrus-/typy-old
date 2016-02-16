@@ -606,34 +606,6 @@ class Context(object):
         value.delegate, value.ty = delegate, ty
         return ty 
 
-    def ana_pat(self, pat, ty):
-        if _is_intro_form(pat):
-            classname = pat.__class__.__name__
-            if classname == "Name":
-                classname = "Name_constructor"
-            elif classname == "Call":
-                classname = "Call_constructor"
-            ana_pat_methodname = 'ana_pat_' + classname
-            delegate = ty
-            method = getattr(delegate, ana_pat_methodname)
-            bindings = method(self, pat)
-            for name, ty in bindings.iteritems():
-                if not util.astx.is_identifier(name):
-                    raise UsageError("Binding " + str(name) + " is not an identifier.")
-                if not isinstance(ty, Type):
-                    raise UsageError("Binding for " + name + " has invalid type.")
-            pat.bindings = bindings
-            pat.ty = ty
-            return bindings
-        elif isinstance(pat, ast.Name):
-            id = pat.id
-            if id == "_":
-                return {}
-            else:
-                return {id : ty}
-        else:
-            raise TypeError("Invalid pattern form", pat)
-
     def _push_bindings(self, bindings):
         tc = tycon(self.fn.ascription)
         tc.push_bindings(self, bindings)
@@ -829,6 +801,22 @@ class Context(object):
         elif isinstance(tree, ast.expr):
             if hasattr(tree, "is_ascription"):
                 translation = self.translate(tree.value)
+            elif _is_match(tree):
+                scrutinee = tree.left.elts[0]
+                scrutinee_trans = self.translate(scrutinee)
+                scrutinee_var = ast.Name(id="__typy_scrutinee__", ctx=ast.Load())
+                rules = tree.comparators[0]
+                rules = zip(rules.keys, rules.values)
+                rule_translations = tuple(_translate_rules(self, rules, scrutinee_var))
+                if len(rule_translations) == 0:
+                    compiled_rules = util.astx.expr_Raise_Exception_string("Match failure.")
+                else:
+                    rt_0 = rule_translations[0]
+                    rt_rest = rule_translations[1:]
+                    compiled_rules = _compile_rule(rt_0, rt_rest)
+                translation = util.astx.make_simple_Call(
+                    util.astx.make_Lambda(('__typy_scrutinee__',), compiled_rules),
+                    [scrutinee_trans])
             elif _is_intro_form(tree):
                 delegate = tree.ty
                 method = getattr(delegate, tree.translation_method_name)
@@ -856,6 +844,56 @@ class Context(object):
         else:
             raise NotImplementedError("cannot translate this...")
         return translation
+
+    def ana_pat(self, pat, ty):
+        if _is_intro_form(pat):
+            classname = pat.__class__.__name__
+            if classname == "Name":
+                classname = "Name_constructor"
+            elif classname == "Call":
+                classname = "Call_constructor"
+            ana_pat_methodname = 'ana_pat_' + classname
+            delegate = ty
+            method = getattr(delegate, ana_pat_methodname)
+            bindings = method(self, pat)
+            for name, ty in bindings.iteritems():
+                if not util.astx.is_identifier(name):
+                    raise UsageError("Binding " + str(name) + " is not an identifier.")
+                if not isinstance(ty, Type):
+                    raise UsageError("Binding for " + name + " has invalid type.")
+        elif isinstance(pat, ast.Name):
+            id = pat.id
+            if id == "_":
+                bindings = {}
+            else:
+                bindings = {id : ty}
+        else:
+            raise TypeError("Invalid pattern form", pat)
+        pat.bindings = bindings
+        pat.ty = ty
+        return bindings
+
+    def translate_pat(self, pat, scrutinee_trans):
+        if _is_intro_form(pat):
+            classname = pat.__class__.__name__
+            if classname == "Name":
+                classname = "Name_constructor"
+            elif classname == "Call":
+                classname = "Call_constructor"
+            translate_pat_methodname = "translate_pat_" + classname
+            delegate = pat.ty
+            method = getattr(delegate, translate_pat_methodname)
+            condition, binding_translations = method(self, pat, scrutinee_trans)
+        elif isinstance(pat, ast.Name):
+            condition = ast.Name(id='True', ctx=ast.Load())
+            id = pat.id
+            if id == "_":
+                binding_translations = {}
+            else:
+                binding_translations = {id: scrutinee_trans}
+        else:
+            raise UsageError("Cannot translate this pattern...")
+        return condition, binding_translations
 
 _intro_forms = (
     ast.Lambda, 
@@ -901,3 +939,38 @@ def _is_match(e):
             isinstance(e.left, ast.Set) and 
             isinstance(e.comparators[0], ast.Dict))
 
+def _translate_rules(ctx, rules, scrutinee_trans):
+    for (pat, branch) in rules:
+        (condition, binding_translations) = ctx.translate_pat(pat, scrutinee_trans)
+        if not isinstance(condition, ast.expr):
+            raise UsageError("Condition must be an expression.")
+        if not pat.bindings.keys() == binding_translations.keys():
+            raise UsageError("All bindings must have translations.")
+        for binding_translation in binding_translations.itervalues():
+            if not isinstance(binding_translation, ast.expr):
+                raise UsageError("Binding translation must be an expression.")
+        branch_translation = ctx.translate(branch)
+        yield condition, binding_translations, branch_translation
+
+def _compile_rule(rule_translation, rest):
+    test, binding_translations, branch_translation = rule_translation
+
+    if len(binding_translations) == 0:
+        body = branch_translation
+    else:
+        body_lambda = util.astx.make_Lambda(
+            binding_translations.iterkeys(),
+            branch_translation)
+        body = util.astx.make_simple_Call(
+            body_lambda, 
+            binding_translations.values())
+
+    if len(rest) == 0:
+        orelse = util.astx.expr_Raise_Exception_string("Match failure.")
+    else:
+        orelse = _compile_rule(rest[0], rest[1:])
+
+    return ast.IfExp(
+        test=test,
+        body=body,
+        orelse=orelse)

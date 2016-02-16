@@ -81,3 +81,40 @@ _name_re = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*$")
 def is_identifier(id):
     return bool(_name_re.match(id))
 
+def make_Lambda(arg_vars, body):
+    return ast.Lambda(
+        args=ast.arguments(
+            args=[
+                ast.Name(id=arg_var, ctx=ast.Param())
+                for arg_var in arg_vars],
+            vararg=None,
+            kwarg=None,
+            defaults=[]),
+        body=body)
+
+def make_simple_Call(func, args):
+    return ast.Call(
+        func=func,
+        args=args,
+        keywords=[],
+        starargs=None,
+        kwargs=None)
+
+def expr_Raise_Exception_string(message):
+    # hack: (_ for _ in ()).throw(Exception(message))
+    return ast.Call(
+        func=ast.Attribute(
+            value=ast.GeneratorExp(
+                elt=ast.Name(id='_', ctx=ast.Load()),
+                generators=[
+                    ast.comprehension(
+                        target=ast.Name(id='_', ctx=ast.Store()),
+                        iter=ast.Tuple(
+                            elts=[], 
+                            ctx=ast.Load()), 
+                        ifs=[])]), 
+            attr='throw', ctx=ast.Load()),
+        args=[builtin_call('Exception', [ast.Str(s=message)])],
+        keywords=[],
+        starargs=None,
+        kwargs=None)

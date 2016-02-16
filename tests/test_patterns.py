@@ -4,6 +4,8 @@ import pytest
 import typy
 from typy.std import *
 
+from utils import *
+
 # pattern matching basics
 class TestVariablePatternAna:
     @pytest.fixture
@@ -16,6 +18,11 @@ class TestVariablePatternAna:
 
     def test_type(self, f):
         assert f.typecheck() == fn[unit, unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (lambda __typy_scrutinee__: ((lambda y: y)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
 
     #def test_translation(self, f):
     #    translation_eq(f, """
@@ -34,8 +41,10 @@ class TestVariablePatternAnaPropagates:
     def test_type(self, f):
         assert f.typecheck() == fn[boolean, boolean]
 
-    #def test_translation(self, f):
-    #    pass
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (lambda __typy_scrutinee__: ((lambda y: True)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
 
 class TestVariablePatternSyn:
     @pytest.fixture
@@ -49,8 +58,10 @@ class TestVariablePatternSyn:
     def test_type(self, f):
         assert f.typecheck() == fn[boolean, boolean]
 
-    #def test_translation(self, f):
-    #    pass
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (lambda __typy_scrutinee__: ((lambda y: y)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
 
 def test_underscore_pattern():
     @fn
@@ -82,6 +93,11 @@ class TestMultipleRulesAna:
     def test_type(self, f):
         assert f.typecheck() == fn[boolean, boolean]
 
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (lambda __typy_scrutinee__: ((lambda y: True)(__typy_scrutinee__) if True else ((lambda y: y)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))(x)""") # noqa
+
 def test_pop():
     @fn
     def test(x):
@@ -110,6 +126,11 @@ class TestOperations:
 
     def test_type(self, f):
         assert f.typecheck() == fn[num, num]
+    
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return ((lambda __typy_scrutinee__: ((lambda y: y)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x) + 5)""") # noqa
 
 class TestBooleanPattern:
     @pytest.fixture
@@ -126,4 +147,8 @@ class TestBooleanPattern:
     def test_type(self, f):
         assert f.typecheck() == fn[boolean, boolean]
 
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (lambda __typy_scrutinee__: (x if (not __typy_scrutinee__) else (x if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))((lambda __typy_scrutinee__: (x if __typy_scrutinee__ else (x if (not __typy_scrutinee__) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))(x))""") # noqa
 
