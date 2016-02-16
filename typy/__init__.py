@@ -119,6 +119,12 @@ class Type(object):
     def syn_idx_Num(self, ctx, e, inc_idx):
         raise NotSupportedError(self, "class method", "syn_idx_Num", e)
 
+    def ana_pat_Num(self, ctx, pat):
+        raise NotSupportedError(self, "method", "ana_pat_Num", pat)
+
+    def translate_pat_Num(self, ctx, pat, scrutinee_trans):
+        raise NotSupportedError(self, "method", "translate_pat_Num", pat)
+
     # Str 
 
     def ana_Str(self, ctx, e):
@@ -130,6 +136,12 @@ class Type(object):
 
     def translate_Str(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Str", e)
+
+    def ana_pat_Str(self, ctx, pat):
+        raise NotSupportedError(self, "method", "ana_pat_Str", pat)
+
+    def translate_pat_Str(self, ctx, pat, scrutinee_trans):
+        raise NotSupportedError(self, "method", "translate_pat_Str", pat)
 
     # Tuple
 
@@ -143,6 +155,84 @@ class Type(object):
     def translate_Tuple(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Tuple", e)
 
+    def ana_pat_Tuple(self, ctx, pat):
+        raise NotSupportedError(self, "method", "ana_pat_Tuple", pat)
+
+    def translate_pat_Tuple(self, ctx, pat, scrutinee_trans):
+        raise NotSupportedError(self, "method", "translate_pat_Tuple", pat)
+
+    # List
+
+    def ana_List(self, ctx, e):
+        raise NotSupportedError(self, "method", "ana_List", e)
+
+    @classmethod
+    def syn_idx_List(self, ctx, e, inc_idx):
+        raise NotSupportedError(self, "class method", "syn_idx_List", e)
+
+    def translate_List(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_List", e)
+
+    def ana_pat_List(self, ctx, pat):
+        raise NotSupportedError(self, "method", "ana_pat_List", pat)
+
+    def translate_pat_List(self, ctx, pat, scrutinee_trans):
+        raise NotSupportedError(self, "method", "translate_pat_List", pat)
+
+    # Dict
+
+    def ana_Dict(self, ctx, e):
+        raise NotSupportedError(self, "method", "ana_Dict", e)
+
+    @classmethod
+    def syn_idx_Dict(self, ctx, e, inc_idx):
+        raise NotSupportedError(self, "class method", "syn_idx_Dict", e)
+
+    def translate_Dict(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_Dict", e)
+
+    def ana_pat_Dict(self, ctx, pat):
+        raise NotSupportedError(self, "method", "ana_pat_Dict", pat)
+
+    def translate_pat_Dict(self, ctx, pat, scrutinee_trans):
+        raise NotSupportedError(self, "method", "translate_pat_Dict", pat)
+
+    # Set
+
+    def ana_Set(self, ctx, e):
+        raise NotSupportedError(self, "method", "ana_Set", e)
+
+    @classmethod
+    def syn_idx_Set(self, ctx, e, inc_idx):
+        raise NotSupportedError(self, "class method", "syn_idx_Set", e)
+
+    def translate_Set(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_Set", e)
+
+    def ana_pat_Set(self, ctx, pat):
+        raise NotSupportedError(self, "method", "ana_pat_Set", pat)
+
+    def translate_pat_Set(self, ctx, pat, scrutinee_trans):
+        raise NotSupportedError(self, "method", "translate_pat_Set", pat)
+
+    # Lambda
+
+    def ana_Lambda(self, ctx, e):
+        raise NotSupportedError(self, "method", "ana_Lambda", e)
+
+    @classmethod
+    def syn_idx_Lambda(self, ctx, e, inc_idx):
+        raise NotSupportedError(self, "class method", "syn_idx_Lambda", e)
+
+    def translate_Lambda(self, ctx, e):
+        raise NotSupportedError(self, "method", "translate_Lambda", e)
+
+    def ana_pat_Lambda(self, ctx, pat):
+        raise NotSupportedError(self, "method", "ana_pat_Lambda", pat)
+
+    def translate_pat_Lambda(self, ctx, pat, scrutinee_trans):
+        raise NotSupportedError(self, "method", "translate_pat_Lambda", pat)
+
     # Name_constructor
 
     def ana_Name_constructor(self, ctx, e):
@@ -155,6 +245,12 @@ class Type(object):
     def translate_Name_constructor(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Name_constructor", e)
 
+    def ana_pat_Name_constructor(self, ctx, pat):
+        raise NotSupportedError(self, "method", "ana_pat_Name_constructor", pat)
+
+    def translate_pat_Name_constructor(self, ctx, pat, scrutinee_trans):
+        raise NotSupportedError(self, "method", "translate_pat_Name_constructor", pat)
+
     # Call_constructor
 
     def ana_Call_constructor(self, ctx, e):
@@ -166,6 +262,12 @@ class Type(object):
 
     def translate_Call_constructor(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Call_constructor", e)
+
+    def ana_pat_Call_constructor(self, ctx, pat):
+        raise NotSupportedError(self, "method", "ana_pat_Call_constructor", pat)
+
+    def translate_pat_Call_constructor(self, ctx, pat):
+        raise NotSupportedError(self, "method", "translate_pat_Call_constructor", pat)
 
     # UnaryOp
 
@@ -856,10 +958,10 @@ class Context(object):
             delegate = ty
             method = getattr(delegate, ana_pat_methodname)
             bindings = method(self, pat)
-            for name, ty in bindings.iteritems():
+            for name, binding_ty in bindings.iteritems():
                 if not util.astx.is_identifier(name):
                     raise UsageError("Binding " + str(name) + " is not an identifier.")
-                if not isinstance(ty, Type):
+                if not isinstance(binding_ty, Type):
                     raise UsageError("Binding for " + name + " has invalid type.")
         elif isinstance(pat, ast.Name):
             id = pat.id
@@ -899,10 +1001,10 @@ _intro_forms = (
     ast.Lambda, 
     ast.Dict, 
     ast.Set, 
-    ast.ListComp, 
-    ast.SetComp, 
-    ast.DictComp, 
-    ast.GeneratorExp, 
+    # ast.ListComp, 
+    # ast.SetComp, 
+    # ast.DictComp, 
+    # ast.GeneratorExp, 
     ast.Num, 
     ast.Str, 
     ast.List, 

@@ -118,3 +118,15 @@ def expr_Raise_Exception_string(message):
         keywords=[],
         starargs=None,
         kwargs=None)
+
+def make_binary_And(left, right):
+    return ast.BoolOp(
+        op=ast.And(),
+        values=[left, right])
+
+def make_Attribute(value, attr):
+    return ast.Attribute(
+        value=value,
+        attr=attr,
+        ctx=ast.Load())
+

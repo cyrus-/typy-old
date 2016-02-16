@@ -29,9 +29,7 @@ class num_(typy.Type):
 
     def ana_Num(self, ctx, e):
         n = e.n
-        if isinstance(n, (int, long)):
-            return
-        else:
+        if not isinstance(n, (int, long)):
             raise typy.TypeError("Expression is not an int or long literal.", e)
 
     @classmethod
@@ -44,6 +42,21 @@ class num_(typy.Type):
 
     def translate_Num(self, ctx, e):
         return astx.copy_node(e)
+
+    def ana_pat_Num(self, ctx, pat):
+        n = pat.n 
+        if not isinstance(n, (int, long)):
+            raise typy.TypeError("Pattern for type 'num' must be int or long.", pat)
+        return {}
+
+    def translate_pat_Num(self, ctx, pat, scrutinee_trans):
+        scrutinee_trans_copy = astx.copy_node(scrutinee_trans)
+        comparator = astx.copy_node(pat)
+        condition = ast.Compare(
+            left=scrutinee_trans_copy,
+            ops=[ast.Eq()],
+            comparators=[comparator])
+        return (condition, {})
 
     def syn_UnaryOp(self, ctx, e):
         if not isinstance(e.op, ast.Not):
@@ -109,6 +122,7 @@ class num_(typy.Type):
         return ast.copy_location(
             astx.builtin_call(name, [ctx.translate(value)]),
             value)
+
 num = num_[()]
 
 #
@@ -147,6 +161,22 @@ class ieee_(typy.Type):
         translation = astx.copy_node(e)
         translation.n = float(e.n)
         return translation
+
+    def ana_pat_Num(self, ctx, pat):
+        if not isinstance(pat.n, (int, long, float)):
+            raise typy.TypeError(
+                "Complex literal cannot be used as a pattern for type 'ieee'.", pat)
+        return {}
+    
+    def translate_pat_Num(self, ctx, pat, scrutinee_trans):
+        n = pat.n
+        comparator = astx.copy_node(pat)
+        comparator.n = float(n)
+        condition = ast.Compare(
+            left=scrutinee_trans,
+            ops=[ast.Eq()],
+            comparators=[comparator])
+        return (condition, {})
 
     def syn_UnaryOp(self, ctx, e):
         if isinstance(e.op, (ast.Not, ast.Invert)):
@@ -234,11 +264,24 @@ class cplx_(typy.Type):
     def translate_Num(self, ctx, e):
         translation = astx.copy_node(e)
         n = e.n
-        if isinstance(n, complex):
-            translation.n = n
-        else:
-            translation.n = complex(e.n)
+        if not isinstance(n, complex):
+            translation.n = complex(n)
         return translation
+
+    def ana_pat_Num(self, ctx, pat):
+        return {}
+
+    def translate_pat_Num(self, ctx, pat, scrutinee_trans):
+        scrutinee_trans_copy = astx.copy_node(scrutinee_trans)
+        comparator = astx.copy_node(pat)
+        n = pat.n
+        if not isinstance(n, complex):
+            comparator.n = complex(n)
+        condition = ast.Compare(
+            left=scrutinee_trans_copy,
+            ops=[ast.Eq()],
+            comparators=[comparator])
+        return (condition, {})
 
     @classmethod
     def _process_Tuple(cls, ctx, e):
@@ -292,6 +335,39 @@ class cplx_(typy.Type):
         return ast.copy_location(
             astx.builtin_call('complex', [rl_trans, im_trans]), 
             e)
+
+    def ana_pat_Tuple(self, ctx, pat):
+        elts = pat.elts
+        if len(elts) != 2:
+            raise typy.TypeError(
+                "Using a tuple pattern for a value of type cplx requires two elements.",
+                pat)
+        rl, im = elts[0], elts[1]
+        rl_bindings = ctx.ana_pat(rl, ieee)
+        im_bindings = ctx.ana_pat(im, ieee)
+        n_rl_bindings = len(rl_bindings)
+        n_im_bindings = len(im_bindings)
+        bindings = dict(rl_bindings)
+        bindings.update(im_bindings)
+        n_bindings = len(bindings)
+        if n_bindings != n_rl_bindings + n_im_bindings:
+            raise typy.TypeError("Duplicated variables in pattern.", pat)
+        return bindings
+    
+    def translate_pat_Tuple(self, ctx, pat, scrutinee_trans):
+        elts = pat.elts
+        rl, im = elts[0], elts[1]
+        rl_scrutinee_trans = astx.make_Attribute(scrutinee_trans, 'real')
+        im_scrutinee_trans = astx.make_Attribute(scrutinee_trans, 'imag')
+        (rl_cond, rl_binding_translations) = ctx.translate_pat(rl, rl_scrutinee_trans)
+        (im_cond, im_binding_translations) = ctx.translate_pat(im, im_scrutinee_trans)
+
+        condition = astx.make_binary_And(rl_cond, im_cond)
+
+        binding_translations = dict(rl_binding_translations)
+        binding_translations.update(im_binding_translations)
+
+        return condition, binding_translations
 
     def syn_UnaryOp(self, ctx, e):
         if not isinstance(e.op, (ast.Not, ast.Invert)):
