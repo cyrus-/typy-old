@@ -130,3 +130,11 @@ def make_Attribute(value, attr):
         attr=attr,
         ctx=ast.Load())
 
+def make_Subscript_Num_Index(value, n):
+    return ast.Subscript(
+        value=value,
+        slice=ast.Index(
+            value=ast.Num(n=n)
+        ),
+        ctx=ast.Load())
+

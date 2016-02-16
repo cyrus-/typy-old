@@ -1,6 +1,9 @@
 """Python booleans"""
 import ast
 
+import ordereddict
+_OD = ordereddict.OrderedDict
+
 import typy
 import typy.util.astx as astx
 
@@ -89,14 +92,14 @@ class boolean_(typy.Type):
         id = pat.id
         if id != "True" and id != "False":
             raise typy.TypeError("Boolean values only match 'True' and 'False'")
-        return {}
+        return _OD()
 
     def translate_pat_Name_constructor(self, ctx, pat, scrutinee):
         id = pat.id
         if id == "True":
-            return (scrutinee, {})
+            return (scrutinee, _OD())
         elif id == "False":
-            return (ast.UnaryOp(op=ast.Not(), operand=scrutinee), {})
+            return (ast.UnaryOp(op=ast.Not(), operand=scrutinee), _OD())
 
 boolean = boolean_[()]
 

@@ -1,6 +1,9 @@
 """typy numeric types"""
 import ast 
 
+import ordereddict
+_OD = ordereddict.OrderedDict
+
 import typy
 import typy.util
 import typy.util.astx as astx
@@ -47,7 +50,7 @@ class num_(typy.Type):
         n = pat.n 
         if not isinstance(n, (int, long)):
             raise typy.TypeError("Pattern for type 'num' must be int or long.", pat)
-        return {}
+        return _OD()
 
     def translate_pat_Num(self, ctx, pat, scrutinee_trans):
         scrutinee_trans_copy = astx.copy_node(scrutinee_trans)
@@ -56,7 +59,7 @@ class num_(typy.Type):
             left=scrutinee_trans_copy,
             ops=[ast.Eq()],
             comparators=[comparator])
-        return (condition, {})
+        return (condition, _OD())
 
     def syn_UnaryOp(self, ctx, e):
         if not isinstance(e.op, ast.Not):
@@ -166,7 +169,7 @@ class ieee_(typy.Type):
         if not isinstance(pat.n, (int, long, float)):
             raise typy.TypeError(
                 "Complex literal cannot be used as a pattern for type 'ieee'.", pat)
-        return {}
+        return _OD()
     
     def translate_pat_Num(self, ctx, pat, scrutinee_trans):
         n = pat.n
@@ -176,7 +179,7 @@ class ieee_(typy.Type):
             left=scrutinee_trans,
             ops=[ast.Eq()],
             comparators=[comparator])
-        return (condition, {})
+        return (condition, _OD())
 
     def syn_UnaryOp(self, ctx, e):
         if isinstance(e.op, (ast.Not, ast.Invert)):
@@ -269,7 +272,7 @@ class cplx_(typy.Type):
         return translation
 
     def ana_pat_Num(self, ctx, pat):
-        return {}
+        return _OD()
 
     def translate_pat_Num(self, ctx, pat, scrutinee_trans):
         scrutinee_trans_copy = astx.copy_node(scrutinee_trans)
@@ -281,7 +284,7 @@ class cplx_(typy.Type):
             left=scrutinee_trans_copy,
             ops=[ast.Eq()],
             comparators=[comparator])
-        return (condition, {})
+        return (condition, _OD())
 
     @classmethod
     def _process_Tuple(cls, ctx, e):
@@ -347,7 +350,7 @@ class cplx_(typy.Type):
         im_bindings = ctx.ana_pat(im, ieee)
         n_rl_bindings = len(rl_bindings)
         n_im_bindings = len(im_bindings)
-        bindings = dict(rl_bindings)
+        bindings = _OD(rl_bindings)
         bindings.update(im_bindings)
         n_bindings = len(bindings)
         if n_bindings != n_rl_bindings + n_im_bindings:
@@ -364,7 +367,7 @@ class cplx_(typy.Type):
 
         condition = astx.make_binary_And(rl_cond, im_cond)
 
-        binding_translations = dict(rl_binding_translations)
+        binding_translations = _OD(rl_binding_translations)
         binding_translations.update(im_binding_translations)
 
         return condition, binding_translations

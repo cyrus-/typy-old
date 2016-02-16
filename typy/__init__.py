@@ -4,6 +4,8 @@ import inspect  # for accessing source code for functions
 import textwrap  # for stripping leading spaces from source code
 
 import six  # Python 2-3 compatibility, e.g. metaclasses
+import ordereddict
+_OD = ordereddict.OrderedDict
 
 import util  # various utilities used throughout typy
 import util.astx  # utility functions for working with asts
@@ -958,6 +960,8 @@ class Context(object):
             delegate = ty
             method = getattr(delegate, ana_pat_methodname)
             bindings = method(self, pat)
+            if not isinstance(bindings, _OD):
+                raise UsageError("Expected ordered dict.")
             for name, binding_ty in bindings.iteritems():
                 if not util.astx.is_identifier(name):
                     raise UsageError("Binding " + str(name) + " is not an identifier.")
@@ -990,11 +994,14 @@ class Context(object):
             condition = ast.Name(id='True', ctx=ast.Load())
             id = pat.id
             if id == "_":
-                binding_translations = {}
+                binding_translations = _OD()
             else:
-                binding_translations = {id: scrutinee_trans}
+                binding_translations = _OD(((id, scrutinee_trans),))
         else:
             raise UsageError("Cannot translate this pattern...")
+        bindings = pat.bindings
+        if bindings.keys() != binding_translations.keys():
+            raise UsageError("Not all bindings have translations.")
         return condition, binding_translations
 
 _intro_forms = (

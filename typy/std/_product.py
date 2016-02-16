@@ -11,57 +11,6 @@ import typy.util.astx as astx
 import _boolean
 
 #
-# unit
-#
-
-#class unit_(typy.Type):
-#    @classmethod
-#    def init_idx(cls, idx):
-#        if idx != ():
-#            raise typy.TypeFormationError("Index of unit type must be ().")
-#        return idx
-
-#    def ana_Tuple(self, ctx, e):
-#        elts = e.elts
-#        if len(elts) != 0:
-#            raise typy.TypeError(
-#                "Non-empty tuple forms cannot be used to introduce values of type unit.",
-#                e)
-
-#    @classmethod
-#    def syn_idx_Tuple(self, ctx, e, inc_idx):
-#        elts = e.elts 
-#        if len(elts) != 0:
-#            raise typy.TypeError(
-#                "Non-empty tuple forms cannot be used to introduce values of type unit.",
-#                e)
-#        return ()
-
-#    def translate_Tuple(self, ctx, e):
-#        return ast.Name("None", ast.Load())
-
-#    def syn_Compare(self, ctx, e):
-#        left, ops, comparators = e.left, e.ops, e.comparators
-#        for op in ops:
-#            if not isinstance(op, (ast.Eq, ast.NotEq, ast.Is, ast.IsNot)):
-#                raise typy.TypeError(
-#                    "Unit type does not support this operator.", e)
-#        for e_ in typy.util.tpl_cons(left, comparators):
-#            if hasattr(e_, "match"): continue # already synthesized
-#            ctx.ana(e_, self)
-#        return typy.std.Bool
-
-#    def translate_Compare(self, ctx, e):
-#        translation=astx.copy_node(e)
-#        translation.left = ctx.translate(e.left)
-#        translation.comparators = tuple(
-#            ctx.translate(comparator)
-#            for comparator in e.comparators)
-#        return translation
-
-#unit = unit_[()]
-
-#
 # tpl
 #
 
@@ -116,6 +65,48 @@ class tpl(typy.Type):
             ctx.translate(elt)
             for elt in e.elts)
         return translation 
+
+    def ana_pat_Tuple(self, ctx, pat):
+        elts = pat.elts
+        idx = self.idx
+        n_elts, n_idx = len(elts), len(idx)
+        if n_elts < n_idx:
+            raise typy.TypeError(
+                "Too few components in tpl pattern.", pat)
+        elif n_elts > n_idx:
+            raise typy.TypeError(
+                "Too many components in tpl pattern.", elts[n_idx])
+        
+        bindings = ordereddict.OrderedDict()
+        n_bindings = 0
+        for elt, (_, ty) in zip(elts, idx.itervalues()):
+            elt_bindings = ctx.ana_pat(elt, ty)
+            n_elt_bindings = len(elt_bindings)
+            bindings.update(elt_bindings)
+            if len(bindings) != n_bindings + n_elt_bindings:
+                raise typy.TypeError("Duplicate variable in pattern.", pat)
+            n_bindings = n_bindings + n_elt_bindings
+        
+        return bindings
+
+    def translate_pat_Tuple(self, ctx, pat, scrutinee_trans):
+        scrutinee_trans_copy = astx.copy_node(scrutinee_trans)
+        elts = pat.elts
+        idx = self.idx
+        conditions = []
+        binding_translations = ordereddict.OrderedDict()
+        for elt, (n, ty) in zip(elts, idx.itervalues()):
+            elt_scrutinee_trans = astx.make_Subscript_Num_Index(
+                scrutinee_trans_copy,
+                n)
+            elt_condition, elt_binding_translations = ctx.translate_pat(
+                elt, elt_scrutinee_trans)
+            conditions.append(elt_condition)
+            binding_translations.update(elt_binding_translations)
+        condition = ast.BoolOp(
+            op=ast.And(),
+            values=conditions)
+        return (condition, binding_translations)
 
     def ana_Dict(self, ctx, e):
         keys, values = e.keys, e.values

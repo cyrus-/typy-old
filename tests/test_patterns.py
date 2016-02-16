@@ -245,3 +245,95 @@ def test_cplx_tuple_nested():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
+class TestStringPattern:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {string}
+            {x} is {
+                "": x,
+                "ABC": x,
+                "DEF": x
+            }
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[string, string]
+    
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (lambda __typy_scrutinee__: (x if (__typy_scrutinee__ == '') else (x if (__typy_scrutinee__ == 'ABC') else (x if (__typy_scrutinee__ == 'DEF') else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))))(x)""") # noqa
+
+class TestTplTuplePattern:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {tpl[num, ieee]} >> tpl[ieee, num]
+            {x} is {
+                (y, z): (z, y)
+            }
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[tpl[num, ieee], tpl[ieee, num]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (lambda __typy_scrutinee__: ((lambda y, z: (z, y))(__typy_scrutinee__[0], __typy_scrutinee__[1]) if (True and True) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
+
+class TestTplNestedTuplePattern:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {tpl[tpl[num, num], tpl[ieee, ieee]]} >> tpl[tpl[ieee, num], tpl[ieee, num]]
+            {x} is {
+                ((a, b), (c, d)): ((c, a), (d, b))
+            }
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[
+            tpl[tpl[num, num], tpl[ieee, ieee]], 
+            tpl[tpl[ieee, num], tpl[ieee, num]]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (lambda __typy_scrutinee__: ((lambda a, b, c, d: ((c, a), (d, b)))(__typy_scrutinee__[0][0], __typy_scrutinee__[0][1], __typy_scrutinee__[1][0], __typy_scrutinee__[1][1]) if ((True and True) and (True and True)) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
+
+def test_Tpl_too_few():
+    @fn
+    def test(x):
+        {tpl[num, num, num]} >> num
+        {x} is {
+            (y, z): y
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_Tpl_too_many():
+    @fn
+    def test(x):
+        {tpl[num, num]} >> num
+        {x} is {
+            (a, b, c): a
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_Tpl_duplicate():
+    @fn
+    def test(x):
+        {tpl[num, num]} >> num
+        {x} is {
+            (y, y): y
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+

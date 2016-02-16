@@ -1,6 +1,9 @@
 """typy string types"""
 import ast 
 
+import ordereddict
+_OD = ordereddict.OrderedDict
+
 import typy
 import typy.util
 import typy.util.astx as astx
@@ -32,6 +35,18 @@ class string_(typy.Type):
 
     def translate_Str(self, ctx, e):
         return astx.copy_node(e)
+
+    def ana_pat_Str(self, ctx, pat):
+        return _OD()
+
+    def translate_pat_Str(self, ctx, pat, scrutinee_trans):
+        scrutinee_trans_copy = astx.copy_node(scrutinee_trans)
+        pat_copy = astx.copy_node(pat)
+        condition = ast.Compare(
+            left=scrutinee_trans_copy,
+            ops=[ast.Eq()],
+            comparators=[pat_copy])
+        return (condition, _OD())
 
     def syn_BinOp(self, ctx, e):
         op = e.op
