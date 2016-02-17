@@ -336,4 +336,136 @@ def test_Tpl_duplicate():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
+class TestTplDictPattern:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {tpl['a' : num, 3 : ieee]} >> tpl[num, ieee]
+            {x} is {
+                {'a': 5, 3: _}: (0, 0),
+                {3: y, 'a': x}: (x, y)
+            }
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[
+            tpl['a' : num, 3 : ieee],
+            tpl[num, ieee]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (lambda __typy_scrutinee__: ((0, 0.0) if ((__typy_scrutinee__[0] == 5) and True) else ((lambda y, x: (x, y))(__typy_scrutinee__[1], __typy_scrutinee__[0]) if (True and True) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))(x)""") # noqa
+
+def test_Tpl_Dict_too_few():
+    @fn
+    def test(x):
+        {tpl['a' : num, 'b' : ieee]} >> num
+        {x} is {
+            {'a': x}: x
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_Tpl_Dict_too_many():
+    @fn
+    def test(x):
+        {tpl['a' : num, 'b' : ieee]} >> num
+        {x} is {
+            {'a': x, 'b': y, 'c': z}: x
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_Tpl_Dict_duplicate_label():
+    @fn
+    def test(x):
+        {tpl['a' : num, 'b' : ieee]} >> num
+        {x} is {
+            {'a': x, 'a': y}: x
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_Tpl_Dict_invalid():
+    @fn
+    def test(x):
+        {tpl['a' : num]} >> num
+        {x} is {
+            {'c': x}: x
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_Tpl_Dict_duplicate_var():
+    @fn
+    def test(x):
+        {tpl['a' : num, 'b' : ieee]} >> num
+        {x} is {
+            {'a': x, 'b': x}: x
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestTplXPattern:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {tpl[num, ieee, 'a' : num, 'b' : ieee]} >> tpl[num, ieee, num, ieee]
+            {x} is {
+                X(a, b, a=x, b=y): (a, b, x, y)
+            }
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[
+            tpl[num, ieee, 'a': num, 'b': ieee],
+            tpl[num, ieee, num, ieee]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (lambda __typy_scrutinee__: ((lambda a, b, x, y: (a, b, x, y))(__typy_scrutinee__[0], __typy_scrutinee__[1], __typy_scrutinee__[2], __typy_scrutinee__[3]) if (True and True and True and True) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
+
+def test_Tpl_X_invalid_label():
+    @fn
+    def test(x):
+        {tpl['a' : num]} >> num
+        {x} is {
+            X(x): x
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_Tpl_X_invalid_label_2():
+    @fn
+    def test(x):
+        {tpl['a' : num]} >> num
+        {x} is {
+            X(b=x): x
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_Tpl_X_duplicate_var():
+    @fn
+    def test(x):
+        {tpl[num, 'a' : num]} >> num
+        {x} is {
+            X(y, a=y): y
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_Tpl_X_duplicate_var_2():
+    @fn
+    def test(x):
+        {tpl[num, 'a' : num, 'b' : num]} >> num
+        {x} is {
+            X(y, a=z, b=z): z
+        }
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
 

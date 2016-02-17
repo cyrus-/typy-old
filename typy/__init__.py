@@ -268,7 +268,7 @@ class Type(object):
     def ana_pat_Call_constructor(self, ctx, pat):
         raise NotSupportedError(self, "method", "ana_pat_Call_constructor", pat)
 
-    def translate_pat_Call_constructor(self, ctx, pat):
+    def translate_pat_Call_constructor(self, ctx, pat, scrutinee_trans):
         raise NotSupportedError(self, "method", "translate_pat_Call_constructor", pat)
 
     # UnaryOp

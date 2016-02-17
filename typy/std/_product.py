@@ -3,6 +3,7 @@ import ast
 
 import six
 import ordereddict
+_OD = ordereddict.OrderedDict
 
 import typy
 import typy.util
@@ -17,7 +18,7 @@ import _boolean
 class tpl(typy.Type):
     @classmethod
     def init_idx(cls, idx):
-        return ordereddict.OrderedDict(_normalize_tuple_idx(idx)) 
+        return _OD(_normalize_tuple_idx(idx)) 
 
     @classmethod
     def init_inc_idx(cls, inc_idx):
@@ -77,15 +78,16 @@ class tpl(typy.Type):
             raise typy.TypeError(
                 "Too many components in tpl pattern.", elts[n_idx])
         
-        bindings = ordereddict.OrderedDict()
+        bindings = _OD()
         n_bindings = 0
         for elt, (_, ty) in zip(elts, idx.itervalues()):
             elt_bindings = ctx.ana_pat(elt, ty)
             n_elt_bindings = len(elt_bindings)
             bindings.update(elt_bindings)
-            if len(bindings) != n_bindings + n_elt_bindings:
+            n_bindings_new = len(bindings)
+            if n_bindings_new != n_bindings + n_elt_bindings:
                 raise typy.TypeError("Duplicate variable in pattern.", pat)
-            n_bindings = n_bindings + n_elt_bindings
+            n_bindings = n_bindings_new
         
         return bindings
 
@@ -94,7 +96,7 @@ class tpl(typy.Type):
         elts = pat.elts
         idx = self.idx
         conditions = []
-        binding_translations = ordereddict.OrderedDict()
+        binding_translations = _OD()
         for elt, (n, ty) in zip(elts, idx.itervalues()):
             elt_scrutinee_trans = astx.make_Subscript_Num_Index(
                 scrutinee_trans_copy,
@@ -137,7 +139,7 @@ class tpl(typy.Type):
     @classmethod
     def syn_idx_Dict(self, ctx, e, inc_idx):
         keys, values = e.keys, e.values
-        idx = ordereddict.OrderedDict()
+        idx = _OD()
         for key, value in zip(keys, values):
             label = ctx.fn.static_env.eval_expr_ast(key)
             if isinstance(label, six.string_types):
@@ -171,6 +173,59 @@ class tpl(typy.Type):
         arg_translation = ast.Tuple(elts=elt_translation)
 
         return ast.copy_location(_translation(idx_mapping, arg_translation), e)
+
+    def ana_pat_Dict(self, ctx, pat):
+        keys, values = pat.keys, pat.values
+        idx = self.idx
+        n_keys, n_idx = len(keys), len(idx)
+        if n_keys < n_idx:
+            raise typy.TypeError("Too few elements in pattern.", pat)
+        elif n_keys > n_idx:
+            raise typy.TypeError("Too many elements in pattern.", keys[n_idx])
+
+        used_labels = set()
+        bindings = _OD()
+        n_bindings = 0 
+        for key, value in zip(keys, values):
+            label = ctx.fn.static_env.eval_expr_ast(key)
+            if label in used_labels:
+                raise typy.TypeError("Duplicate label: " + str(label), key)
+            try:
+                (_, ty) = idx[label]
+            except KeyError:
+                raise typy.TypeError("Invalid label: " + str(label), key)
+            used_labels.add(label)
+            key.evaluated = label
+            elt_bindings = ctx.ana_pat(value, ty)
+            n_elt_bindings = len(elt_bindings)
+            bindings.update(elt_bindings)
+            n_bindings_new = len(bindings)
+            if not n_bindings_new == n_bindings + n_elt_bindings:
+                raise typy.TypeError("Duplicate variable in pattern.", pat)
+            n_bindings = n_bindings_new
+
+        return bindings
+
+    def translate_pat_Dict(self, ctx, pat, scrutinee_trans):
+        scrutinee_trans_copy = astx.copy_node(scrutinee_trans)
+        keys, values = pat.keys, pat.values
+        idx = self.idx
+        conditions = []
+        binding_translations = _OD()
+        for key, value in zip(keys, values):
+            label = key.evaluated
+            (n, _) = idx[label]
+            elt_scrutinee_trans = astx.make_Subscript_Num_Index(
+                scrutinee_trans_copy,
+                n)
+            elt_condition, elt_binding_translations = ctx.translate_pat(
+                value, elt_scrutinee_trans)
+            conditions.append(elt_condition)
+            binding_translations.update(elt_binding_translations)
+        condition = ast.BoolOp(
+            op=ast.And(),
+            values=conditions)
+        return (condition, binding_translations)
 
     def ana_Call_constructor(self, ctx, e):
         id = e.func.id
@@ -208,7 +263,7 @@ class tpl(typy.Type):
             try:
                 (_, ty) = idx[label]
             except KeyError:
-                raise typy.TypeError("No component labeled " + arg, arg)
+                raise typy.TypeError("No component labeled " + label, label)
             value = keyword.value
             ctx.ana(value, ty)
 
@@ -216,7 +271,7 @@ class tpl(typy.Type):
     def syn_idx_Call_constructor(self, ctx, e, inc_idx):
         id = e.func.id
         if id != 'X':
-            raise typy.TypeError("tpl only supports the X constructor")
+            raise typy.TypeError("tpl only supports the X constructor", e.func)
         if e.starargs is not None:
             raise typy.TypeError("No support for starargs", e)
         if e.kwargs is not None:
@@ -256,6 +311,84 @@ class tpl(typy.Type):
         arg_translation = ast.Tuple(elts=elt_translation)
 
         return ast.copy_location(_translation(idx_mapping, arg_translation), e)
+
+    def ana_pat_Call_constructor(self, ctx, pat):
+        id = pat.func.id
+        if id != 'X':
+            raise typy.TypeError("tpl supports only the 'X' constructor", pat.func)
+        if pat.starargs is not None:
+            raise typy.TypeError("No support for starargs", pat)
+        if pat.kwargs is not None:
+            raise typy.TypeError("No support for kwargs", pat)
+
+        args = pat.args
+        keywords = pat.keywords
+        idx = self.idx
+
+        bindings = _OD()
+        n_bindings = 0
+        
+        for i, arg in enumerate(args):
+            try:
+                (_, ty) = idx[i]
+            except KeyError:
+                raise typy.TypeError("Invalid label: " + str(i), arg)
+            elt_bindings = ctx.ana_pat(arg, ty)
+            n_elt_bindings = len(elt_bindings)
+            bindings.update(elt_bindings)
+            n_bindings_new = len(bindings)
+            if n_bindings_new != n_bindings + n_elt_bindings:
+                raise typy.TypeError("Duplicate variable in pattern.", arg)
+            n_bindings = n_bindings_new
+
+        for keyword in keywords:
+            label = keyword.arg
+            try:
+                (_, ty) = idx[label]
+            except KeyError:
+                raise typy.TypeError("Invalid label: " + label, keyword)
+            value = keyword.value
+            elt_bindings = ctx.ana_pat(value, ty)
+            n_elt_bindings = len(elt_bindings)
+            bindings.update(elt_bindings)
+            n_bindings_new = len(bindings)
+            if n_bindings_new != n_bindings + n_elt_bindings:
+                raise typy.TypeError("Duplicate variable in pattern.", value)
+            n_bindings = n_bindings_new
+
+        return bindings
+
+    def translate_pat_Call_constructor(self, ctx, pat, scrutinee_trans):
+        scrutinee_trans_copy = astx.copy_node(scrutinee_trans)
+        args, keywords = pat.args, pat.keywords
+        idx = self.idx
+        conditions = []
+        binding_translations = _OD()
+        for i, arg in enumerate(args):
+            (n, _) = idx[i]
+            elt_scrutinee_trans = astx.make_Subscript_Num_Index(
+                scrutinee_trans_copy,
+                n)
+            elt_condition, elt_binding_translations = ctx.translate_pat(
+                arg, elt_scrutinee_trans)
+            conditions.append(elt_condition)
+            binding_translations.update(elt_binding_translations)
+        
+        for keyword in keywords:
+            (n, _) = idx[keyword.arg]
+            elt_scrutinee_trans = astx.make_Subscript_Num_Index(
+                scrutinee_trans_copy,
+                n)
+            elt_condition, elt_binding_translations = ctx.translate_pat(
+                keyword.value, elt_scrutinee_trans)
+            conditions.append(elt_condition)
+            binding_translations.update(elt_binding_translations)
+
+        condition = ast.BoolOp(
+            op=ast.And(),
+            values=conditions)
+
+        return (condition, binding_translations)
 
     def syn_Attribute(self, ctx, e):
         idx = self.idx
@@ -327,6 +460,8 @@ class tpl(typy.Type):
     # TODO: x % "label"
     # TODO: x % ("l1", "l2", "l3")
     # TODO: multi-projection, e.g. x['l1', 'l2', 'l3']
+    # TODO: set intro for variable expressions ala ocaml
+    # TODO: and corresponding set patterns
 
 def _normalize_tuple_idx(idx):
     if not isinstance(idx, tuple):
