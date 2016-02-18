@@ -119,6 +119,12 @@ def expr_Raise_Exception_string(message):
         starargs=None,
         kwargs=None)
 
+def stmt_Raise_Exception_string(message):
+    return ast.Raise(
+        type=builtin_call('Exception', [ast.Str(s=message)]),
+        inst=None, 
+        tback=None)
+
 def make_binary_And(left, right):
     return ast.BoolOp(
         op=ast.And(),
@@ -137,4 +143,16 @@ def make_Subscript_Num_Index(value, n):
             value=ast.Num(n=n)
         ),
         ctx=ast.Load())
+
+def cond_vacuously_true(cond):
+    if isinstance(cond, ast.Name) and cond.id == "True":
+        return True
+    if isinstance(cond, ast.BoolOp):
+        if isinstance(cond.op, ast.And):
+            for value in cond.values:
+                if not cond_vacuously_true(value):
+                    return False
+            return True
+    return False
+
 

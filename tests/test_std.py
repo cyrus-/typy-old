@@ -435,7 +435,7 @@ def test_stdfn_sig_named_args_wrong_names2():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestStdFnSigcplxTypes:
+class TestStdFnSigEvalTypes:
     @pytest.fixture
     def f(self):
         q = [unit, boolean]
@@ -614,6 +614,82 @@ def test_unit_bad_omitted_inc_ascription():
     with pytest.raises(typy.NotSupportedError):
         test.typecheck()
 
+class TestSimpleAssign:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x [: unit] = ()
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = ()
+                return x""")
+
+class TestSimpleAssignShadow:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x [: unit] = ()
+            x [: unit] = ()
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = ()
+                __typy_id_x_1__ = ()
+                return __typy_id_x_1__""")
+
+class TestSimpleAssignSyn:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x = () [: unit]
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = ()
+                return x""")
+
+class TestSimpleAssignSynShadow:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x = () [: unit]
+            x = () [: unit]
+            x
+        return f
+    
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = ()
+                __typy_id_x_1__ = ()
+                return __typy_id_x_1__""")
+
 class TestUnitCompare:
     @pytest.fixture
     def f(self):
@@ -759,13 +835,13 @@ class TestAssignSyn:
     #def test_eval(self, f):
     #    assert f() == None
 
-class TestAssignAna:
+class TestAssignMulti:
     @pytest.fixture
     def f(self):
         @fn
         def f():
             x = () [: unit]
-            x = ()
+            x = () [: unit]
             x
         return f
 
@@ -776,8 +852,8 @@ class TestAssignAna:
         translation_eq(f, """
             def f():
                 x = ()
-                x = ()
-                return x""")
+                __typy_id_x_1__ = ()
+                return __typy_id_x_1__""")
 
     #def test_eval(self, f):
     #    assert f() == ()
@@ -808,7 +884,7 @@ class TestAssignAscription:
                 x = True
                 return x""")
 
-class TestAssignAscriptionDbl:
+class TestAssignAscriptionShadow:
     @pytest.fixture
     def f(self):
         @fn
@@ -825,17 +901,28 @@ class TestAssignAscriptionDbl:
         translation_eq(f, """
             def f():
                 x = True
-                x = True
-                return x""")
+                __typy_id_x_1__ = True
+                return __typy_id_x_1__""")
 
-def test_assign_ascription_dbl_inconsistent():
-    @fn
-    def test():
-        x [: boolean] = True 
-        x [: unit] = ()
-        x
-    with pytest.raises(typy.TypeError):
-        test.typecheck()
+class TestAssignShadowDiffTypes:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x [: boolean] = True 
+            x [: unit] = ()
+            x
+        return f
+    
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = True
+                __typy_id_x_1__ = ()
+                return __typy_id_x_1__""")
 
 class TestAssignMultiple:
     @pytest.fixture
@@ -928,6 +1015,27 @@ def test_shadow_fn_name():
         f
     with pytest.raises(typy.TypeError):
         f.typecheck()
+
+class TestAssignFnName:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {boolean} >> boolean
+            f(x) # noqa
+            f = x
+            f
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[boolean, boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                f(x)
+                __typy_id_f_1__ = x
+                return __typy_id_f_1__""")
 
 #
 # boolean
@@ -2373,18 +2481,18 @@ class TeststringingCompare:
     def f(self):
         @fn
         def f():
-            x = "abc" [: string] == "def" == "ghi"
-            x [: boolean]
-            x = "abc" [: string] != "def" != "ghi"
-            x [: boolean]
-            x = "abc" [: string] is "def" is "ghi"
-            x [: boolean]
-            x = "abc" [: string] is not "def" is not "ghi" 
-            x [: boolean]
-            x = "abc" [: string] in "def" in "ghi"
-            x [: boolean]
-            x = "abc" [: string] not in "def" not in "ghi"
-            x [: boolean]
+            x1 = "abc" [: string] == "def" == "ghi"
+            x1 [: boolean]
+            x2 = "abc" [: string] != "def" != "ghi"
+            x2 [: boolean]
+            x3 = "abc" [: string] is "def" is "ghi"
+            x3 [: boolean]
+            x4 = "abc" [: string] is not "def" is not "ghi" 
+            x4 [: boolean]
+            x5 = "abc" [: string] in "def" in "ghi"
+            x5 [: boolean]
+            x6 = "abc" [: string] not in "def" not in "ghi"
+            x6 [: boolean]
         return f
 
     def test_type(self, f):
@@ -2393,18 +2501,18 @@ class TeststringingCompare:
     def test_translation(self, f):
         translation_eq(f, """
             def f():
-                x = ('abc' == 'def' == 'ghi')
-                x
-                x = ('abc' != 'def' != 'ghi')
-                x
-                x = ('abc' is 'def' is 'ghi')
-                x
-                x = ('abc' is not 'def' is not 'ghi')
-                x
-                x = ('abc' in 'def' in 'ghi')
-                x
-                x = ('abc' not in 'def' not in 'ghi')
-                return x""") 
+                x1 = ('abc' == 'def' == 'ghi')
+                x1
+                x2 = ('abc' != 'def' != 'ghi')
+                x2
+                x3 = ('abc' is 'def' is 'ghi')
+                x3
+                x4 = ('abc' is not 'def' is not 'ghi')
+                x4
+                x5 = ('abc' in 'def' in 'ghi')
+                x5
+                x6 = ('abc' not in 'def' not in 'ghi')
+                return x6""") 
 
 class TeststringingSubscript:
     @pytest.fixture
@@ -2412,28 +2520,28 @@ class TeststringingSubscript:
         @fn
         def f():
             x [: string] = "abcdefg"
-            y = x[0]
-            y [: string]
-            y = x[0:1]
-            y [: string]
-            y = x[0:1:2]
-            y [: string]
-            y = x[0:]
-            y [: string]
+            y1 = x[0]
+            y1 [: string]
+            y2 = x[0:1]
+            y2 [: string]
+            y3 = x[0:1:2]
+            y3 [: string]
+            y4 = x[0:]
+            y4 [: string]
             # no x[:1] because that's ascription syntax
             # can always use x[0:1] for this
-            y = x[0:1:]
-            y [: string]
-            y = x[0::1]
-            y [: string]
-            y = x[:0:1]
-            y [: string]
-            y = x[0::]
-            y [: string]
-            y = x[:0:]
-            y [: string]
-            y = x[::0]
-            y [: string]
+            y5 = x[0:1:]
+            y5 [: string]
+            y6 = x[0::1]
+            y6 [: string]
+            y7 = x[:0:1]
+            y7 [: string]
+            y8 = x[0::]
+            y8 [: string]
+            y9 = x[:0:]
+            y9 [: string]
+            y10 = x[::0]
+            y10 [: string]
         return f
 
     def test_type(self, f):
@@ -2443,26 +2551,26 @@ class TeststringingSubscript:
         translation_eq(f, """
             def f():
                 x = 'abcdefg'
-                y = x[0]
-                y
-                y = x[0:1]
-                y
-                y = x[0:1:2]
-                y
-                y = x[0:]
-                y
-                y = x[0:1]
-                y
-                y = x[0::1]
-                y
-                y = x[:0:1]
-                y
-                y = x[0:]
-                y
-                y = x[:0]
-                y
-                y = x[::0]
-                return y""")
+                y1 = x[0]
+                y1
+                y2 = x[0:1]
+                y2
+                y3 = x[0:1:2]
+                y3
+                y4 = x[0:]
+                y4
+                y5 = x[0:1]
+                y5
+                y6 = x[0::1]
+                y6
+                y7 = x[:0:1]
+                y7
+                y8 = x[0:]
+                y8
+                y9 = x[:0]
+                y9
+                y10 = x[::0]
+                return y10""")
 
 # 
 # tpl

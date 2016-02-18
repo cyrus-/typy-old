@@ -680,9 +680,34 @@ class Context(object):
     def __init__(self, fn):
         self.fn = fn
         self.data = {}
+        self._id_count = {}
+        self._tmp_count = {}
+
+    def generate_fresh_id(self, id):
+        _id_count = self._id_count
+        try:
+            id_count = _id_count[id]
+        except KeyError:
+            _id_count[id] = 1
+            return id
+        else:
+            _id_count[id] = id_count + 1
+            return '__typy_id_' + id + '_' + str(id_count) + '__'
+    
+    def generate_fresh_tmp(self, tmp):
+        _tmp_count = self._tmp_count
+        print "TMP" + tmp
+        print _tmp_count
+        try:
+            tmp_count = _tmp_count[tmp]
+        except KeyError:
+            print " ERROR "
+            tmp_count = _tmp_count[tmp] = 1
+        else:
+            tmp_count = _tmp_count[tmp] = tmp_count + 1
+        return '__typy_tmp_' + tmp + '_' + str(tmp_count) + '__'
 
     def check(self, stmt):
-        # TODO: compare against py3 grammar
         if not isinstance(stmt, ast.stmt):
             raise UsageError("Cannot check a non-statement.")
         classname = stmt.__class__.__name__
@@ -690,33 +715,6 @@ class Context(object):
         delegate = tycon(self.fn.ascription)
         method = getattr(delegate, check_method)
         method(self, stmt)
-
-    def ana_intro_inc(self, value, inc_ty):
-        if not _is_intro_form(value):
-            raise UsageError("Expression is not an intro form.")
-        if not isinstance(inc_ty, IncompleteType):
-            raise UsageError("No incomplete type provided.")
-        classname = value.__class__.__name__
-        if classname == "Name":
-            classname = "Name_constructor"
-        elif classname == "Call":
-            classname = "Call_constructor"
-        syn_idx_methodname = 'syn_idx_%s' % classname
-        delegate = inc_ty.tycon
-        method = getattr(delegate, syn_idx_methodname)
-        syn_idx = method(self, value, inc_ty.inc_idx)
-        ty = _construct_ty(delegate, syn_idx)
-        value.translation_method_name = "translate_%s" % classname
-        value.delegate, value.ty = delegate, ty
-        return ty 
-
-    def _push_bindings(self, bindings):
-        tc = tycon(self.fn.ascription)
-        tc.push_bindings(self, bindings)
-
-    def _pop_bindings(self):
-        tc = tycon(self.fn.ascription)
-        tc.pop_bindings(self)
 
     def ana(self, e, ty):
         if not isinstance(e, ast.expr):
@@ -735,7 +733,7 @@ class Context(object):
             e.ty = ty
             e.delegate = ty
             e.translation_method_name = 'translate_%s' % classname
-        elif _is_match(e):
+        elif _is_match_expr(e):
             elts = e.left.elts
             n_elts = len(elts)
             if n_elts == 0:
@@ -759,8 +757,27 @@ class Context(object):
             if ty != syn_ty:
                 raise TypeMismatchError(ty, syn_ty, e)
 
+    def ana_intro_inc(self, value, inc_ty):
+        if not _is_intro_form(value):
+            raise UsageError("Expression is not an intro form.")
+        if not isinstance(inc_ty, IncompleteType):
+            raise UsageError("No incomplete type provided.")
+        classname = value.__class__.__name__
+        if classname == "Name":
+            classname = "Name_constructor"
+        elif classname == "Call":
+            classname = "Call_constructor"
+        syn_idx_methodname = 'syn_idx_%s' % classname
+        delegate = inc_ty.tycon
+        method = getattr(delegate, syn_idx_methodname)
+        syn_idx = method(self, value, inc_ty.inc_idx)
+        ty = _construct_ty(delegate, syn_idx)
+        value.translation_method_name = "translate_%s" % classname
+        value.delegate, value.ty = delegate, ty
+        return ty 
+
     def syn(self, e):
-        if _is_match(e):
+        if _is_match_expr(e):
             elts = e.left.elts
             n_elts = len(elts)
             if n_elts == 0:
@@ -902,10 +919,12 @@ class Context(object):
             delegate = self.fn.tree.ty
             method = getattr(delegate, method_name)
             translation = method(self, tree)
+            if isinstance(translation, ast.stmt):
+                translation = [translation]
         elif isinstance(tree, ast.expr):
             if hasattr(tree, "is_ascription"):
                 translation = self.translate(tree.value)
-            elif _is_match(tree):
+            elif _is_match_expr(tree):
                 scrutinee = tree.left.elts[0]
                 scrutinee_trans = self.translate(scrutinee)
                 scrutinee_var = ast.Name(id="__typy_scrutinee__", ctx=ast.Load())
@@ -1004,6 +1023,14 @@ class Context(object):
             raise UsageError("Not all bindings have translations.")
         return condition, binding_translations
 
+    def _push_bindings(self, bindings):
+        tc = tycon(self.fn.ascription)
+        tc.push_bindings(self, bindings)
+
+    def _pop_bindings(self):
+        tc = tycon(self.fn.ascription)
+        tc.pop_bindings(self)
+ 
 _intro_forms = (
     ast.Lambda, 
     ast.Dict, 
@@ -1017,9 +1044,9 @@ _intro_forms = (
     ast.List, 
     ast.Tuple)
 def _is_intro_form(e):
-    return isinstance(e, _intro_forms) \
-        or _is_Name_constructor(e) \
-        or _is_Call_constructor(e)
+    return (isinstance(e, _intro_forms) or 
+            _is_Name_constructor(e) or
+            _is_Call_constructor(e))
 
 def _is_Name_constructor(e):
     return isinstance(e, ast.Name) and e.id[0].isupper()
@@ -1041,7 +1068,8 @@ def _process_ascription_slice(slice_, static_env):
                     upper)
     return None 
 
-def _is_match(e):
+def _is_match_expr(e):
+    # {scrutinee} is {rules}
     return (isinstance(e, ast.Compare) and
             len(e.ops) == 1 and 
             isinstance(e.ops[0], ast.Is) and

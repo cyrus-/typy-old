@@ -58,6 +58,8 @@ class fn(typy.FnType):
 
     @classmethod
     def init_ctx(cls, ctx):
+        # ctx.variables is a dict stack mapping identifiers to 
+        # a pair consisting of the translation of the identifier and its type
         ctx.variables = typy.util.DictStack()
         ctx.variables.push({})
         ctx.return_type = None
@@ -184,7 +186,7 @@ class fn(typy.FnType):
             all_but_last_stmt = body[0:-1]
             last_stmt = body[-1]
             for stmt in all_but_last_stmt:
-                body_translation.append(ctx.translate(stmt))
+                body_translation.extend(ctx.translate(stmt))
             if isinstance(last_stmt, ast.Pass):
                 body_translation.append(ast.Return(ast.Tuple(elts=[], ctx=ast.Load())))
             elif isinstance(last_stmt, ast.Expr):
@@ -208,39 +210,75 @@ class fn(typy.FnType):
         id = e.id
         variables = ctx.variables
         try:
-            return variables[id]
+            (uniq_id, ty) = variables[id]
+            e.uniq_id = uniq_id
+            return ty
         except KeyError:
             raise typy.TypeError(
                 "Variable not found in context.", e)
 
     def translate_Name(cls, ctx, e):
-        return astx.copy_node(e)
+        translation = astx.copy_node(e)
+        translation.id = e.uniq_id
+        return translation
 
     @classmethod
     def check_Assign(cls, ctx, stmt):
         targets, value = stmt.targets, stmt.value
-        asc_ty = _process_targets(ctx, targets)
-        if asc_ty is None:
+        asc = _get_asc(ctx, targets)
+        if asc is None:
             ty = ctx.syn(value)
-        elif isinstance(asc_ty, typy.Type):
-            ty = asc_ty 
-            ctx.ana(value, ty)
-        elif isinstance(asc_ty, typy.IncompleteType):
-            ty = ctx.ana_intro_inc(value, asc_ty)
+        elif isinstance(asc, typy.Type):
+            ctx.ana(value, asc)
+            ty = asc
+        elif isinstance(asc, typy.IncompleteType):
+            ty = ctx.ana_intro_inc(value, asc)
         else:
-            raise typy.TypeError("Invalid type ascription", stmt)
-        _update_targets(ctx, targets, ty)
+            raise typy.UsageError("Invalid ascription")
+        _ana_patterns(ctx, targets, ty)
 
     def translate_Assign(self, ctx, stmt):
         targets, value = stmt.targets, stmt.value
-        target_translation = []
-        for target in targets:
-            if isinstance(target, ast.Name):
-                target_translation.append(astx.copy_node(target))
-            elif isinstance(target, ast.Subscript):
-                target_translation.append(astx.copy_node(target.value))
+
         value_translation = ctx.translate(value)
-        return ast.Assign(target_translation, value_translation)
+
+        scrutinee_trans = ast.Name(
+            id='__typy_let_scrutinee__',
+            ctx=ast.Load())
+        target_translation_data = tuple(_target_translation_data(
+            ctx, 
+            targets, 
+            scrutinee_trans))
+
+        try:
+            for (condition, binding_translations), _ in target_translation_data:
+                if astx.cond_vacuously_true(condition):
+                    for binding_translation in binding_translations.itervalues():
+                        if binding_translation != scrutinee_trans:
+                            raise _NotSimpleAssignment(0)
+                else:
+                    raise _NotSimpleAssignment(1)
+            print target_translation_data
+            return ast.Assign(
+                targets=[
+                    ast.Name(id=variables_update[id][0])
+                    for (_, binding_translations), variables_update in
+                    target_translation_data
+                    for id in binding_translations.iterkeys() 
+                ],
+                value=value_translation)
+        except _NotSimpleAssignment:
+            raise Exception("NOT YET")
+
+        value_translation
+        # translation = []
+        # value_assign = ast.Assign(
+        #   targets=[value_tmp],
+        #    value=value_translation)
+        #translation.append(value_assign)
+        #for target_trans in _translate_targets(ctx, targets, value_tmp):
+        #    translation.extend(target_trans)
+        #return translation
 
     @classmethod
     def check_Expr(cls, ctx, stmt):
@@ -388,7 +426,7 @@ def _setup_args(ctx, args, arg_types, tree):
         # ... the Python parser checks dupes itself, but in case of manual entry
         if arg_id in variables:
             raise typy.TypeError("Duplicate argument: " + arg_id + ".", arg)
-        variables[arg_id] = arg_type
+        variables[arg_id] = (ctx.generate_fresh_id(arg_id), arg_type)
 
     # set up support for recursive functions
     # requires a return type to have been provided
@@ -396,77 +434,147 @@ def _setup_args(ctx, args, arg_types, tree):
     if ctx.return_type != Ellipsis:
         name = tree.name
         if name in variables:
-            raise typy.TypeError("Argument shadows function name: " + name + ".", name)
-        variables[tree.name] = fn[arg_types, return_type]
+            raise typy.TypeError("Function name already bound: " + name + ".", name)
+        variables[name] = (ctx.generate_fresh_id(name), fn[arg_types, return_type])
 
-def _process_targets(ctx, targets):
-    asc_ty = None
+def _get_asc(ctx, targets):
+    asc = None
     for target in targets:
-        if isinstance(target, ast.Name):
-            id = target.id
-            variables = ctx.variables
-            try:
-                ctx_ty = variables[id]
-            except KeyError: 
-                pass
-            else:
-                if asc_ty is None:
-                    asc_ty = ctx_ty
-                elif asc_ty != ctx_ty:
-                    raise typy.TypeError(
-                        "Variable {0} has conflicting types.".format(id), target)
+        if isinstance(target, (ast.Name, ast.Tuple, ast.Dict, ast.List)):
+            continue
         elif isinstance(target, ast.Subscript):
             target_value, slice_ = target.value, target.slice
             if isinstance(target_value, ast.Name):
-                if isinstance(slice_, ast.Slice):
-                    lower, upper, step = slice_.lower, slice_.upper, slice_.step
-                    if lower is None and upper is not None and step is None:
-                        id = target_value.id
-                        variables = ctx.variables
-                        cur_asc_ty = ctx.fn.static_env.eval_expr_ast(upper)
-                        if isinstance(cur_asc_ty, typy.Type):
-                            try:
-                                ctx_ty = variables[id]
-                            except KeyError: 
-                                pass
-                            else:
-                                if cur_asc_ty != ctx_ty:
-                                    raise typy.TypeError(
-                                        "Variable {0} has conflicting types.".format(
-                                            target_value.id), target)
-                            if asc_ty is None: 
-                                asc_ty = cur_asc_ty
-                            elif asc_ty != cur_asc_ty:
-                                raise typy.TypeError(
-                                    "Variable {0} has conflicting types.".format(
-                                        target_value.id), target)
+                id = target_value.id
+                if id == "let":
+                    if len(targets) != 1:
+                        raise typy.TypeError(
+                            "Cannot use multiple assignment form with let.", targets)
+                    if isinstance(slice_, ast.Index):
+                        continue
+                    elif isinstance(slice_, ast.Slice):
+                        pat, asc_ast, step = slice_.lower, slice_.upper, slice_.step
+                        if pat is not None and asc_ast is not None and step is None:
+                            cur_asc = _process_asc_ast(asc_ast)
+                            if asc is None:
+                                asc = cur_asc
+                            elif asc != cur_asc:
+                                raise typy.TypeError("Inconsistent ascriptions", asc_ast)
+                            continue
                         else:
-                            if issubclass(cur_asc_ty, typy.Type):
-                                cur_asc_ty = cur_asc_ty[...]
-
-                            if isinstance(cur_asc_ty, typy.IncompleteType):
-                                try:
-                                    ctx_ty = variables[id]
-                                except KeyError:
-                                    if asc_ty is None:
-                                        asc_ty = cur_asc_ty
-                                    elif asc_ty != cur_asc_ty:
-                                        raise typy.TypeError("Variable {0} has conflicting types.", 
-                                            upper)
-                                else:
-                                    raise typy.TypeError("Variable already has a type.", upper)
-                            else:
-                                raise typy.TypeError(
-                                    "Variable type ascription is not a type or incomplete type.",
-                                    upper)
+                            raise typy.TypeError("Invalid let format.", slice_)
+                    else:
+                        raise typy.TypeError("Invalid let format.", slice_)
+            if not isinstance(target_value, (ast.Name, ast.Tuple, ast.Dict, ast.List)):
+                raise typy.TypeError("Unknown assignment form.", target_value)
+            if isinstance(slice_, ast.Slice):
+                lower, asc_ast, step = slice_.lower, slice_.upper, slice_.step
+                if lower is None and asc_ast is not None and step is None:
+                    cur_asc = _process_asc_ast(ctx, asc_ast)
+                    if asc is None:
+                        asc = cur_asc
+                    elif asc != cur_asc:
+                        raise typy.TypeError("Inconsistent ascriptions", asc_ast)
+                else:
+                    raise typy.TypeError("Invalid ascription format.", slice_)
         else:
-            raise typy.TypeError(
-                "Form not supported for assignment.", target)
-    return asc_ty 
+            raise typy.TypeError("Unknown assignment form.", target)
+    return asc
 
-def _update_targets(ctx, targets, ty):
+def _process_asc_ast(ctx, asc_ast):
+    asc = ctx.fn.static_env.eval_expr_ast(asc_ast)
+    if (isinstance(asc, typy.Type) or 
+            isinstance(asc, typy.IncompleteType)):
+        return asc
+    elif issubclass(asc, typy.Type):
+        return asc[...]
+    else:
+        raise typy.TypeError("Invalid ascription.", asc_ast)
+
+def _ana_patterns(ctx, targets, ty):
     for target in targets:
-        if isinstance(target, ast.Name):
-            ctx.variables[target.id] = ty
+        if isinstance(target, (ast.Name, ast.Tuple, ast.Dict, ast.List)):
+            ctx.ana_pat(target, ty)
+            _process_bindings(ctx, target)
         elif isinstance(target, ast.Subscript):
-            ctx.variables[target.value.id] = ty
+            target_value, slice_ = target.value, target.slice
+            if isinstance(target_value, ast.Name):
+                id = target_value.id
+                if id == "let":
+                    if isinstance(slice_, ast.Index):
+                        pat = slice_.value
+                        ctx.ana_pat(pat, ty)
+                        _process_bindings(ctx, pat)
+                        continue
+                    elif isinstance(slice_, ast.Slice):
+                        pat = slice_.lower
+                        ctx.ana_pat(pat, ty)
+                        _process_bindings(ctx, pat)
+                        continue
+            ctx.ana_pat(target_value, ty)
+            _process_bindings(ctx, target_value)
+
+def _process_bindings(ctx, pat):
+    bindings = pat.bindings
+    variables_update = pat.variables_update = {}
+    for id, ty in bindings.iteritems():
+        uniq_id = ctx.generate_fresh_id(id)
+        variables_item = (uniq_id, ty)
+        variables_update[id] = variables_item
+        ctx.variables[id] = variables_item
+
+def _target_translation_data(ctx, targets, scrutinee_trans):
+    for target in targets:
+        if isinstance(target, (ast.Name, ast.Tuple, ast.Dict, ast.List)):
+            yield (ctx.translate_pat(target, scrutinee_trans), target.variables_update)
+        elif isinstance(target, ast.Subscript):
+            target_value, slice_ = target.value, target.slice
+            if isinstance(target_value, ast.Name):
+                id = target_value.id
+                if id == "let":
+                    slice_
+                    continue # TODO
+            yield (ctx.translate_pat(target_value, scrutinee_trans), 
+                   target_value.variables_update)
+
+def _translate_targets(ctx, targets, scrutinee_trans):
+    for target in targets:
+        if isinstance(target, (ast.Name, ast.Tuple, ast.Dict, ast.List)):
+            condition, binding_translations = ctx.translate_pat(target, scrutinee_trans)
+            yield _translate_target(target, condition, binding_translations)
+        elif isinstance(target, ast.Subscript):
+            target_value, slice_ = target.value, target.slice
+            if isinstance(target_value, ast.Name):
+                id = target_value.id
+                if id == "let":
+                    slice_
+                    continue # TODO
+            condition, binding_translations = ctx.translate_pat(
+                target_value, scrutinee_trans)
+            yield _translate_target(target_value, condition, binding_translations)
+
+def _translate_target(target, condition, binding_translations):
+    # TODO: Optimize if condition is vacuous
+    if astx.cond_vacuously_true(condition):
+        return list(_translate_binding_translations(
+            target,
+            binding_translations))
+    else:
+        return [ast.If(
+            test=condition,
+            body=list(
+                _translate_binding_translations(
+                    target, 
+                    binding_translations)),
+            orelse=[astx.stmt_Raise_Exception_string("Let match failure")])]
+
+def _translate_binding_translations(target, binding_translations):
+    for id, translation in binding_translations.iteritems():
+        uniq_id = target.variables_update[id][0]
+        yield ast.Assign(
+            targets=[ast.Name(id=uniq_id)],
+            value=translation)
+
+class _NotSimpleAssignment(Exception):
+    pass
+
