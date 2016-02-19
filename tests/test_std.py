@@ -983,6 +983,107 @@ def test_assign_multiple_ascription_bad_3():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
+class TestSimpleLetSyn:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            let [x] = True [: boolean]
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = True
+                return x""")
+    
+class TestSimpleLetAna:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            let [x : boolean] = True
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = True
+                return x""")
+
+def test_let_multiple():
+    @fn
+    def test():
+        let [x : boolean] = y = True # noqa
+        x
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+class TestSimpleLetUnderscore:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            let [_ : boolean] = True
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                True
+                return ()""")
+
+
+class TestSimpleLetUnderscoreSyn:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            let [_] = True [: boolean]
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                True
+                return ()""")
+
+class TestSimpleAssignUnderscore:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            _ = True [: boolean] # noqa
+            _ [: boolean] = True
+            pass
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                True
+                True
+                return ()""")
+
 class TestRecursiveFn:
     @pytest.fixture
     def f(self):

@@ -455,7 +455,7 @@ def _get_asc(ctx, targets):
                     elif isinstance(slice_, ast.Slice):
                         pat, asc_ast, step = slice_.lower, slice_.upper, slice_.step
                         if pat is not None and asc_ast is not None and step is None:
-                            cur_asc = _process_asc_ast(asc_ast)
+                            cur_asc = _process_asc_ast(ctx, asc_ast)
                             if asc is None:
                                 asc = cur_asc
                             elif asc != cur_asc:
@@ -532,8 +532,16 @@ def _target_translation_data(ctx, targets, scrutinee_trans):
             if isinstance(target_value, ast.Name):
                 id = target_value.id
                 if id == "let":
-                    slice_
-                    continue # TODO
+                    if isinstance(slice_, ast.Index):
+                        pat = slice_.value
+                        yield (ctx.translate_pat(pat, scrutinee_trans),
+                               pat.variables_update)
+                        continue
+                    elif isinstance(slice_, ast.Slice):
+                        pat = slice_.lower
+                        yield (ctx.translate_pat(pat, scrutinee_trans),
+                               pat.variables_update)
+                        continue
             yield (ctx.translate_pat(target_value, scrutinee_trans), 
                    target_value.variables_update)
 

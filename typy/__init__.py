@@ -4,19 +4,24 @@ import inspect  # for accessing source code for functions
 import textwrap  # for stripping leading spaces from source code
 
 import six  # Python 2-3 compatibility, e.g. metaclasses
-import ordereddict
-_OD = ordereddict.OrderedDict
+import ordereddict # Built in to 2.7+ but needed for 2.6.
+odict = ordereddict.OrderedDict
 
 import util  # various utilities used throughout typy
 import util.astx  # utility functions for working with asts
 
 class UsageError(Exception):
-    pass
+    """For internal errors."""
+    pass # TODO rename to InternalError
 
 class TypeError(Exception):
     def __init__(self, message, tree):
         Exception.__init__(self, message)
         self.tree = tree
+
+    # TODO pretty-printing
+    # TODO error message codes
+    # TODO review error message usability
 
 class TypeMismatchError(TypeError):
     def __init__(self, expected, got, tree):
@@ -49,19 +54,10 @@ def warn(message, tree=None):
 
 class _TypeMetaclass(type): # here, type is Python's "type" builtin
     def __getitem__(self, idx):
-        if _contains_ellipsis(idx): 
+        if util._contains_ellipsis(idx): 
             return _construct_incty(self, idx)
         else: 
             return _construct_ty(self, idx)
-
-def _contains_ellipsis(idx):
-    if idx is Ellipsis: 
-        return True
-    elif isinstance(idx, tuple):
-        for item in idx:
-            if item is Ellipsis: 
-                return True
-    return False 
 
 def _construct_incty(tycon, inc_idx):
     inc_idx = tycon.init_inc_idx(inc_idx)
@@ -103,11 +99,11 @@ class Type(object):
 
     @classmethod
     def init_idx(cls, idx): 
-        return idx
+        raise TypeFormationError("init_idx not implemented.")
 
     @classmethod
     def init_inc_idx(cls, inc_idx):
-        return inc_idx
+        raise TypeFormationError("init_inc_idx not implemented.")
 
     # Num
 
@@ -979,7 +975,7 @@ class Context(object):
             delegate = ty
             method = getattr(delegate, ana_pat_methodname)
             bindings = method(self, pat)
-            if not isinstance(bindings, _OD):
+            if not isinstance(bindings, odict):
                 raise UsageError("Expected ordered dict.")
             for name, binding_ty in bindings.iteritems():
                 if not util.astx.is_identifier(name):
@@ -1013,9 +1009,9 @@ class Context(object):
             condition = ast.Name(id='True', ctx=ast.Load())
             id = pat.id
             if id == "_":
-                binding_translations = _OD()
+                binding_translations = odict()
             else:
-                binding_translations = _OD(((id, scrutinee_trans),))
+                binding_translations = odict(((id, scrutinee_trans),))
         else:
             raise UsageError("Cannot translate this pattern...")
         bindings = pat.bindings

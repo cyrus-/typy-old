@@ -37,3 +37,13 @@ def tpl_cons(hd, tl):
     yield hd
     for x in tl:
         yield x 
+
+def _contains_ellipsis(idx):
+    if idx is Ellipsis: 
+        return True
+    elif isinstance(idx, tuple):
+        for item in idx:
+            if item is Ellipsis: 
+                return True
+    return False 
+
