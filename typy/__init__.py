@@ -389,8 +389,16 @@ class FnType(Type):
         raise NotSupportedError(cls, "class method", "push_bindings", None)
 
     @classmethod
+    def push_variable_update(cls, ctx, variable_update):
+        raise NotSupportedError(cls, "class method", "push_variable_update", None)
+
+    @classmethod
     def pop_bindings(cls, ctx):
-        raise NotSupportedError(cls, "class method", "pop bindings", None)
+        raise NotSupportedError(cls, "class method", "pop_bindings", None)
+
+    @classmethod
+    def pop_variable_update(cls, ctx):
+        raise NotSupportedError(cls, "class method", "pop_variable_update", None)
 
     @classmethod
     def preprocess_FunctionDef_toplevel(cls, fn, tree):
@@ -743,7 +751,7 @@ class Context(object):
             rules = zip(rule_dict.keys, rule_dict.values)
             for (pat, branch) in rules:
                 bindings = self.ana_pat(pat, scrutinee_ty)
-                self._push_bindings(bindings)
+                branch.variable_update = self._push_bindings(bindings)
                 self.ana(branch, ty)
                 self._pop_bindings()
             e.delegate = scrutinee_ty
@@ -787,7 +795,7 @@ class Context(object):
             syn_ty = None
             for (pat, branch) in rules:
                 bindings = self.ana_pat(pat, scrutinee_ty)
-                self._push_bindings(bindings)
+                branch.variable_update = self._push_bindings(bindings)
                 branch_ty = self.syn(branch)
                 if syn_ty is None:
                     syn_ty = branch_ty
@@ -932,7 +940,7 @@ class Context(object):
                 else:
                     rt_0 = rule_translations[0]
                     rt_rest = rule_translations[1:]
-                    compiled_rules = _compile_rule(rt_0, rt_rest)
+                    compiled_rules = _compile_rule(self, rt_0, rt_rest)
                 translation = util.astx.make_simple_Call(
                     util.astx.make_Lambda(('__typy_scrutinee__',), compiled_rules),
                     [scrutinee_trans])
@@ -1021,11 +1029,19 @@ class Context(object):
 
     def _push_bindings(self, bindings):
         tc = tycon(self.fn.ascription)
-        tc.push_bindings(self, bindings)
+        return tc.push_bindings(self, bindings)
+
+    def _push_variable_update(self, variable_update):
+        tc = tycon(self.fn.ascription)
+        return tc.push_variable_update(self, variable_update)
 
     def _pop_bindings(self):
         tc = tycon(self.fn.ascription)
         tc.pop_bindings(self)
+
+    def _pop_variable_update(self):
+        tc = tycon(self.fn.ascription)
+        tc.pop_variable_update(self)
  
 _intro_forms = (
     ast.Lambda, 
@@ -1082,17 +1098,22 @@ def _translate_rules(ctx, rules, scrutinee_trans):
         for binding_translation in binding_translations.itervalues():
             if not isinstance(binding_translation, ast.expr):
                 raise UsageError("Binding translation must be an expression.")
+        ctx._push_variable_update(branch.variable_update)
         branch_translation = ctx.translate(branch)
+        branch_translation.variable_update = branch.variable_update
+        ctx._pop_variable_update()
         yield condition, binding_translations, branch_translation
 
-def _compile_rule(rule_translation, rest):
+def _compile_rule(ctx, rule_translation, rest):
     test, binding_translations, branch_translation = rule_translation
 
     if len(binding_translations) == 0:
         body = branch_translation
     else:
+        variable_update = branch_translation.variable_update
         body_lambda = util.astx.make_Lambda(
-            binding_translations.iterkeys(),
+            (variable_update[id][0] 
+             for id in binding_translations.iterkeys()),
             branch_translation)
         body = util.astx.make_simple_Call(
             body_lambda, 
@@ -1101,7 +1122,7 @@ def _compile_rule(rule_translation, rest):
     if len(rest) == 0:
         orelse = util.astx.expr_Raise_Exception_string("Match failure.")
     else:
-        orelse = _compile_rule(rest[0], rest[1:])
+        orelse = _compile_rule(ctx, rest[0], rest[1:])
 
     return ast.IfExp(
         test=test,

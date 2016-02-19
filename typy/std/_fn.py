@@ -1,6 +1,9 @@
 """typy functions"""
 import ast
 
+import ordereddict
+_odict = ordereddict.OrderedDict
+
 import typy
 import typy.util 
 import typy.util.astx as astx
@@ -66,10 +69,22 @@ class fn(typy.FnType):
 
     @classmethod
     def push_bindings(cls, ctx, bindings):
-        ctx.variables.push(bindings)
+        variable_update = _odict(
+            (id, (ctx.generate_fresh_id(id), ty))
+            for (id, ty) in bindings.iteritems())
+        ctx.variables.push(variable_update)
+        return variable_update
+
+    @classmethod
+    def push_variable_update(cls, ctx, variable_update):
+        ctx.variables.push(variable_update)
 
     @classmethod
     def pop_bindings(cls, ctx):
+        ctx.variables.pop()
+
+    @classmethod
+    def pop_variable_update(cls, ctx):
         ctx.variables.pop()
 
     def ana_FunctionDef_toplevel(self, ctx, tree):

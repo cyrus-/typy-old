@@ -96,7 +96,7 @@ class TestMultipleRulesAna:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: ((lambda y: True)(__typy_scrutinee__) if True else ((lambda y: y)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: ((lambda y: True)(__typy_scrutinee__) if True else ((lambda __typy_id_y_1__: __typy_id_y_1__)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))(x)""") # noqa
 
 def test_pop():
     @fn
@@ -223,7 +223,7 @@ class TestCplxTuplePattern:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: (0.0 if ((__typy_scrutinee__.real == 0.0) and (__typy_scrutinee__.imag == 1.0)) else ((lambda y: y)(__typy_scrutinee__.real) if (True and (__typy_scrutinee__.imag == 2.0)) else ((lambda y: y)(__typy_scrutinee__.imag) if ((__typy_scrutinee__.real == 3.0) and True) else ((lambda y, z: (y + z))(__typy_scrutinee__.real, __typy_scrutinee__.imag) if (True and True) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: (0.0 if ((__typy_scrutinee__.real == 0.0) and (__typy_scrutinee__.imag == 1.0)) else ((lambda y: y)(__typy_scrutinee__.real) if (True and (__typy_scrutinee__.imag == 2.0)) else ((lambda __typy_id_y_1__: __typy_id_y_1__)(__typy_scrutinee__.imag) if ((__typy_scrutinee__.real == 3.0) and True) else ((lambda __typy_id_y_2__, z: (__typy_id_y_2__ + z))(__typy_scrutinee__.real, __typy_scrutinee__.imag) if (True and True) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))))(x)""") # noqa
 
 def test_cplx_tuple_duplicate_vars():
     @fn
@@ -356,7 +356,7 @@ class TestTplDictPattern:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: ((0, 0.0) if ((__typy_scrutinee__[0] == 5) and True) else ((lambda y, x: (x, y))(__typy_scrutinee__[1], __typy_scrutinee__[0]) if (True and True) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: ((0, 0.0) if ((__typy_scrutinee__[0] == 5) and True) else ((lambda y, __typy_id_x_1__: (__typy_id_x_1__, y))(__typy_scrutinee__[1], __typy_scrutinee__[0]) if (True and True) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))(x)""") # noqa
 
 def test_Tpl_Dict_too_few():
     @fn
@@ -427,7 +427,7 @@ class TestTplXPattern:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: ((lambda a, b, x, y: (a, b, x, y))(__typy_scrutinee__[0], __typy_scrutinee__[1], __typy_scrutinee__[2], __typy_scrutinee__[3]) if (True and True and True and True) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: ((lambda a, b, __typy_id_x_1__, y: (a, b, __typy_id_x_1__, y))(__typy_scrutinee__[0], __typy_scrutinee__[1], __typy_scrutinee__[2], __typy_scrutinee__[3]) if (True and True and True and True) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
 
 def test_Tpl_X_invalid_label():
     @fn
