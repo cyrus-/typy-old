@@ -54,7 +54,7 @@ def warn(message, tree=None):
 
 class _TypeMetaclass(type): # here, type is Python's "type" builtin
     def __getitem__(self, idx):
-        if util._contains_ellipsis(idx): 
+        if util.contains_ellipsis(idx): 
             return _construct_incty(self, idx)
         else: 
             return _construct_ty(self, idx)
@@ -343,7 +343,9 @@ class IncompleteType(object):
             (ast, static_env) = _reflect_func(f)
             return Fn(ast, static_env, self)
         else: 
-            raise TypeError("Incomplete non-FnType used as a top-level function decorator.")
+            raise TypeError(
+                "Incomplete non-FnType used as a top-level function decorator.",
+                None)
 
     def __eq__(self, other):
         return isinstance(other, IncompleteType) \
@@ -819,7 +821,8 @@ class Context(object):
                     e.is_ascription = True 
                 else:
                     raise TypeError(
-                        "Incomplete type ascriptions can only appear on introductory forms.", 
+                        "Incomplete type ascriptions can only appear"
+                        "on introductory forms.", 
                         value)
             else:
                 # not an ascription
@@ -909,7 +912,8 @@ class Context(object):
                 raise TypeInvariantError(
                     "syn_Attribute did not return a type.", e)
         else:
-            raise TypeError("Unsupported form for type synthesis: " + e.__class__.__name__, e)
+            raise TypeError("Unsupported form for type synthesis: " + 
+                            e.__class__.__name__, e)
 
         assert delegate is not None
         assert ty is not None 
@@ -940,7 +944,7 @@ class Context(object):
                 else:
                     rt_0 = rule_translations[0]
                     rt_rest = rule_translations[1:]
-                    compiled_rules = _compile_rule(self, rt_0, rt_rest)
+                    compiled_rules = _compile_rule(rt_0, rt_rest)
                 translation = util.astx.make_simple_Call(
                     util.astx.make_Lambda(('__typy_scrutinee__',), compiled_rules),
                     [scrutinee_trans])
@@ -1104,7 +1108,7 @@ def _translate_rules(ctx, rules, scrutinee_trans):
         ctx._pop_variable_update()
         yield condition, binding_translations, branch_translation
 
-def _compile_rule(ctx, rule_translation, rest):
+def _compile_rule(rule_translation, rest):
     test, binding_translations, branch_translation = rule_translation
 
     if len(binding_translations) == 0:
@@ -1122,7 +1126,7 @@ def _compile_rule(ctx, rule_translation, rest):
     if len(rest) == 0:
         orelse = util.astx.expr_Raise_Exception_string("Match failure.")
     else:
-        orelse = _compile_rule(ctx, rest[0], rest[1:])
+        orelse = _compile_rule(rest[0], rest[1:])
 
     return ast.IfExp(
         test=test,

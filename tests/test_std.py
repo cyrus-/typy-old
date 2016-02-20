@@ -2679,21 +2679,23 @@ class TeststringingSubscript:
 
 from typy.std import tpl
 import ordereddict
-OD = ordereddict.OrderedDict
+odict = ordereddict.OrderedDict
 
 def test_tpl_formation_unit():
     assert isinstance(tpl[()], typy.Type)
-    assert tpl[()].idx == OD(())
+    assert tpl[()].idx == odict(())
 
 def test_tpl_formation_single_ty():
     assert isinstance(tpl[num], typy.Type)
-    assert tpl[num].idx == OD(((0, (0, num)),))
+    assert tpl[num].idx == odict((
+        (0, num),
+    ))
 
 def test_tpl_formation_two_ty():
     assert isinstance(tpl[num, num], typy.Type)
-    assert tpl[num, num].idx == OD((
-        (0, (0, num)),
-        (1, (1, num))
+    assert tpl[num, num].idx == odict((
+        (0, num),
+        (1, num)
     ))
 
 def test_tpl_formation_single_noty():
@@ -2705,14 +2707,14 @@ def test_tpl_formation_two_noty():
         tpl[num, "num"]
 
 def test_tpl_formation_single_label():
-    assert tpl["lbl0" : num].idx == OD((
-        ("lbl0", (0, num)),
+    assert tpl["lbl0" : num].idx == odict((
+        ("lbl0", num),
     ))
 
 def test_tpl_formation_two_labels():
-    assert tpl["lbl0": num, "lbl1": string].idx == OD((
-        ("lbl0", (0, num)),
-        ("lbl1", (1, string))
+    assert tpl["lbl0": num, "lbl1": string].idx == odict((
+        ("lbl0", num),
+        ("lbl1", string)
     ))
 
 def test_tpl_formation_duplicate_labels():
@@ -2724,9 +2726,9 @@ def test_tpl_formation_empty_lbl():
         tpl["": num]
 
 def test_tpl_formation_num_labels():
-    assert tpl[1 : num, 0 : num].idx == OD((
-        (1, (0, num)),
-        (0, (1, num))
+    assert tpl[1 : num, 0 : num].idx == odict((
+        (1, num),
+        (0, num)
     ))
 
 def test_tpl_formation_neg_label():
@@ -2874,8 +2876,8 @@ class TestTplDictIntro():
         @fn
         def f():
             z1 [: tpl[string, num]] = {0 : "test", 1 : 0}
-            z2 [: tpl['lbl0' : string, 'lbl1' : num]] = {'lbl0': "test", 'lbl1': 0}
-            z3 [: tpl['lbl0' : string, 'lbl1' : num]] = {'lbl1': 0, 'lbl0': "test"}
+            z2 [: tpl['lbl0' : string, 'lbl1' : num]] = {lbl0: "test", lbl1: 0}
+            z3 [: tpl['lbl0' : string, 'lbl1' : num]] = {lbl1: 0, lbl0: "test"}
             z3
         return f
 
@@ -2944,21 +2946,12 @@ def test_tpl_Dict_neg_lbl():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-def test_tpl_Dict_bad_lbl():
-    @fn 
-    def test():
-        x [: string] = "test"
-        z1 [: tpl] = {None : x}
-        z1
-    with pytest.raises(typy.TypeError):
-        test.typecheck()
-
 def test_tpl_Dict_duplicate_lbl():
     @fn
     def test():
         x [: string] = "test"
         y [: num] = 0
-        z1 [: tpl] = {"lbl0": x, "lbl0": y}
+        z1 [: tpl] = {lbl0: x, "lbl0": y}
         z1
     with pytest.raises(typy.TypeError):
         test.typecheck()

@@ -273,7 +273,6 @@ class fn(typy.FnType):
                             raise _NotSimpleAssignment(0)
                 else:
                     raise _NotSimpleAssignment(1)
-            print target_translation_data
             return ast.Assign(
                 targets=[
                     ast.Name(id=variables_update[id][0])
@@ -283,9 +282,21 @@ class fn(typy.FnType):
                 ],
                 value=value_translation)
         except _NotSimpleAssignment:
-            raise Exception("NOT YET")
+            translation = []
+            scrutinee_assign = ast.Assign(
+                targets=[scrutinee_trans],
+                value=value_translation)
+            translation.append(scrutinee_assign)
+            for (condition, binding_translations), variables_update \
+                    in target_translation_data:
+                translation.append(ast.If(
+                    test=condition,
+                    body=list(
+                        _translate_binding_translations(
+                            binding_translations, variables_update)),
+                    orelse=[astx.stmt_Raise_Exception_string("Match failure.")]))
+            return translation
 
-        value_translation
         # translation = []
         # value_assign = ast.Assign(
         #   targets=[value_tmp],
@@ -407,7 +418,8 @@ def _process_argument_signature(value, arg_names, static_env):
         n_args = len(arg_names)
         if n_elts != n_args:
             raise typy.TypeError(
-                "Function specifies {0} arguments, but function signature specifies {1} arguments."
+                "Function specifies {0} arguments, but function"
+                "signature specifies {1} arguments."
                 .format(n_args, n_elts), value)
         for elt in elts:
             arg_types.append(static_env.eval_expr_ast(elt))
@@ -560,43 +572,15 @@ def _target_translation_data(ctx, targets, scrutinee_trans):
             yield (ctx.translate_pat(target_value, scrutinee_trans), 
                    target_value.variables_update)
 
-def _translate_targets(ctx, targets, scrutinee_trans):
-    for target in targets:
-        if isinstance(target, (ast.Name, ast.Tuple, ast.Dict, ast.List)):
-            condition, binding_translations = ctx.translate_pat(target, scrutinee_trans)
-            yield _translate_target(target, condition, binding_translations)
-        elif isinstance(target, ast.Subscript):
-            target_value, slice_ = target.value, target.slice
-            if isinstance(target_value, ast.Name):
-                id = target_value.id
-                if id == "let":
-                    slice_
-                    continue # TODO
-            condition, binding_translations = ctx.translate_pat(
-                target_value, scrutinee_trans)
-            yield _translate_target(target_value, condition, binding_translations)
-
-def _translate_target(target, condition, binding_translations):
-    # TODO: Optimize if condition is vacuous
-    if astx.cond_vacuously_true(condition):
-        return list(_translate_binding_translations(
-            target,
-            binding_translations))
+def _translate_binding_translations(binding_translations, variables_update):
+    if len(binding_translations) == 0:
+        yield ast.Pass()
     else:
-        return [ast.If(
-            test=condition,
-            body=list(
-                _translate_binding_translations(
-                    target, 
-                    binding_translations)),
-            orelse=[astx.stmt_Raise_Exception_string("Let match failure")])]
-
-def _translate_binding_translations(target, binding_translations):
-    for id, translation in binding_translations.iteritems():
-        uniq_id = target.variables_update[id][0]
-        yield ast.Assign(
-            targets=[ast.Name(id=uniq_id)],
-            value=translation)
+        for id, translation in binding_translations.iteritems():
+            uniq_id = variables_update[id][0]
+            yield ast.Assign(
+                targets=[ast.Name(id=uniq_id)],
+                value=translation)
 
 class _NotSimpleAssignment(Exception):
     pass

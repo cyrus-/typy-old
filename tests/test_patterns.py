@@ -22,12 +22,11 @@ class TestVariablePatternAna:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: ((lambda y: y)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
-
-    #def test_translation(self, f):
-    #    translation_eq(f, """
-    #        def f(x):
-    #            return (lambda x: x if True else raise __builtin__.Exception('Match failure'))(x)""") # noqa
+                return """
+                    "(lambda __typy_scrutinee__: "
+                       "((lambda y: y)(__typy_scrutinee__) if True "
+                       "else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))"
+                    ")(x)""") 
 
 class TestVariablePatternAnaPropagates:
     @pytest.fixture
@@ -44,7 +43,10 @@ class TestVariablePatternAnaPropagates:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: ((lambda y: True)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: """
+                    "((lambda y: True)(__typy_scrutinee__) if True "
+                    "else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))"
+                ")(x)") 
 
 class TestVariablePatternSyn:
     @pytest.fixture
@@ -61,7 +63,10 @@ class TestVariablePatternSyn:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: ((lambda y: y)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: """
+                    "((lambda y: y)(__typy_scrutinee__) if True "
+                    "else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))"
+                ")(x)")
 
 def test_underscore_pattern():
     @fn
@@ -96,7 +101,12 @@ class TestMultipleRulesAna:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: ((lambda y: True)(__typy_scrutinee__) if True else ((lambda __typy_id_y_1__: __typy_id_y_1__)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: """
+                  "((lambda y: True)(__typy_scrutinee__) if True "
+                  "else ("
+                    "(lambda __typy_id_y_1__: __typy_id_y_1__)(__typy_scrutinee__) if True "
+                    "else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))"
+                ")(x)") 
 
 def test_pop():
     @fn
@@ -130,7 +140,10 @@ class TestOperations:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return ((lambda __typy_scrutinee__: ((lambda y: y)(__typy_scrutinee__) if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x) + 5)""") # noqa
+                return ((lambda __typy_scrutinee__: """
+                    "((lambda y: y)(__typy_scrutinee__) if True "
+                    "else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))"
+                ")(x) + 5)""")
 
 class TestBooleanPattern:
     @pytest.fixture
@@ -150,7 +163,64 @@ class TestBooleanPattern:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: (x if (not __typy_scrutinee__) else (x if True else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))((lambda __typy_scrutinee__: (x if __typy_scrutinee__ else (x if (not __typy_scrutinee__) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))(x))""") # noqa
+                return (lambda __typy_scrutinee__: """
+                    "(x if (not __typy_scrutinee__) "
+                    "else ("
+                    "x if True "
+                    "else (_ for _ in ()).throw("
+                    "__builtin__.Exception('Match failure.'))))"
+                ")((lambda __typy_scrutinee__: "
+                    "(x if __typy_scrutinee__ "
+                    "else ("
+                    "x if (not __typy_scrutinee__) "
+                    "else (_ for _ in ()).throw("
+                    "__builtin__.Exception('Match failure.')))))(x))""")
+
+class TestBooleanDestructuringAssign:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {boolean}
+            True = x # noqa
+            x
+        return f
+
+    def test_type(self, f):
+        f.typecheck() == fn[boolean, boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_let_scrutinee__ = x
+                if __typy_let_scrutinee__:
+                    pass
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                return x""")
+
+class TestBooleanLet:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {boolean}
+            let [True] = x
+            x
+        return f
+
+    def test_type(self, f):
+        f.typecheck() == fn[boolean, boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_let_scrutinee__ = x
+                if __typy_let_scrutinee__:
+                    pass
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                return x""")
 
 class TestNumPattern:
     @pytest.fixture
@@ -167,7 +237,34 @@ class TestNumPattern:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: (x if (__typy_scrutinee__ == 0) else ((x + x) if (__typy_scrutinee__ == 5) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: """
+                    "(x if (__typy_scrutinee__ == 0) "
+                    "else ((x + x) if (__typy_scrutinee__ == 5) "
+                    "else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))"
+                ")(x)")
+
+class TestNumLet:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {num}
+            let [5] = x
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[num, num]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_let_scrutinee__ = x
+                if (__typy_let_scrutinee__ == 5):
+                    pass
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                return x""")
 
 class TestIEEEPattern:
     @pytest.fixture
@@ -184,7 +281,11 @@ class TestIEEEPattern:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: (x if (__typy_scrutinee__ == 0.0) else ((x + x) if (__typy_scrutinee__ == 5.5) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: """
+                    "(x if (__typy_scrutinee__ == 0.0) "
+                    "else ((x + x) if (__typy_scrutinee__ == 5.5) "
+                    "else (_ for _ in ()).throw("
+                       "__builtin__.Exception('Match failure.')))))(x)")
 
 class TestCplxNumPattern:
     @pytest.fixture
@@ -201,7 +302,12 @@ class TestCplxNumPattern:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: (x if (__typy_scrutinee__ == 0j) else ((x + x) if (__typy_scrutinee__ == (5.5+0j)) else (((x + x) + x) if (__typy_scrutinee__ == 6j) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: """
+                    "(x if (__typy_scrutinee__ == 0j) "
+                    "else ((x + x) if (__typy_scrutinee__ == (5.5+0j)) "
+                    "else (((x + x) + x) if (__typy_scrutinee__ == 6j) "
+                    "else (_ for _ in ()).throw("
+                       "__builtin__.Exception('Match failure.'))))))(x)")
 
 class TestCplxTuplePattern:
     @pytest.fixture
@@ -223,7 +329,57 @@ class TestCplxTuplePattern:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: (0.0 if ((__typy_scrutinee__.real == 0.0) and (__typy_scrutinee__.imag == 1.0)) else ((lambda y: y)(__typy_scrutinee__.real) if (True and (__typy_scrutinee__.imag == 2.0)) else ((lambda __typy_id_y_1__: __typy_id_y_1__)(__typy_scrutinee__.imag) if ((__typy_scrutinee__.real == 3.0) and True) else ((lambda __typy_id_y_2__, z: (__typy_id_y_2__ + z))(__typy_scrutinee__.real, __typy_scrutinee__.imag) if (True and True) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: """
+                    "(0.0 if ((__typy_scrutinee__.real == 0.0) "
+                       "and (__typy_scrutinee__.imag == 1.0)) "
+                    "else ((lambda y: y)(__typy_scrutinee__.real) "
+                       "if (True and (__typy_scrutinee__.imag == 2.0)) "
+                    "else ((lambda __typy_id_y_1__: __typy_id_y_1__)("
+                       "__typy_scrutinee__.imag) if "
+                       "((__typy_scrutinee__.real == 3.0) and True) "
+                    "else ((lambda __typy_id_y_2__, z: (__typy_id_y_2__ + z))("
+                       "__typy_scrutinee__.real, "
+                       "__typy_scrutinee__.imag) if (True and True) "
+                    "else (_ for _ in ()).throw("
+                       "__builtin__.Exception('Match failure.')))))))(x)")
+
+class TestCplxTupleLet:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {cplx} >> ieee
+            (y, z) = x
+            let [(y, z)] = x
+            let [(y, z) : cplx] = (y, z)
+            y + z
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[cplx, ieee]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_let_scrutinee__ = x
+                if (True and True):
+                    y = __typy_let_scrutinee__.real
+                    z = __typy_let_scrutinee__.imag
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                __typy_let_scrutinee__ = x
+                if (True and True):
+                    __typy_id_y_1__ = __typy_let_scrutinee__.real
+                    __typy_id_z_1__ = __typy_let_scrutinee__.imag
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                __typy_let_scrutinee__ = __builtin__.complex(__typy_id_y_1__, __typy_id_z_1__)
+                if (True and True):
+                    __typy_id_y_2__ = __typy_let_scrutinee__.real
+                    __typy_id_z_2__ = __typy_let_scrutinee__.imag
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                return (__typy_id_y_2__ + __typy_id_z_2__)""")
 
 def test_cplx_tuple_duplicate_vars():
     @fn
@@ -264,7 +420,36 @@ class TestStringPattern:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: (x if (__typy_scrutinee__ == '') else (x if (__typy_scrutinee__ == 'ABC') else (x if (__typy_scrutinee__ == 'DEF') else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: """
+                    "(x if (__typy_scrutinee__ == '') "
+                    "else (x if (__typy_scrutinee__ == 'ABC') "
+                    "else (x if (__typy_scrutinee__ == 'DEF') "
+                    "else (_ for _ in ()).throw("
+                       "__builtin__.Exception('Match failure.')))))"
+                ")(x)")
+
+class TestStringLet:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {string}
+            let ["test"] = x
+            x
+        return f
+    
+    def test_type(self, f):
+        assert f.typecheck() == fn[string, string]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_let_scrutinee__ = x
+                if (__typy_let_scrutinee__ == 'test'):
+                    pass
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                return x""")
 
 class TestTplTuplePattern:
     @pytest.fixture
@@ -283,7 +468,12 @@ class TestTplTuplePattern:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: ((lambda y, z: (z, y))(__typy_scrutinee__[0], __typy_scrutinee__[1]) if (True and True) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: """
+                    "((lambda y, z: (z, y))(__typy_scrutinee__[0], __typy_scrutinee__[1]) "
+                    "if (True and True) "
+                    "else (_ for _ in ()).throw("
+                    "__builtin__.Exception('Match failure.')))"
+                ")(x)""")
 
 class TestTplNestedTuplePattern:
     @pytest.fixture
@@ -304,7 +494,44 @@ class TestTplNestedTuplePattern:
     def test_translation(self, f):
         translation_eq(f, """
             def f(x):
-                return (lambda __typy_scrutinee__: ((lambda a, b, c, d: ((c, a), (d, b)))(__typy_scrutinee__[0][0], __typy_scrutinee__[0][1], __typy_scrutinee__[1][0], __typy_scrutinee__[1][1]) if ((True and True) and (True and True)) else (_ for _ in ()).throw(__builtin__.Exception('Match failure.'))))(x)""") # noqa
+                return (lambda __typy_scrutinee__: """
+                    "((lambda a, b, c, d: ((c, a), (d, b)))("
+                    "__typy_scrutinee__[0][0], "
+                    "__typy_scrutinee__[0][1], "
+                    "__typy_scrutinee__[1][0], "
+                    "__typy_scrutinee__[1][1]) "
+                    "if ((True and True) and (True and True)) "
+                    "else (_ for _ in ()).throw("
+                    "__builtin__.Exception('Match failure.')))"
+                ")(x)""")
+
+class TestTplLet:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {tpl[tpl[num, num], tpl[ieee, ieee]]}
+            ((a, b), (c, d)) = x
+            ((c, a), (d, b)) [: tpl]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[
+            tpl[tpl[num, num], tpl[ieee, ieee]],
+            tpl[tpl[ieee, num], tpl[ieee, num]]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_let_scrutinee__ = x
+                if ((True and True) and (True and True)):
+                    a = __typy_let_scrutinee__[0][0]
+                    b = __typy_let_scrutinee__[0][1]
+                    c = __typy_let_scrutinee__[1][0]
+                    d = __typy_let_scrutinee__[1][1]
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                return ((c, a), (d, b))""")
 
 def test_Tpl_too_few():
     @fn

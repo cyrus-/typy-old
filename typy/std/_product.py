@@ -3,7 +3,7 @@ import ast
 
 import six
 import ordereddict
-_OD = ordereddict.OrderedDict
+_odict = ordereddict.OrderedDict
 
 import typy
 import typy.util
@@ -18,7 +18,7 @@ import _boolean
 class tpl(typy.Type):
     @classmethod
     def init_idx(cls, idx):
-        return _OD(_normalize_tuple_idx(idx)) 
+        return _odict(_normalize_tuple_idx(idx)) 
 
     @classmethod
     def init_inc_idx(cls, inc_idx):
@@ -31,7 +31,7 @@ class tpl(typy.Type):
     def __str__(self):
         idx = self.idx
         return (
-            "Tpl[" + 
+            "tpl[" + 
             (str.join(", ", _idx_to_str(idx)) if len(idx) > 0 else "()") + 
             "]"
         )
@@ -48,17 +48,12 @@ class tpl(typy.Type):
             raise typy.TypeError(
                 "Too many components provided.", elts[n_idx])
 
-        for elt, (_, ty) in zip(elts, idx.itervalues()):
+        for elt, ty in zip(elts, idx.itervalues()):
             ctx.ana(elt, ty)
 
     @classmethod
-    def syn_idx_Tuple(self, ctx, e, inc_idx):
-        elts = e.elts
-        idx = tuple(
-            (i, ctx.syn(elt))
-            for i, elt in enumerate(elts)
-        )
-        return idx
+    def syn_idx_Tuple(cls, ctx, e, inc_idx):
+        return tuple(_syn_idx_Tuple(cls, ctx, e.elts))
 
     def translate_Tuple(self, ctx, e):
         translation = astx.copy_node(e)
@@ -78,9 +73,9 @@ class tpl(typy.Type):
             raise typy.TypeError(
                 "Too many components in tpl pattern.", elts[n_idx])
         
-        bindings = _OD()
+        bindings = _odict()
         n_bindings = 0
-        for elt, (_, ty) in zip(elts, idx.itervalues()):
+        for elt, ty in zip(elts, idx.itervalues()):
             elt_bindings = ctx.ana_pat(elt, ty)
             n_elt_bindings = len(elt_bindings)
             bindings.update(elt_bindings)
@@ -96,8 +91,8 @@ class tpl(typy.Type):
         elts = pat.elts
         idx = self.idx
         conditions = []
-        binding_translations = _OD()
-        for elt, (n, ty) in zip(elts, idx.itervalues()):
+        binding_translations = _odict()
+        for n, (elt, ty) in enumerate(zip(elts, idx.itervalues())):
             elt_scrutinee_trans = astx.make_Subscript_Num_Index(
                 scrutinee_trans_copy,
                 n)
@@ -123,43 +118,22 @@ class tpl(typy.Type):
 
         used_labels = set()
         for key, value in zip(keys, values):
-            label = ctx.fn.static_env.eval_expr_ast(key)
+            label = _read_label(key)
             if label in used_labels:
                 raise typy.TypeError(
                     "Duplicate label: " + str(label), key)
             try:
-                (_, ty) = idx[label]
+                ty = idx[label]
             except KeyError:
                 raise typy.TypeError(
                     "Invalid label: " + str(label), key)
             used_labels.add(label)
-            key.evaluated = label
+            key.label = label
             ctx.ana(value, ty)
 
     @classmethod
-    def syn_idx_Dict(self, ctx, e, inc_idx):
-        keys, values = e.keys, e.values
-        idx = _OD()
-        for key, value in zip(keys, values):
-            label = ctx.fn.static_env.eval_expr_ast(key)
-            if isinstance(label, six.string_types):
-                if len(label) == 0:
-                    raise typy.TypeError(
-                        "String label must be non-empty.", key)
-            elif isinstance(label, (int, long)):
-                if label < 0:
-                    raise typy.TypeError(
-                        "Integer label must be non-negative.", key)
-            else:
-                raise typy.TypeError(
-                    "Label must be string or integer.", key)
-            if label in idx:
-                raise typy.TypeError(
-                    "Duplicate label: " + str(label), key)
-            ty = ctx.syn(value)
-            idx[label] = (label, ty)
-            key.evaluated = label
-        return tuple(idx.itervalues())
+    def syn_idx_Dict(cls, ctx, e, inc_idx):
+        return tuple(_syn_idx_Dict(cls, ctx, e.keys, e.values))
 
     def translate_Dict(self, ctx, e):
         keys, values = e.keys, e.values
@@ -167,12 +141,13 @@ class tpl(typy.Type):
         elt_translation = []
         idx_mapping = []
         for key, value in zip(keys, values):
-            label = key.evaluated
+            label = key.label
             elt_translation.append(ctx.translate(value))
-            idx_mapping.append(idx[label][0])
+            i = typy.util.odict_idx_of(idx, label)
+            idx_mapping.append(i)
         arg_translation = ast.Tuple(elts=elt_translation)
 
-        return ast.copy_location(_translation(idx_mapping, arg_translation), e)
+        return ast.copy_location(_labeled_translation(idx_mapping, arg_translation), e)
 
     def ana_pat_Dict(self, ctx, pat):
         keys, values = pat.keys, pat.values
@@ -184,23 +159,24 @@ class tpl(typy.Type):
             raise typy.TypeError("Too many elements in pattern.", keys[n_idx])
 
         used_labels = set()
-        bindings = _OD()
+        bindings = _odict()
         n_bindings = 0 
         for key, value in zip(keys, values):
-            label = ctx.fn.static_env.eval_expr_ast(key)
+            label = _read_label(key)
             if label in used_labels:
                 raise typy.TypeError("Duplicate label: " + str(label), key)
+            used_labels.add(label)
+            key.label = label
+
             try:
-                (_, ty) = idx[label]
+                ty = idx[label]
             except KeyError:
                 raise typy.TypeError("Invalid label: " + str(label), key)
-            used_labels.add(label)
-            key.evaluated = label
             elt_bindings = ctx.ana_pat(value, ty)
             n_elt_bindings = len(elt_bindings)
             bindings.update(elt_bindings)
             n_bindings_new = len(bindings)
-            if not n_bindings_new == n_bindings + n_elt_bindings:
+            if n_bindings_new != n_bindings + n_elt_bindings:
                 raise typy.TypeError("Duplicate variable in pattern.", pat)
             n_bindings = n_bindings_new
 
@@ -211,10 +187,10 @@ class tpl(typy.Type):
         keys, values = pat.keys, pat.values
         idx = self.idx
         conditions = []
-        binding_translations = _OD()
+        binding_translations = _odict()
         for key, value in zip(keys, values):
-            label = key.evaluated
-            (n, _) = idx[label]
+            label = key.label
+            n = typy.util.odict_idx_of(idx, label)
             elt_scrutinee_trans = astx.make_Subscript_Num_Index(
                 scrutinee_trans_copy,
                 n)
@@ -252,7 +228,7 @@ class tpl(typy.Type):
         # process non-keywords
         for i, arg in enumerate(args):
             try:
-                (_, ty) = idx[i]
+                ty = idx[i]
             except KeyError:
                 raise typy.TypeError("No component labeled " + str(i), arg)
             ctx.ana(arg, ty)
@@ -261,7 +237,7 @@ class tpl(typy.Type):
         for keyword in keywords:
             label = keyword.arg
             try:
-                (_, ty) = idx[label]
+                ty = idx[label]
             except KeyError:
                 raise typy.TypeError("No component labeled " + label, label)
             value = keyword.value
@@ -269,30 +245,7 @@ class tpl(typy.Type):
 
     @classmethod
     def syn_idx_Call_constructor(self, ctx, e, inc_idx):
-        id = e.func.id
-        if id != 'X':
-            raise typy.TypeError("tpl only supports the X constructor", e.func)
-        if e.starargs is not None:
-            raise typy.TypeError("No support for starargs", e)
-        if e.kwargs is not None:
-            raise typy.TypeError("No support for kwargs", e)
-
-        args = e.args
-        keywords = e.keywords
-
-        idx = []
-
-        # process non-keywords
-        for i, arg in enumerate(args):
-            idx.append((i, ctx.syn(arg)))
-
-        # process keywords
-        for keyword in keywords:
-            label = keyword.arg
-            ty = ctx.syn(keyword.value)
-            idx.append((label, ty))
-
-        return tuple(idx)
+        return tuple(_syn_idx_Call_constructor(ctx, e))
 
     def translate_Call_constructor(self, ctx, e):
         args, keywords = e.args, e.keywords
@@ -302,15 +255,17 @@ class tpl(typy.Type):
         idx_mapping = []
         for i, arg in enumerate(args):
             elt_translation.append(ctx.translate(arg))
-            idx_mapping.append(idx[i][0])
+            n = typy.util.odict_idx_of(idx, i)
+            idx_mapping.append(n)
         for keyword in keywords:
             label = keyword.arg
             value = keyword.value
             elt_translation.append(ctx.translate(value))
-            idx_mapping.append(idx[label][0])
+            n = typy.util.odict_idx_of(idx, label)
+            idx_mapping.append(n)
         arg_translation = ast.Tuple(elts=elt_translation)
 
-        return ast.copy_location(_translation(idx_mapping, arg_translation), e)
+        return ast.copy_location(_labeled_translation(idx_mapping, arg_translation), e)
 
     def ana_pat_Call_constructor(self, ctx, pat):
         id = pat.func.id
@@ -325,12 +280,12 @@ class tpl(typy.Type):
         keywords = pat.keywords
         idx = self.idx
 
-        bindings = _OD()
+        bindings = _odict()
         n_bindings = 0
         
         for i, arg in enumerate(args):
             try:
-                (_, ty) = idx[i]
+                ty = idx[i]
             except KeyError:
                 raise typy.TypeError("Invalid label: " + str(i), arg)
             elt_bindings = ctx.ana_pat(arg, ty)
@@ -344,7 +299,7 @@ class tpl(typy.Type):
         for keyword in keywords:
             label = keyword.arg
             try:
-                (_, ty) = idx[label]
+                ty = idx[label]
             except KeyError:
                 raise typy.TypeError("Invalid label: " + label, keyword)
             value = keyword.value
@@ -363,9 +318,9 @@ class tpl(typy.Type):
         args, keywords = pat.args, pat.keywords
         idx = self.idx
         conditions = []
-        binding_translations = _OD()
+        binding_translations = _odict()
         for i, arg in enumerate(args):
-            (n, _) = idx[i]
+            n = typy.util.odict_idx_of(idx, i)
             elt_scrutinee_trans = astx.make_Subscript_Num_Index(
                 scrutinee_trans_copy,
                 n)
@@ -375,7 +330,7 @@ class tpl(typy.Type):
             binding_translations.update(elt_binding_translations)
         
         for keyword in keywords:
-            (n, _) = idx[keyword.arg]
+            n = typy.util.odict_idx_of(idx, keyword.arg)
             elt_scrutinee_trans = astx.make_Subscript_Num_Index(
                 scrutinee_trans_copy,
                 n)
@@ -394,13 +349,13 @@ class tpl(typy.Type):
         idx = self.idx
         attr = e.attr
         try:
-            (_, ty) = idx[attr]
+            ty = idx[attr]
         except KeyError:
             raise typy.TypeError("Cannot project component labeled " + attr, e)
         return ty 
 
     def translate_Attribute(self, ctx, e):
-        (n, _) = self.idx[e.attr]
+        n = typy.util.odict_idx_of(self.idx, e.attr)
         return ast.copy_location(ast.Subscript(
             value=ctx.translate(e.value),
             slice=ast.Num(n=n),
@@ -412,18 +367,18 @@ class tpl(typy.Type):
         if not isinstance(slice_, ast.Index):
             raise typy.TypeError("Must provide a single label.", slice_)
         value = slice_.value
-        label = ctx.fn.static_env.eval_expr_ast(value)
+        label = _read_label(value)
         try:
-            (_, ty) = self.idx[label]
+            ty = self.idx[label]
         except KeyError:
             raise typy.TypeError("Cannot project component labeled " + str(label), e)
-        value.evaluated = label
+        value.label = label
         return ty
 
     def translate_Subscript(self, ctx, e):
         value = e.value 
-        label = e.slice.value.evaluated
-        (n, _) = self.idx[label]
+        label = e.slice.value.label
+        n = typy.util.odict_idx_of(self.idx, label)
         return ast.copy_location(ast.Subscript(
             value=ctx.translate(value),
             slice=ast.Num(n=n),
@@ -460,8 +415,6 @@ class tpl(typy.Type):
     # TODO: x % "label"
     # TODO: x % ("l1", "l2", "l3")
     # TODO: multi-projection, e.g. x['l1', 'l2', 'l3']
-    # TODO: set intro for variable expressions ala ocaml
-    # TODO: and corresponding set patterns
 
 def _normalize_tuple_idx(idx):
     if not isinstance(idx, tuple):
@@ -473,7 +426,7 @@ def _normalize_tuple_idx(idx):
                 raise typy.TypeFormationError(
                     "Duplicate label: " + str(i))
             used_labels.add(i)
-            yield (i, (i, component))
+            yield (i, component)
             continue
         elif isinstance(component, slice):
             label = component.start
@@ -508,20 +461,83 @@ def _normalize_tuple_idx(idx):
             raise typy.TypeFormationError(
                 "Component labeled " + label + " has invalid type specification.")
 
-        yield (label, (i, ty))
+        yield (label, ty)
 
 def _idx_to_str(idx):
-    label_seen = False
-    for label, (i, ty) in idx.iteritems():
+    str_label_seen = False
+    for i, (label, ty) in enumerate(idx.iteritems()):
         if i == label:
-            if not label_seen:
+            if not str_label_seen:
                 yield str(ty)
                 continue
         else:
-            label_seen = True
+            str_label_seen = True
         yield repr(label) + " : " + str(ty)
 
-def _translation(idx_mapping, arg_translation):
+def _syn_idx_Tuple(cls, ctx, elts):
+    for i, elt in enumerate(elts):
+        if typy._is_intro_form(elt):
+            ty = ctx.ana_intro_inc(elt, cls[...])
+        else:
+            ty = ctx.syn(elt)
+        yield (i, ty)
+
+def _read_label(key):
+    if isinstance(key, ast.Name):
+        return key.id
+    elif isinstance(key, ast.Num):
+        n = key.n
+        if isinstance(n, (int, long)) and n >= 0:
+            return n
+        else:
+            raise typy.TypeError("Invalid numeric label.", key)
+    elif isinstance(key, ast.Str):
+        s = key.s
+        if s != "":
+            return s
+        else:
+            raise typy.TypeError("Invalid string label.", key)
+    else:
+        raise typy.TypeError("Invalid label", key)
+
+def _syn_idx_Dict(cls, ctx, keys, values):
+    used_labels = set()
+    for key, value in zip(keys, values):
+        label = _read_label(key)
+        if label in used_labels:
+            raise typy.TypeError(
+                "Duplicate label: " + str(label), key)
+        used_labels.add(label)
+        if typy._is_intro_form(value):
+            ty = ctx.ana_intro_inc(value, tpl[...])
+        else:
+            ty = ctx.syn(value)
+        key.label = label
+        yield (label, ty)
+
+def _syn_idx_Call_constructor(ctx, e):
+    id = e.func.id
+    if id != 'X':
+        raise typy.TypeError("tpl only supports the X constructor", e.func)
+    if e.starargs is not None:
+        raise typy.TypeError("No support for starargs", e)
+    if e.kwargs is not None:
+        raise typy.TypeError("No support for kwargs", e)
+
+    args = e.args
+    keywords = e.keywords
+
+    # process non-keywords
+    for i, arg in enumerate(args):
+        yield ctx.syn(arg)
+
+    # process keywords
+    for keyword in keywords:
+        label = keyword.arg
+        ty = ctx.syn(keyword.value)
+        yield (label, ty)
+
+def _labeled_translation(idx_mapping, arg_translation):
     lambda_translation = ast.Lambda(
         args=ast.arguments(
             args=[ast.Name(id='x', ctx=ast.Param())],

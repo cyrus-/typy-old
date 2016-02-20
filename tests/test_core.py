@@ -40,6 +40,10 @@ def test_unit_eq():
 
 class ty2_(Type):
     @classmethod
+    def init_idx(cls, idx):
+        return idx
+
+    @classmethod
     def init_inc_idx(cls, inc_idx):
         if inc_idx is not Ellipsis and inc_idx != (0, Ellipsis):
             raise TypeFormationError("Bad incomplete index.")
@@ -82,6 +86,14 @@ def test_incty_bad_construction():
 # Test function type construction
 
 class fn(FnType):
+    @classmethod
+    def init_idx(cls, idx):
+        return idx
+
+    @classmethod
+    def init_inc_idx(cls, inc_idx):
+        return inc_idx
+
     def ana_FunctionDef_toplevel(self, ctx, tree): 
         pass
     

@@ -38,7 +38,7 @@ def tpl_cons(hd, tl):
     for x in tl:
         yield x 
 
-def _contains_ellipsis(idx):
+def contains_ellipsis(idx):
     if idx is Ellipsis: 
         return True
     elif isinstance(idx, tuple):
@@ -46,4 +46,16 @@ def _contains_ellipsis(idx):
             if item is Ellipsis: 
                 return True
     return False 
+
+def odict_idx_of(od, key):
+    for idx, k in enumerate(od.iterkeys()):
+        if k == key:
+            return idx
+    raise KeyError(key)
+
+def odict_lookup_with_idx(od, key):
+    for idx, (k, v) in enumerate(od.iteritems()):
+        if k == key:
+            return (idx, v)
+    raise KeyError(key)
 
