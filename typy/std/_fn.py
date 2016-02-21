@@ -8,8 +8,6 @@ import typy
 import typy.util 
 import typy.util.astx as astx
 
-from _product import unit
-
 #
 # fn
 #
@@ -65,7 +63,6 @@ class fn(typy.FnType):
         # a pair consisting of the translation of the identifier and its type
         ctx.variables = typy.util.DictStack()
         ctx.variables.push({})
-        ctx.return_type = None
 
     @classmethod
     def push_bindings(cls, ctx, bindings):
@@ -90,128 +87,91 @@ class fn(typy.FnType):
     def ana_FunctionDef_toplevel(self, ctx, tree):
         args = tree.args
         body = tree._post_docstring_body
-        tree._post_sig_body = body # will update below if needed
         (arg_types, return_type) = self.idx
-        ctx.return_type = return_type
 
-        _setup_args(ctx, args, arg_types, tree)
-        arg_names = _get_arg_names(args)
+        tree.uniq_id = _setup_recursive_fn(ctx, self, tree.name)
+        arg_names = tuple(_setup_args(ctx, args, arg_types, tree))
+
         if len(body) > 0:
             sig_idx = _process_function_signature(body[0], arg_names, ctx.fn.static_env)
             if sig_idx is not None:
-                if (sig_idx[0] != self.idx[0]) \
-                        or (sig_idx[1] != Ellipsis and sig_idx[1] != self.idx[1]):
+                if (sig_idx[0] != arg_types) \
+                        or (sig_idx[1] != Ellipsis and sig_idx[1] != return_type):
                     raise typy.TypeError(
                         "Function signature and function ascription do not match.", 
                         body[0])
                 body = tree._post_sig_body = body[1:]
+            else:
+                tree._post_sig_body = body
 
         if len(body) == 0:
-            if return_type != unit:
-                raise typy.TypeError(
-                    "Empty function bodies must have unit return type.", tree)
-            else: 
-                return
+            raise typy.TypeError("Function body is empty.", tree)
 
-        all_but_last_stmt = body[0:-1]
-        last_stmt = body[-1]
-        for stmt in all_but_last_stmt:
-            ctx.check(stmt) 
-        if isinstance(last_stmt, ast.Pass):
-            if return_type != unit:
-                raise typy.TypeMismatchError(return_type, unit, last_stmt)
-        elif isinstance(last_stmt, ast.Expr):
-            ctx.ana(last_stmt.value, return_type)
-        else:
-            raise typy.TypeError("Last statement must be pass or an expression.",
-                last_stmt)
+        block = tree.block = Block(body)
+        block.ana(ctx, return_type)
 
     @classmethod
     def syn_idx_FunctionDef_toplevel(cls, ctx, tree, inc_ty):
         args = tree.args 
         body = tree._post_docstring_body
-        tree._post_sig_body = body # will update below if needed
         inc_idx = inc_ty.inc_idx
 
-        arg_names = _get_arg_names(args)
-        if len(body) == 0:
-            if inc_idx == Ellipsis:
-                raise typy.TypeError("Expected function signature.", tree)
-        else:
+        if len(body) > 0:
+            arg_names = astx._get_arg_names(args)
             sig_idx = _process_function_signature(body[0], arg_names, ctx.fn.static_env)
             if inc_idx == Ellipsis:
                 if sig_idx is None:
                     if len(arg_names) == 0:
                         inc_idx = ((), Ellipsis)
+                        tree._post_sig_body = body
                     else:
-                        raise typy.TypeError("Expected function signature.", tree)
+                        raise typy.TypeError("Missing argument signature.", tree)
                 else:
                     inc_idx = sig_idx
                     body = tree._post_sig_body = body[1:]
             else:
-                if sig_idx is not None:
+                if sig_idx is None:
+                    tree._post_sig_body = body
+                else:
                     if inc_idx[0] != sig_idx[0]:
                         raise typy.TypeError(
-                            "Argument signature and argument ascription do not match.", 
+                            "Argument signature and ascription do not match.",
                             body[0])
                     inc_idx = sig_idx
                     body = tree._post_sig_body = body[1:]
 
-        (arg_types, ctx.return_type) = inc_idx
-
-        _setup_args(ctx, args, arg_types, tree)
-
-        # iterate over body
         if len(body) == 0:
-            if ctx.return_type == Ellipsis:
-                ctx.return_type = unit
-            elif ctx.return_type != unit:
-                raise typy.TypeError(
-                    "Function has empty body but return type is not unit.", 
-                    tree)
-        else:
-            all_but_last_stmt = body[0:-1]
-            last_stmt = body[-1]
-            for stmt in all_but_last_stmt:
-                ctx.check(stmt)
-            if isinstance(last_stmt, ast.Pass):
-                if ctx.return_type == Ellipsis:
-                    ctx.return_type = unit
-                elif ctx.return_type != unit:
-                    raise typy.TypeError("Function return type mismatch.", last_stmt)
-            elif isinstance(last_stmt, ast.Expr):
-                if ctx.return_type == Ellipsis:
-                    ty = ctx.syn(last_stmt.value)
-                    ctx.return_type = ty
-                else:
-                    ctx.ana(last_stmt.value, ctx.return_type)
-            else:
-                raise typy.TypeError("Last statement must be pass or an expression.",
-                    last_stmt)
+            raise typy.TypeError("Function body is empty.", tree)
 
-        return (arg_types, ctx.return_type)
+        (arg_types, return_type) = inc_idx
+        if return_type != Ellipsis:
+            fn_ty = cls[arg_types, return_type]
+        else:
+            fn_ty = None
+        tree.uniq_id = _setup_recursive_fn(ctx, fn_ty, tree.name)
+        _setup_args(ctx, args, arg_types, tree)
+        
+        block = tree.block = Block(body)
+        if return_type == Ellipsis:
+            return_type = block.syn(ctx)
+        else:
+            block.ana(ctx, return_type)
+
+        return (arg_types, return_type)
 
     def translate_FunctionDef_toplevel(self, ctx, tree):
-        body_translation = []
-        body = tree._post_sig_body
+        # body = tree._post_sig_body
+        # if len(body) == 0:
+        #     body_translation.append(ast.Return(ast.Tuple(elts=[], ctx=ast.Load())))
+        # else:
+        #     ctx.translate_block(body)
         
-        if len(body) == 0:
-            body_translation.append(ast.Return(ast.Tuple(elts=[], ctx=ast.Load())))
-        else:
-            all_but_last_stmt = body[0:-1]
-            last_stmt = body[-1]
-            for stmt in all_but_last_stmt:
-                body_translation.extend(ctx.translate(stmt))
-            if isinstance(last_stmt, ast.Pass):
-                body_translation.append(ast.Return(ast.Tuple(elts=[], ctx=ast.Load())))
-            elif isinstance(last_stmt, ast.Expr):
-                body_translation.append(ast.Return(ctx.translate(last_stmt.value)))
-
-        return ast.FunctionDef(
-            name=tree.name,
-            args=astx.deep_copy_node(tree.args),
-            body=body_translation,
-            decorator_list=[])
+        # return ast.FunctionDef(
+        #     name=tree.name,
+        #     args=astx.deep_copy_node(tree.args),
+        #     body=body_translation,
+        #     decorator_list=[])
+        pass
 
     @classmethod
     def check_Pass(cls, ctx, tree):
@@ -227,6 +187,8 @@ class fn(typy.FnType):
         try:
             (uniq_id, ty) = variables[id]
             e.uniq_id = uniq_id
+            if ty is None:
+                raise typy.TypeError("Variable has no available type: " + id, e)
             return ty
         except KeyError:
             raise typy.TypeError(
@@ -341,6 +303,60 @@ class fn(typy.FnType):
             for arg in args)
         return translation
 
+class Block(object):
+    """A block is a sequence of BlockExpr's"""
+    def __init__(self, stmts):
+        self.stmts = stmts
+        self.block_exprs = Block._block_exprs(stmts)
+
+    @classmethod
+    def _block_exprs(cls, stmts):
+        cur_bindings = []
+        for stmt in stmts:
+            if isinstance(stmt, ast.Assign):
+                cur_bindings.append(BlockAssignBinding(stmt))
+            elif isinstance(stmt, ast.Expr):
+                block_expr = BlockExprExpr(stmt)
+                if len(cur_bindings) == 0:
+                    yield block_expr
+                else:
+                    yield BlockLetExpr(cur_bindings, block_expr)
+                    cur_bindings = []
+            elif isinstance(stmt, ast.Pass):
+                block_expr = BlockPassExpr(stmt)
+                if len(cur_bindings) == 0:
+                    yield block_expr
+                else:
+                    yield BlockLetExpr(cur_bindings, block_expr)
+                    cur_bindings = []
+            else:
+                raise typy.TypeError("Statement form not supported.", stmt)
+        if len(cur_bindings) != 0:
+            raise typy.TypeError("Incomplete block expression.", stmt)
+
+class BlockExpr(object):
+    pass
+
+class BlockLetExpr(BlockExpr):
+    def __init__(self, bindings, in_expr):
+        self.bindings = bindings
+        self.in_expr = in_expr
+
+class BlockExprExpr(BlockExpr):
+    def __init__(self, stmt):
+        self.stmt = stmt
+
+class BlockPassExpr(BlockExpr):
+    def __init__(self, stmt):
+        self.stmt = stmt
+
+class BlockBinding(object):
+    pass
+
+class BlockAssignBinding(BlockBinding):
+    def __init__(self, stmt):
+        self.stmt = stmt
+
 def _normalize_fn_idx(idx):
     len_idx = len(idx)
     if len_idx < 2:
@@ -369,8 +385,11 @@ def _extract_docstring(body):
             return (value.s, body[1:])
     return (None, body)
 
-def _get_arg_names(args):
-    return tuple(arg.id for arg in args.args)
+def _setup_recursive_fn(ctx, fn_ty, name):
+    variables = ctx.variables
+    uniq_id = ctx.generate_fresh_id(name)
+    variables[name] = (uniq_id, fn_ty)
+    return uniq_id
 
 def _process_function_signature(stmt, arg_names, static_env):
     return_type = Ellipsis
@@ -434,35 +453,25 @@ def _setup_args(ctx, args, arg_types, tree):
         raise typy.TypeError("Varargs are not supported.", args.vararg)
     if args.kwarg:
         raise typy.TypeError("Kwargs are not supported.", args.kwarg)
+    if len(args.defaults) != 0:
+        raise typy.TypeError("Defaults are not supported.", tree)
 
     variables = ctx.variables
-
-    # set up arguments in context
     arguments = args.args
     n_args, n_arg_types = len(arguments), len(arg_types)
     if n_args != n_arg_types:
         raise typy.TypeError(
-            "Type specifies {0} arguments but function has {1}.".format(n_arg_types, n_args), 
+            "Type specifies {0} arguments but function has {1}.".format(
+                n_arg_types, n_args), 
             tree)
-    if len(args.defaults) != 0:
-        raise typy.TypeError("Defaults are not supported.", tree)
     for arg, arg_type in zip(arguments, arg_types):
         if not isinstance(arg, ast.Name):
             raise typy.TypeError("Argument must be an identifier.", arg)
         arg_id = arg.id
-        # ... the Python parser checks dupes itself, but in case of manual entry
-        if arg_id in variables:
-            raise typy.TypeError("Duplicate argument: " + arg_id + ".", arg)
-        variables[arg_id] = (ctx.generate_fresh_id(arg_id), arg_type)
-
-    # set up support for recursive functions
-    # requires a return type to have been provided
-    return_type = ctx.return_type
-    if ctx.return_type != Ellipsis:
-        name = tree.name
-        if name in variables:
-            raise typy.TypeError("Function name already bound: " + name + ".", name)
-        variables[name] = (ctx.generate_fresh_id(name), fn[arg_types, return_type])
+        uniq_id = ctx.generate_fresh_id(arg_id)
+        arg.uniq_id = uniq_id
+        variables[arg_id] = (uniq_id, arg_type)
+        yield arg_id
 
 def _get_asc(ctx, targets):
     asc = None
