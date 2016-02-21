@@ -387,22 +387,6 @@ class FnType(Type):
         pass
 
     @classmethod
-    def push_bindings(cls, ctx, bindings):
-        raise NotSupportedError(cls, "class method", "push_bindings", None)
-
-    @classmethod
-    def push_variable_update(cls, ctx, variable_update):
-        raise NotSupportedError(cls, "class method", "push_variable_update", None)
-
-    @classmethod
-    def pop_bindings(cls, ctx):
-        raise NotSupportedError(cls, "class method", "pop_bindings", None)
-
-    @classmethod
-    def pop_variable_update(cls, ctx):
-        raise NotSupportedError(cls, "class method", "pop_variable_update", None)
-
-    @classmethod
     def preprocess_FunctionDef_toplevel(cls, fn, tree):
         pass 
 
@@ -423,174 +407,17 @@ class FnType(Type):
     def translate_Name(self, ctx, tree):
         raise NotSupportedError(self, "method", "translate_Name", tree)
 
-    ################################################################################
-    # The following stubs are pasted from the result of running _generate_FnType.py.
-    ################################################################################
+    @classmethod
+    def ana_match_expr(cls, ctx, e, ty):
+        raise NotSupportedError(cls, "class method", "ana_match_expr", e)
 
     @classmethod
-    def check_FunctionDef(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_FunctionDef", tree)
-
-    def translate_FunctionDef(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_FunctionDef", tree)
+    def syn_match_expr(cls, ctx, e):
+        raise NotSupportedError(cls, "class method", "syn_match_expr", e)
 
     @classmethod
-    def check_ClassDef(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_ClassDef", tree)
-
-    def translate_ClassDef(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_ClassDef", tree)
-
-    @classmethod
-    def check_Return(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Return", tree)
-
-    def translate_Return(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Return", tree)
-
-    @classmethod
-    def check_Delete(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Delete", tree)
-
-    def translate_Delete(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Delete", tree)
-
-    @classmethod
-    def check_Assign(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Assign", tree)
-
-    def translate_Assign(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Assign", tree)
-
-    @classmethod
-    def check_AugAssign(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_AugAssign", tree)
-
-    def translate_AugAssign(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_AugAssign", tree)
-
-    @classmethod
-    def check_Print(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Print", tree)
-
-    def translate_Print(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Print", tree)
-
-    @classmethod
-    def check_For(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_For", tree)
-
-    def translate_For(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_For", tree)
-
-    @classmethod
-    def check_While(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_While", tree)
-
-    def translate_While(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_While", tree)
-
-    @classmethod
-    def check_If(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_If", tree)
-
-    def translate_If(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_If", tree)
-
-    @classmethod
-    def check_With(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_With", tree)
-
-    def translate_With(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_With", tree)
-
-    @classmethod
-    def check_Raise(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Raise", tree)
-
-    def translate_Raise(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Raise", tree)
-
-    @classmethod
-    def check_TryExcept(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_TryExcept", tree)
-
-    def translate_TryExcept(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_TryExcept", tree)
-
-    @classmethod
-    def check_TryFinally(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_TryFinally", tree)
-
-    def translate_TryFinally(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_TryFinally", tree)
-
-    @classmethod
-    def check_Assert(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Assert", tree)
-
-    def translate_Assert(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Assert", tree)
-
-    @classmethod
-    def check_Import(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Import", tree)
-
-    def translate_Import(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Import", tree)
-
-    @classmethod
-    def check_ImportFrom(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_ImportFrom", tree)
-
-    def translate_ImportFrom(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_ImportFrom", tree)
-
-    @classmethod
-    def check_Exec(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Exec", tree)
-
-    def translate_Exec(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Exec", tree)
-
-    @classmethod
-    def check_Global(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Global", tree)
-
-    def translate_Global(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Global", tree)
-
-    @classmethod
-    def check_Expr(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Expr", tree)
-
-    def translate_Expr(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Expr", tree)
-
-    @classmethod
-    def check_Pass(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Pass", tree)
-
-    def translate_Pass(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Pass", tree)
-
-    @classmethod
-    def check_Break(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Break", tree)
-
-    def translate_Break(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Break", tree)
-
-    @classmethod
-    def check_Continue(cls, ctx, tree):
-        raise NotSupportedError(cls, "class method", "check_Continue", tree)
-
-    def translate_Continue(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_Continue", tree)
-
-    ################################################################################
-    # End autogenerated section
-    ################################################################################
+    def translate_match_expr(cls, ctx, e):
+        raise NotSupportedError(cls, "method", "translate_match_expr", e)
 
 def _reflect_func(f): 
     source = textwrap.dedent(inspect.getsource(f))
@@ -728,6 +555,7 @@ class Context(object):
         if not isinstance(ty, Type):
             raise UsageError("Cannot analyze an expression against a non-type.")
         if _is_intro_form(e):
+            e.is_intro_form = True
             classname = e.__class__.__name__
             if classname == "Name":
                 classname = "Name_constructor"
@@ -740,24 +568,12 @@ class Context(object):
             e.delegate = ty
             e.translation_method_name = 'translate_%s' % classname
         elif _is_match_expr(e):
-            elts = e.left.elts
-            n_elts = len(elts)
-            if n_elts == 0:
-                raise TypeError("Scrutinee missing.", e)
-            elif n_elts > 1:
-                # TODO: turn it into a tuple
-                raise TypeError("Too many scrutinees.", e)
-            scrutinee = elts[0]
-            scrutinee_ty = self.syn(scrutinee)
-            rule_dict = e.comparators[0]
-            rules = zip(rule_dict.keys, rule_dict.values)
-            for (pat, branch) in rules:
-                bindings = self.ana_pat(pat, scrutinee_ty)
-                branch.variable_update = self._push_bindings(bindings)
-                self.ana(branch, ty)
-                self._pop_bindings()
-            e.delegate = scrutinee_ty
+            e.is_match_expr = True
+            delegate = tycon(self.fn.ascription)
+            delegate.ana_match_expr(self, e, ty)
             e.ty = ty
+            e.delegate = delegate
+            e.translation_method_name = 'translate_match_expr'
         else:
             syn_ty = self.syn(e)
             if ty != syn_ty:
@@ -778,35 +594,19 @@ class Context(object):
         method = getattr(delegate, syn_idx_methodname)
         syn_idx = method(self, value, inc_ty.inc_idx)
         ty = _construct_ty(delegate, syn_idx)
+        value.is_intro_form = True
         value.translation_method_name = "translate_%s" % classname
         value.delegate, value.ty = delegate, ty
         return ty 
 
     def syn(self, e):
         if _is_match_expr(e):
-            elts = e.left.elts
-            n_elts = len(elts)
-            if n_elts == 0:
-                raise TypeError("Scrutinee missing.", e)
-            elif n_elts > 1:
-                raise TypeError("Too many scrutinees.", e)
-            scrutinee = elts[0]
-            scrutinee_ty = self.syn(scrutinee)
-            rule_dict = e.comparators[0]
-            rules = zip(rule_dict.keys, rule_dict.values)
-            syn_ty = None
-            for (pat, branch) in rules:
-                bindings = self.ana_pat(pat, scrutinee_ty)
-                branch.variable_update = self._push_bindings(bindings)
-                branch_ty = self.syn(branch)
-                if syn_ty is None:
-                    syn_ty = branch_ty
-                else:
-                    if syn_ty != branch_ty:
-                        raise TypeError("Inconsistent branch types.", branch)
-                self._pop_bindings()
-            delegate = scrutinee_ty
-            ty = syn_ty
+            e.is_match_expr = True
+            delegate = tycon(self.fn.ascription)
+            ty = delegate.syn_match_expr(self, e)
+            e.ty = ty
+            e.delegate = delegate
+            e.translation_method_name = "translate_match_expr"
         elif isinstance(e, ast.Subscript):
             value, slice_ = e.value, e.slice 
             ty = _process_ascription_slice(slice_, self.fn.static_env)
@@ -921,59 +721,37 @@ class Context(object):
         return ty 
 
     def translate(self, tree):
-        if isinstance(tree, ast.stmt):
-            classname = tree.__class__.__name__
-            method_name = 'translate_' + classname
+        if not isinstance(tree, ast.expr):
+            raise UsageError("Cannot translate non-expression.")
+
+        if hasattr(tree, "is_ascription"):
+            translation = self.translate(tree.value)
+        elif hasattr(tree, "is_match_expr"):
+            delegate = tree.delegate
+            translation = delegate.translate_match_expr(self, tree)
+        elif hasattr(tree, "is_intro_form"):
+            delegate = tree.ty
+            method = getattr(delegate, tree.translation_method_name)
+            translation = method(self, tree)
+        elif isinstance(tree, ast.Name):
             delegate = self.fn.tree.ty
+            translation = delegate.translate_Name(self, tree)
+        elif isinstance(tree, (
+                ast.Call, 
+                ast.Subscript, 
+                ast.Attribute, 
+                ast.BoolOp, 
+                ast.Compare, 
+                ast.BinOp, 
+                ast.UnaryOp)):
+            delegate = tree.delegate
+            method = getattr(delegate, tree.translation_method_name)
+            translation = method(self, tree)
+        else:
+            method_name = tree.translation_method_name
+            delegate = tree.ty
             method = getattr(delegate, method_name)
             translation = method(self, tree)
-            if isinstance(translation, ast.stmt):
-                translation = [translation]
-        elif isinstance(tree, ast.expr):
-            if hasattr(tree, "is_ascription"):
-                translation = self.translate(tree.value)
-            elif _is_match_expr(tree):
-                scrutinee = tree.left.elts[0]
-                scrutinee_trans = self.translate(scrutinee)
-                scrutinee_var = ast.Name(id="__typy_scrutinee__", ctx=ast.Load())
-                rules = tree.comparators[0]
-                rules = zip(rules.keys, rules.values)
-                rule_translations = tuple(_translate_rules(self, rules, scrutinee_var))
-                if len(rule_translations) == 0:
-                    compiled_rules = util.astx.expr_Raise_Exception_string("Match failure.")
-                else:
-                    rt_0 = rule_translations[0]
-                    rt_rest = rule_translations[1:]
-                    compiled_rules = _compile_rule(rt_0, rt_rest)
-                translation = util.astx.make_simple_Call(
-                    util.astx.make_Lambda(('__typy_scrutinee__',), compiled_rules),
-                    [scrutinee_trans])
-            elif _is_intro_form(tree):
-                delegate = tree.ty
-                method = getattr(delegate, tree.translation_method_name)
-                translation = method(self, tree)
-            else:
-                if isinstance(tree, ast.Name):
-                    delegate = self.fn.tree.ty
-                    translation = delegate.translate_Name(self, tree)
-                elif isinstance(tree, (
-                        ast.Call, 
-                        ast.Subscript, 
-                        ast.Attribute, 
-                        ast.BoolOp, 
-                        ast.Compare, 
-                        ast.BinOp, 
-                        ast.UnaryOp)):
-                    delegate = tree.delegate
-                    method = getattr(delegate, tree.translation_method_name)
-                    translation = method(self, tree)
-                else:
-                    method_name = tree.translation_method_name
-                    delegate = tree.ty
-                    method = getattr(delegate, method_name)
-                    translation = method(self, tree)
-        else:
-            raise NotImplementedError("cannot translate this...")
         return translation
 
     def ana_pat(self, pat, ty):
@@ -1031,22 +809,6 @@ class Context(object):
             raise UsageError("Not all bindings have translations.")
         return condition, binding_translations
 
-    def _push_bindings(self, bindings):
-        tc = tycon(self.fn.ascription)
-        return tc.push_bindings(self, bindings)
-
-    def _push_variable_update(self, variable_update):
-        tc = tycon(self.fn.ascription)
-        return tc.push_variable_update(self, variable_update)
-
-    def _pop_bindings(self):
-        tc = tycon(self.fn.ascription)
-        tc.pop_bindings(self)
-
-    def _pop_variable_update(self):
-        tc = tycon(self.fn.ascription)
-        tc.pop_variable_update(self)
- 
 _intro_forms = (
     ast.Lambda, 
     ast.Dict, 
@@ -1070,6 +832,14 @@ def _is_Name_constructor(e):
 def _is_Call_constructor(e):
     return isinstance(e, ast.Call) and _is_Name_constructor(e.func)
 
+def _is_match_expr(e):
+    # {scrutinee} is {rules}
+    return (isinstance(e, ast.Compare) and
+            len(e.ops) == 1 and 
+            isinstance(e.ops[0], ast.Is) and
+            isinstance(e.left, ast.Set) and 
+            isinstance(e.comparators[0], ast.Dict))
+
 def _process_ascription_slice(slice_, static_env):
     if isinstance(slice_, ast.Slice):
         lower, upper, step = slice_.lower, slice_.upper, slice_.step
@@ -1084,51 +854,4 @@ def _process_ascription_slice(slice_, static_env):
                     upper)
     return None 
 
-def _is_match_expr(e):
-    # {scrutinee} is {rules}
-    return (isinstance(e, ast.Compare) and
-            len(e.ops) == 1 and 
-            isinstance(e.ops[0], ast.Is) and
-            isinstance(e.left, ast.Set) and 
-            isinstance(e.comparators[0], ast.Dict))
 
-def _translate_rules(ctx, rules, scrutinee_trans):
-    for (pat, branch) in rules:
-        (condition, binding_translations) = ctx.translate_pat(pat, scrutinee_trans)
-        if not isinstance(condition, ast.expr):
-            raise UsageError("Condition must be an expression.")
-        if not pat.bindings.keys() == binding_translations.keys():
-            raise UsageError("All bindings must have translations.")
-        for binding_translation in binding_translations.itervalues():
-            if not isinstance(binding_translation, ast.expr):
-                raise UsageError("Binding translation must be an expression.")
-        ctx._push_variable_update(branch.variable_update)
-        branch_translation = ctx.translate(branch)
-        branch_translation.variable_update = branch.variable_update
-        ctx._pop_variable_update()
-        yield condition, binding_translations, branch_translation
-
-def _compile_rule(rule_translation, rest):
-    test, binding_translations, branch_translation = rule_translation
-
-    if len(binding_translations) == 0:
-        body = branch_translation
-    else:
-        variable_update = branch_translation.variable_update
-        body_lambda = util.astx.make_Lambda(
-            (variable_update[id][0] 
-             for id in binding_translations.iterkeys()),
-            branch_translation)
-        body = util.astx.make_simple_Call(
-            body_lambda, 
-            binding_translations.values())
-
-    if len(rest) == 0:
-        orelse = util.astx.expr_Raise_Exception_string("Match failure.")
-    else:
-        orelse = _compile_rule(rest[0], rest[1:])
-
-    return ast.IfExp(
-        test=test,
-        body=body,
-        orelse=orelse)

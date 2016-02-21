@@ -112,12 +112,14 @@ def test_stdfn_docstring():
     @fnty
     def f():
         """This is a docstring."""
+        pass
     assert f.__doc__ == f.func_doc == """This is a docstring."""
 
 def test_stdfn_incty_docstring():
     @fn
     def f():
         """This is a docstring."""
+        pass
     assert f.__doc__ == f.func_doc == """This is a docstring."""
 
 class TestStdFnArgCountCorrect:
@@ -130,6 +132,7 @@ class TestStdFnArgCountCorrect:
         @fn_ty
         def f(x):
             """This is a docstring."""
+            pass
         return f
 
     def test_type(self, f, fn_ty):
@@ -145,6 +148,7 @@ def test_stdfn_arg_count_incorrect():
     @fn_ty
     def test():
         """This is a docstring."""
+        pass
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
@@ -158,6 +162,7 @@ class TestStdFnArgCountZero:
         @fn_ty
         def f():
             """This is a docstring."""
+            pass
         return f
 
     def test_type(self, f, fn_ty):
@@ -176,6 +181,7 @@ def test_stdfn_arg_count_zero_incorrect():
     @fn_ty
     def f(x):
         """This is a docstring."""
+        pass
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
@@ -184,6 +190,7 @@ def test_stdfn_varargs_unsupported():
     @fn_ty 
     def f(*x):
         """This is a docstring."""
+        pass
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
@@ -192,6 +199,7 @@ def test_stdfn_kwargs_unsupported():
     @fn_ty 
     def f(**x):
         """This is a docstring."""
+        pass
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
@@ -200,6 +208,7 @@ def test_stdfn_defaults_unsupported():
     @fn_ty 
     def f(x=()):
         """This is a docstring."""
+        pass
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
@@ -242,6 +251,7 @@ class TestStdFnIncTyEmpty:
         @fn_ty
         def f():
             """This is a docstring."""
+            pass
         return f 
 
     def test_type(self, f):
@@ -282,6 +292,7 @@ class TestStdFnSig:
         def f():
             """This is a docstring."""
             {}
+            pass
         return f 
 
     def test_type(self, f):
@@ -302,6 +313,7 @@ class TestStdFnSigR():
         def f():
             """This is a docstring."""
             {} >> unit
+            pass
         return f
 
     def test_type(self, f):
@@ -411,6 +423,7 @@ def test_stdfn_sig_named_args_too_many():
     @fn
     def test(x):
         {x : unit, y : unit}
+        pass
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
@@ -418,6 +431,7 @@ def test_stdfn_sig_named_args_too_few():
     @fn
     def test(x, y):
         {x : unit}
+        pass
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
@@ -425,6 +439,7 @@ def test_stdfn_sig_named_args_wrong_names():
     @fn
     def test(x):
         {y : unit}
+        pass
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
@@ -432,6 +447,7 @@ def test_stdfn_sig_named_args_wrong_names2():
     @fn
     def test(x, y):
         {x : unit, z : unit}
+        pass
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
@@ -442,6 +458,7 @@ class TestStdFnSigEvalTypes:
         @fn
         def f(x, y):
             {x : q[1], y : q[0]} >> q[0]
+            pass
         return f
 
     def test_type(self, f):
@@ -459,6 +476,7 @@ class TestRedundantSigs:
         @fn_ty 
         def f():
             {}
+            pass
         return f
 
     def test_type(self, f):
@@ -479,6 +497,7 @@ class TestRedundantSigs2:
         @fn_ty
         def f(x, y):
             {unit, unit} >> unit
+            pass
         return f
 
     def test_type(self, f):
@@ -499,6 +518,7 @@ class TestRedundantSigs3:
         @fn_ty
         def f():
             {} >> unit
+            pass
         return f 
 
     def test_type(self, f):
@@ -517,6 +537,7 @@ def test_redundant_sigs_4():
     @fn_ty
     def f(x, y):
         {boolean, boolean}
+        pass
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
@@ -527,6 +548,7 @@ class TestRedundantSigs5:
         @fn_ty
         def f(x, y):
             {boolean, boolean}
+            pass
         return f
 
     def test_type(self, f):
@@ -1109,13 +1131,22 @@ def test_nonrecursive_fn():
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
-def test_shadow_fn_name():
-    @fn
-    def f(f):
-        {boolean} >> boolean
-        f
-    with pytest.raises(typy.TypeError):
-        f.typecheck()
+class TestShadowFnName: 
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(f):
+            {boolean} >> boolean
+            f
+        return f
+     
+    def test_type(self, f):
+        assert f.typecheck() == fn[boolean, boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(__typy_id_f_1__):
+                return __typy_id_f_1__""")
 
 class TestAssignFnName:
     @pytest.fixture

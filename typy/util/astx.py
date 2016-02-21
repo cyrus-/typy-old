@@ -81,6 +81,9 @@ _name_re = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*$")
 def is_identifier(id):
     return bool(_name_re.match(id))
 
+def _get_arg_names(args):
+    return tuple(arg.id for arg in args.args)
+
 def make_Lambda(arg_vars, body):
     return ast.Lambda(
         args=ast.arguments(
