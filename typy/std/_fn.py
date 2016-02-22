@@ -268,8 +268,6 @@ class fn(typy.FnType):
             yield arg_id
 
     def translate_FunctionDef_toplevel(self, ctx, tree):
-        body_block = tree.body_block
-        body_block_translation = body_block.translate(ctx)
         argument_translation = ast.arguments(
             args=[
                 ast.Name(id=arg.uniq_id)
@@ -278,6 +276,8 @@ class fn(typy.FnType):
             vararg=None,
             kwarg=None,
             defaults=[])
+        body_block = tree.body_block
+        body_block_translation = body_block.translate_return(ctx)
         return ast.FunctionDef(
             name=tree.uniq_id,
             args=argument_translation,
@@ -459,6 +459,12 @@ class Block(object):
         for stmt in stmts:
             if isinstance(stmt, ast.Assign):
                 yield BlockAssignBinding(stmt)
+            elif isinstance(stmt, ast.With):
+                if (BlockWithBinding.is_with_binding(stmt)):
+                    body_block = Block.from_stmts(stmt.body)
+                    yield BlockWithBinding(stmt.context_expr, body_block)
+                else:
+                    raise typy.TypeError("Invalid with form.", stmt)
             elif isinstance(stmt, ast.Expr):
                 yield BlockNoBinding(BlockExprExpr(stmt))
             elif isinstance(stmt, ast.Pass):
@@ -483,11 +489,25 @@ class Block(object):
             binding.pop(ctx)
         return ty
 
-    def translate(self, ctx):
+    def translate_return(self, ctx):
         translation = []
         for binding in self.bindings:
             translation.extend(binding.translate(ctx))
         translation.extend(self.last_expr.translate_return(ctx))
+        return translation
+
+    def translate_no_binding(self, ctx):
+        translation = []
+        for binding in self.bindings:
+            translation.extend(binding.translate(ctx))
+        translation.extend(self.last_expr.translate_no_binding(ctx))
+        return translation
+
+    def translate_assign(self, ctx, assign_to):
+        translation = []
+        for binding in self.bindings:
+            translation.extend(binding.translate(ctx))
+        translation.extend(self.last_expr.translate_assign(ctx, assign_to))
         return translation
 
 class BlockBinding(object):
@@ -500,7 +520,7 @@ class BlockBinding(object):
     def translate(self, ctx):
         raise typy.UsageError("Missing implementation.")
 
-class BlockNoBinding(object):
+class BlockNoBinding(BlockBinding):
     def __init__(self, expr):
         self.expr = expr
 
@@ -515,14 +535,12 @@ class BlockNoBinding(object):
 
 class BlockAssignBinding(BlockBinding):
     def __init__(self, stmt):
-        print "ASSIGN BINDING"
         self.stmt = stmt
 
     def check_and_push(self, ctx):
         stmt = self.stmt
         targets, value = stmt.targets, stmt.value
         asc = self._get_asc(ctx, targets)
-        print "GOT ASC"
         if asc is None:
             ty = ctx.syn(value)
         elif isinstance(asc, typy.Type):
@@ -558,7 +576,7 @@ class BlockAssignBinding(BlockBinding):
                         elif isinstance(slice_, ast.Slice):
                             pat, asc_ast, step = slice_.lower, slice_.upper, slice_.step
                             if pat is not None and asc_ast is not None and step is None:
-                                cur_asc = self._process_asc_ast(ctx, asc_ast)
+                                cur_asc = typy._process_asc_ast(ctx, asc_ast)
                                 if asc is None:
                                     asc = cur_asc
                                 elif asc != cur_asc:
@@ -571,7 +589,7 @@ class BlockAssignBinding(BlockBinding):
                 if isinstance(slice_, ast.Slice):
                     lower, asc_ast, step = slice_.lower, slice_.upper, slice_.step
                     if lower is None and asc_ast is not None and step is None:
-                        cur_asc = self._process_asc_ast(ctx, asc_ast)
+                        cur_asc = typy._process_asc_ast(ctx, asc_ast)
                         if asc is None:
                             asc = cur_asc
                         elif asc != cur_asc:
@@ -584,16 +602,6 @@ class BlockAssignBinding(BlockBinding):
                 raise typy.TypeError("Unknown assignment form.", target)
         return asc
 
-    def _process_asc_ast(self, ctx, asc_ast):
-        asc = ctx.fn.static_env.eval_expr_ast(asc_ast)
-        if (isinstance(asc, typy.Type) or 
-                isinstance(asc, typy.IncompleteType)):
-            return asc
-        elif issubclass(asc, typy.Type):
-            return asc[...]
-        else:
-            raise typy.TypeError("Invalid ascription.", asc_ast)
-
     def _check_and_push_targets(self, ctx, targets, ty):
         for target in targets:
             if isinstance(target, (
@@ -602,7 +610,7 @@ class BlockAssignBinding(BlockBinding):
                     ast.Dict, # Py3 only
                     ast.List)):
                 ctx.ana_pat(target, ty)
-                self._push_pat_bindings(ctx, target)
+                _push_pat_bindings(ctx, target)
             elif isinstance(target, ast.Subscript):
                 target_value, slice_ = target.value, target.slice
                 if isinstance(target_value, ast.Name):
@@ -612,30 +620,20 @@ class BlockAssignBinding(BlockBinding):
                             # no ascription
                             pat = slice_.value
                             ctx.ana_pat(pat, ty)
-                            self._push_pat_bindings(ctx, pat)
+                            _push_pat_bindings(ctx, pat)
                             continue
                         elif isinstance(slice_, ast.Slice):
                             # ascription
                             # already valid by _get_asc
                             pat = slice_.lower
                             ctx.ana_pat(pat, ty)
-                            self._push_pat_bindings(ctx, pat)
+                            _push_pat_bindings(ctx, pat)
                             continue
                     ctx.ana_pat(target_value, ty)
-                    self._push_pat_bindings(ctx, target_value)
-
-    def _push_pat_bindings(self, ctx, pat):
-        print "PUSHING STUFF"
-        ctx_update = dict(
-            (id, (ctx.generate_fresh_id(id), ty))
-            for (id, ty) in pat.bindings.iteritems())
-        print ctx_update
-        pat.ctx_update = ctx_update
-        ctx.variables.push(ctx_update)
+                    _push_pat_bindings(ctx, target_value)
 
     def pop(self, ctx):
         for target in self.stmt.targets:
-            print "POPPING"
             ctx.variables.pop()
 
     def translate(self, ctx):
@@ -688,6 +686,89 @@ class BlockAssignBinding(BlockBinding):
                     orelse=[astx.stmt_Raise_Exception_string("Match failure.")]))
             return translation
 
+def _push_pat_bindings(ctx, pat):
+    ctx_update = dict(
+        (id, (ctx.generate_fresh_id(id), ty))
+        for (id, ty) in pat.bindings.iteritems())
+    pat.ctx_update = ctx_update
+    ctx.variables.push(ctx_update)
+
+class BlockWithBinding(BlockBinding):
+    def __init__(self, binding, body_block):
+        self.binding = binding
+        self.body_block = body_block
+
+    @classmethod
+    def is_with_binding(cls, stmt):
+        context_expr = stmt.context_expr
+        return (isinstance(context_expr, ast.Subscript) and
+                isinstance(context_expr.value, ast.Name) and
+                context_expr.value.id == 'let' and
+                stmt.optional_vars is None)
+
+    def check_and_push(self, ctx):
+        binding, body_block = self.binding, self.body_block
+        pat, asc = self._get_pat_and_asc(ctx, binding)
+        self.pat = pat
+        if asc is None:
+            ty = body_block.syn(ctx)
+        elif isinstance(asc, typy.Type):
+            ty = asc
+            body_block.ana(ctx, asc)
+        elif isinstance(asc, typy.IncompleteType):
+            raise typy.TypeError(
+                "Cannot provide incomplete type ascription on with binding.", 
+                binding)
+        else:
+            raise typy.UsageError("Unexpected ascription.")
+        ctx.ana_pat(pat, ty)
+        _push_pat_bindings(ctx, pat)
+
+    def _get_pat_and_asc(self, ctx, binding):
+        if isinstance(binding, ast.Subscript):
+            value = binding.value
+            if isinstance(value, ast.Name) and value.id == 'let':
+                slice = binding.slice
+                if isinstance(slice, ast.Index):
+                    return (slice.value, None)
+                elif isinstance(slice, ast.Slice):
+                    lower, upper, step = slice.lower, slice.upper, slice.step
+                    if lower is not None and upper is not None and step is None:
+                        asc = typy._process_asc_ast(ctx, upper)
+                        return lower, asc
+                    else:
+                        raise typy.TypeError("Invalid ascription format.", slice)
+                else:
+                    raise typy.TypeError("Invalid ascription format.", slice)
+            else:
+                raise typy.TypeError("Invalid with format.", value)
+        else:
+            raise typy.TypeError("Invalid with format.", binding)
+
+    def pop(self, ctx):
+        ctx.variables.pop()
+
+    def translate(self, ctx):
+        translation = []
+        scrutinee = ast.Name(id="__typy_with_scrutinee__")
+        translation.extend(self.body_block.translate_assign(
+            ctx, scrutinee))
+        pat = self.pat
+        ctx_update = pat.ctx_update
+        condition, binding_translations = ctx.translate_pat(pat, scrutinee)
+        if astx.cond_vacuously_true(condition):
+            for (id, trans) in binding_translations.iteritems():
+                translation.append(ast.Assign(
+                    targets=[ast.Name(id=ctx_update[id][0])],
+                    value=trans))
+        else:
+            translation.append(ast.If(
+                test=condition,
+                body=list(_translate_binding_translations(
+                    binding_translations, ctx_update)),
+                orelse=astx.expr_Raise_Exception_string("Match failure.")))
+        return translation
+
 class BlockExpr(object):
     def ana(self, ctx, ty):
         raise typy.UsageError("Missing implementation.")
@@ -701,9 +782,11 @@ class BlockExpr(object):
     def translate_return(self, ctx):
         raise typy.UsageError("Missing implementation.")
 
+    def translate_assign(self, ctx, assign_to):
+        raise typy.UsageError("Missing implementation.")
+
 class BlockExprExpr(BlockExpr):
     def __init__(self, stmt):
-        print "BLOCK EXPR"
         self.stmt = stmt
 
     def ana(self, ctx, ty):
@@ -719,6 +802,11 @@ class BlockExprExpr(BlockExpr):
 
     def translate_return(self, ctx):
         return [ast.Return(value=ctx.translate(self.stmt.value))]
+
+    def translate_assign(self, ctx, assign_to):
+        return [ast.Assign(
+            targets=[assign_to], 
+            value=ctx.translate(self.stmt.value))]
 
 class BlockPassExpr(BlockExpr):
     def __init__(self, stmt):
@@ -737,6 +825,11 @@ class BlockPassExpr(BlockExpr):
 
     def translate_return(self, ctx):
         return [ast.Return(value=ast.Tuple(elts=[]))]
+
+    def translate_assign(self, ctx, assign_to):
+        return [ast.Assign(
+            targets=[assign_to],
+            value=ast.Tuple(elts=[]))]
 
 def _target_translation_data(ctx, targets, scrutinee_trans):
     for target in targets:

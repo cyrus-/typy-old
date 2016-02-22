@@ -881,4 +881,13 @@ def _process_ascription_slice(slice_, static_env):
                     upper)
     return None 
 
+def _process_asc_ast(ctx, asc_ast):
+    asc = ctx.fn.static_env.eval_expr_ast(asc_ast)
+    if (isinstance(asc, Type) or 
+            isinstance(asc, IncompleteType)):
+        return asc
+    elif issubclass(asc, Type):
+        return asc[...]
+    else:
+        raise TypeError("Invalid ascription.", asc_ast)
 

@@ -1106,6 +1106,110 @@ class TestSimpleAssignUnderscore:
                 True
                 return ()""")
 
+class TestWithBindingSyn:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(y):
+            {num}
+            with let[x]:
+                y + y
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[num, num]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(y):
+                __typy_with_scrutinee__ = (y + y)
+                x = __typy_with_scrutinee__
+                return x""")
+
+class TestWithBindingAna:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            with let[x : num]:
+                3
+            x + x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), num]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                __typy_with_scrutinee__ = 3
+                x = __typy_with_scrutinee__
+                return (x + x)""")
+
+class TestWithBindingSynBlock:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {num}
+            with let[(y, z)]:
+                y = x + x
+                z = x * x
+                (y, z) [: tpl]
+            y + z
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[num, num]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                y = (x + x)
+                z = (x * x)
+                __typy_with_scrutinee__ = (y, z)
+                __typy_id_y_1__ = __typy_with_scrutinee__[0]
+                __typy_id_z_1__ = __typy_with_scrutinee__[1]
+                return (__typy_id_y_1__ + __typy_id_z_1__)""")
+
+class TestWithBindingNested:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {num}
+            with let[y]:
+                with let[z]:
+                    x + x
+                z * z
+            y - y
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[num, num]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_with_scrutinee__ = (x + x)
+                z = __typy_with_scrutinee__
+                __typy_with_scrutinee__ = (z * z)
+                y = __typy_with_scrutinee__
+                return (y - y)""")
+
+def test_with_binding_block_local():
+    @fn
+    def f(x):
+        {num}
+        with let[q]:
+            y = x + x
+            z = x * x
+            y + z
+        y + z
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
 class TestRecursiveFn:
     @pytest.fixture
     def f(self):
