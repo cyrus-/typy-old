@@ -1656,7 +1656,7 @@ def test_num_Or():
 from typy.std import ieee
 from typy.std._numeric import ieee_
 
-class TestieeeIntroF:
+class TestIEEEIntroF:
     @pytest.fixture
     def f(self):
         @fn
@@ -1672,7 +1672,7 @@ class TestieeeIntroF:
             def f():
                 return 3.0""")
 
-class TestieeeIntroI:
+class TestIEEEIntroI:
     @pytest.fixture
     def f(self):
         @fn
@@ -1688,7 +1688,7 @@ class TestieeeIntroI:
             def f():
                 return 3.0""")
 
-class TestieeeIntroL:
+class TestIEEEIntroL:
     @pytest.fixture
     def f(self):
         @fn
@@ -1703,6 +1703,52 @@ class TestieeeIntroL:
         translation_eq(f, """
             def f():
                 return 1.2345678901234567e+69""")
+
+class TestIEEEIntroName:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x1 = Inf [: ieee]
+            x1 [: ieee]
+            x2 = NaN [: ieee]
+            x2 [: ieee]
+            x3 = Inf [: ieee_]
+            x3 [: ieee]
+            x4 = NaN [: ieee_]
+            x4 [: ieee]
+            x5 [: ieee] = -Inf
+            x5 [: ieee]
+            x6 [: ieee] = +Inf
+            x6 [: ieee]
+            x7 [: ieee_] = -Inf
+            x7 [: ieee]
+            x8 [: ieee_] = +Inf
+            x8 [: ieee]
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), ieee]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x1 = __builtin__.float('Inf')
+                x1
+                x2 = __builtin__.float('NaN')
+                x2
+                x3 = __builtin__.float('Inf')
+                x3
+                x4 = __builtin__.float('NaN')
+                x4
+                x5 = __builtin__.float('-Inf')
+                x5
+                x6 = __builtin__.float('Inf')
+                x6
+                x7 = __builtin__.float('-Inf')
+                x7
+                x8 = __builtin__.float('Inf')
+                return x8""")
 
 class TestIntegerIncIntroF:
     @pytest.fixture
@@ -1736,9 +1782,7 @@ class TestIntegerIncIntroI:
             def f():
                 return 3.0""")
 
-# ieee
-
-class TestieeeIncIntroL:
+class TestIEEEIncIntroL:
     @pytest.fixture
     def f(self):
         @fn
@@ -1768,7 +1812,7 @@ def test_ieee_ascription_on_stringing():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestieeeUnaryOps:
+class TestIEEEUnaryOps:
     @pytest.fixture
     def f(self):
         @fn
@@ -1807,7 +1851,7 @@ def test_ieee_no_invert():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestieeeBinops:
+class TestIEEEBinops:
     @pytest.fixture
     def f(self):
         @fn
@@ -1893,7 +1937,7 @@ def test_ieee_no_bitand():
     with pytest.raises(typy.TypeError):
         test.typecheck()
  
-class TestieeeCompareOps:
+class TestIEEECompareOps:
     @pytest.fixture
     def f(self):
         @fn
@@ -2256,7 +2300,7 @@ def test_cplx_no_invert():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TestieeeBinopsCC:
+class TestIEEEBinopsCC:
     @pytest.fixture
     def f(self):
         @fn

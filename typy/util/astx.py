@@ -76,6 +76,19 @@ def builtin_call(name, args):
         starargs=None, 
         kwargs=None)
 
+def import_expr(name):
+    return builtin_call('__import__', [ast.Str(s=name)])
+
+def method_call(obj, method_name, args):
+    return ast.Call(
+        func=ast.Attribute(
+            value=obj,
+            attr=method_name,
+            ctx=ast.Load()),
+        args=args,
+        keywords=[],
+        starargs=None,
+        kwargs=None)
 
 _name_re = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*$")
 def is_identifier(id):

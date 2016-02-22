@@ -287,6 +287,34 @@ class TestIEEEPattern:
                     "else (_ for _ in ()).throw("
                        "__builtin__.Exception('Match failure.')))))(x)")
 
+class TestIEEENamePattern:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {ieee}
+            {x} is {
+                NaN: x,
+                Inf: x,
+                -Inf: x,
+                +Inf: x}
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[ieee, ieee]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                return (lambda __typy_scrutinee__: """
+                    "(x if __builtin__.__import__('math').isnan(__typy_scrutinee__) "
+                    "else (x if (__typy_scrutinee__ == __builtin__.float('Inf')) "
+                    "else (x if (__typy_scrutinee__ == __builtin__.float('-Inf')) "
+                    "else (x if (__typy_scrutinee__ == __builtin__.float('Inf')) "
+                    "else (_ for _ in ()).throw("
+                    "__builtin__.Exception('Match failure.'))))))"
+                ")(x)")
+
 class TestCplxNumPattern:
     @pytest.fixture
     def f(self):

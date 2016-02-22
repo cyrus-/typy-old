@@ -237,8 +237,8 @@ class Type(object):
         raise NotSupportedError(self, "method", "ana_Name_constructor", e)
 
     @classmethod
-    def syn_idx_Name_constructor(self, ctx, e, inc_idx):
-        raise NotSupportedError(self, "class method", "syn_idx_Name_constructor", e)
+    def syn_idx_Name_constructor(cls, ctx, e, inc_idx):
+        raise NotSupportedError(cls, "class method", "syn_idx_Name_constructor", e)
 
     def translate_Name_constructor(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Name_constructor", e)
@@ -248,6 +248,28 @@ class Type(object):
 
     def translate_pat_Name_constructor(self, ctx, pat, scrutinee_trans):
         raise NotSupportedError(self, "method", "translate_pat_Name_constructor", pat)
+
+    # Unary_Name_constructor
+
+    def ana_Unary_Name_constructor(self, ctx, e):
+        raise NotSupportedError(self, "method", "ana_Unary_Name_constructor", e)
+
+    @classmethod
+    def syn_idx_Unary_Name_constructor(self, ctx, e, inc_idx):
+        raise NotSupportedError(self, "class method", 
+                                "syn_idx_Unary_Name_constructor", e)
+
+    def translate_Unary_Name_constructor(self, ctx, e):
+        raise NotSupportedError(self, "method", 
+                                "translate_Unary_Name_constructor", e)
+
+    def ana_pat_Unary_Name_constructor(self, ctx, pat):
+        raise NotSupportedError(self, "method", 
+                                "ana_pat_Unary_Name_constructor", pat)
+
+    def translate_pat_Unary_Name_constructor(self, ctx, pat, scrutinee_trans):
+        raise NotSupportedError(self, "method",
+                                "translate_pat_Unary_Name_constructor", pat)
 
     # Call_constructor
 
@@ -540,15 +562,6 @@ class Context(object):
             tmp_count = _tmp_count[tmp] = tmp_count + 1
         return '__typy_tmp_' + tmp + '_' + str(tmp_count) + '__'
 
-    def check(self, stmt):
-        if not isinstance(stmt, ast.stmt):
-            raise UsageError("Cannot check a non-statement.")
-        classname = stmt.__class__.__name__
-        check_method = 'check_%s' % classname
-        delegate = tycon(self.fn.ascription)
-        method = getattr(delegate, check_method)
-        method(self, stmt)
-
     def ana(self, e, ty):
         if not isinstance(e, ast.expr):
             raise UsageError("Cannot analyze a non-expression.")
@@ -561,6 +574,8 @@ class Context(object):
                 classname = "Name_constructor"
             elif classname == "Call":
                 classname = "Call_constructor"
+            elif classname == "UnaryOp":
+                classname = "Unary_Name_constructor"
             ana_method = 'ana_%s' % classname
             method = getattr(ty, ana_method)
             method(self, e)
@@ -589,6 +604,8 @@ class Context(object):
             classname = "Name_constructor"
         elif classname == "Call":
             classname = "Call_constructor"
+        elif classname == "UnaryOp":
+            classname = "Unary_Name_constructor"
         syn_idx_methodname = 'syn_idx_%s' % classname
         delegate = inc_ty.tycon
         method = getattr(delegate, syn_idx_methodname)
@@ -761,6 +778,8 @@ class Context(object):
                 classname = "Name_constructor"
             elif classname == "Call":
                 classname = "Call_constructor"
+            elif classname == "UnaryOp":
+                classname = "Unary_Name_constructor"
             ana_pat_methodname = 'ana_pat_' + classname
             delegate = ty
             method = getattr(delegate, ana_pat_methodname)
@@ -791,6 +810,8 @@ class Context(object):
                 classname = "Name_constructor"
             elif classname == "Call":
                 classname = "Call_constructor"
+            elif classname == "UnaryOp":
+                classname = "Unary_Name_constructor"
             translate_pat_methodname = "translate_pat_" + classname
             delegate = pat.ty
             method = getattr(delegate, translate_pat_methodname)
@@ -824,10 +845,16 @@ _intro_forms = (
 def _is_intro_form(e):
     return (isinstance(e, _intro_forms) or 
             _is_Name_constructor(e) or
+            _is_Unary_Name_constructor(e) or 
             _is_Call_constructor(e))
 
 def _is_Name_constructor(e):
     return isinstance(e, ast.Name) and e.id[0].isupper()
+
+def _is_Unary_Name_constructor(e):
+    return (isinstance(e, ast.UnaryOp) and 
+            isinstance(e.op, (ast.USub, ast.UAdd, ast.Invert)) and 
+            _is_Name_constructor(e.operand))
 
 def _is_Call_constructor(e):
     return isinstance(e, ast.Call) and _is_Name_constructor(e.func)

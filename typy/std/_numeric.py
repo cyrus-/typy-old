@@ -2,7 +2,7 @@
 import ast 
 
 import ordereddict
-_OD = ordereddict.OrderedDict
+_odict = ordereddict.OrderedDict
 
 import typy
 import typy.util
@@ -50,7 +50,7 @@ class num_(typy.Type):
         n = pat.n 
         if not isinstance(n, (int, long)):
             raise typy.TypeError("Pattern for type 'num' must be int or long.", pat)
-        return _OD()
+        return _odict()
 
     def translate_pat_Num(self, ctx, pat, scrutinee_trans):
         scrutinee_trans_copy = astx.copy_node(scrutinee_trans)
@@ -59,13 +59,14 @@ class num_(typy.Type):
             left=scrutinee_trans_copy,
             ops=[ast.Eq()],
             comparators=[comparator])
-        return (condition, _OD())
+        return (condition, _odict())
 
     def syn_UnaryOp(self, ctx, e):
         if not isinstance(e.op, ast.Not):
             return self
         else:
-            raise typy.TypeError("Invalid unary operator 'not' for operand of type num.", e)
+            raise typy.TypeError(
+                "Invalid unary operator 'not' for operand of type num.", e)
 
     def translate_UnaryOp(self, ctx, e):
         translation = astx.copy_node(e)
@@ -169,7 +170,7 @@ class ieee_(typy.Type):
         if not isinstance(pat.n, (int, long, float)):
             raise typy.TypeError(
                 "Complex literal cannot be used as a pattern for type 'ieee'.", pat)
-        return _OD()
+        return _odict()
     
     def translate_pat_Num(self, ctx, pat, scrutinee_trans):
         n = pat.n
@@ -179,7 +180,95 @@ class ieee_(typy.Type):
             left=scrutinee_trans,
             ops=[ast.Eq()],
             comparators=[comparator])
-        return (condition, _OD())
+        return (condition, _odict())
+
+    def ana_Name_constructor(self, ctx, e):
+        id = e.id
+        if id == "NaN" or id == "Inf":
+            return
+        else:
+            raise typy.TypeError("Invalid constructor name: " + id, e)
+
+    @classmethod
+    def syn_idx_Name_constructor(cls, ctx, e, inc_idx):
+        id = e.id 
+        if id == "NaN" or id == "Inf":
+            return ()
+        else:
+            raise typy.TypeError("Invalid constructor name: " + id, e)
+
+    def translate_Name_constructor(self, ctx, e):
+        id = e.id
+        argument = ast.Str(s=id)
+        return astx.builtin_call("float", [argument])
+
+    def ana_pat_Name_constructor(cls, ctx, pat):
+        id = pat.id
+        if id == "NaN" or id == "Inf":
+            return _odict()
+        else:
+            raise typy.TypeError("Invalid constructor name: " + id, pat)
+
+    def translate_pat_Name_constructor(cls, ctx, pat, scrutinee_trans):
+        id = pat.id
+        if id == "NaN":
+            condition = astx.method_call(
+                astx.import_expr('math'),
+                'isnan',
+                [scrutinee_trans])
+        else:
+            condition = ast.Compare(
+                left=scrutinee_trans,
+                ops=[ast.Eq()],
+                comparators=[
+                    astx.builtin_call("float", [ast.Str(s=id)])]
+            )
+        return (condition, _odict())
+
+    def ana_Unary_Name_constructor(self, ctx, e):
+        id = e.operand.id
+        if id != "Inf":
+            raise typy.TypeError("Invalid ieee literal.", e)
+        if not isinstance(e.op, (ast.UAdd, ast.USub)):
+            raise typy.TypeError("Invalid unary operator on ieee literal.", e)
+
+    @classmethod
+    def syn_idx_Unary_Name_constructor(cls, ctx, e, inc_idx):
+        id = e.operand.id
+        if id != "Inf":
+            raise typy.TypeError("Invalid ieee literal.", e)
+        if not isinstance(e.op, (ast.UAdd, ast.USub)):
+            raise typy.TypeError("Invalid unary operator on ieee literal.", e)
+        return ()
+
+    def translate_Unary_Name_constructor(self, ctx, e):
+        if isinstance(e.op, ast.UAdd):
+            argument = "Inf"
+        else:
+            argument = "-Inf"
+        return astx.builtin_call("float", [ast.Str(s=argument)])
+
+    def ana_pat_Unary_Name_constructor(self, ctx, pat):
+        id = pat.operand.id
+        if id != "Inf":
+            raise typy.TypeError("Invalid ieee literal pattern.", pat)
+        if not isinstance(pat.op, (ast.UAdd, ast.USub)):
+            raise typy.TypeError(
+                "Invalid unary operator on ieee literal pattern.", pat)
+        return _odict()
+
+    def translate_pat_Unary_Name_constructor(self, ctx, pat, scrutinee_trans):
+        if isinstance(pat.op, ast.USub):
+            s = "-Inf"
+        else:
+            s = "Inf"
+        condition = ast.Compare(
+            left=scrutinee_trans,
+            ops=[ast.Eq()],
+            comparators=[
+                astx.builtin_call("float", [ast.Str(s=s)])]
+        )
+        return (condition, _odict())
 
     def syn_UnaryOp(self, ctx, e):
         if isinstance(e.op, (ast.Not, ast.Invert)):
@@ -272,7 +361,7 @@ class cplx_(typy.Type):
         return translation
 
     def ana_pat_Num(self, ctx, pat):
-        return _OD()
+        return _odict()
 
     def translate_pat_Num(self, ctx, pat, scrutinee_trans):
         scrutinee_trans_copy = astx.copy_node(scrutinee_trans)
@@ -284,7 +373,7 @@ class cplx_(typy.Type):
             left=scrutinee_trans_copy,
             ops=[ast.Eq()],
             comparators=[comparator])
-        return (condition, _OD())
+        return (condition, _odict())
 
     @classmethod
     def _process_Tuple(cls, ctx, e):
@@ -350,7 +439,7 @@ class cplx_(typy.Type):
         im_bindings = ctx.ana_pat(im, ieee)
         n_rl_bindings = len(rl_bindings)
         n_im_bindings = len(im_bindings)
-        bindings = _OD(rl_bindings)
+        bindings = _odict(rl_bindings)
         bindings.update(im_bindings)
         n_bindings = len(bindings)
         if n_bindings != n_rl_bindings + n_im_bindings:
@@ -367,7 +456,7 @@ class cplx_(typy.Type):
 
         condition = astx.make_binary_And(rl_cond, im_cond)
 
-        binding_translations = _OD(rl_binding_translations)
+        binding_translations = _odict(rl_binding_translations)
         binding_translations.update(im_binding_translations)
 
         return condition, binding_translations
