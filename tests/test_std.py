@@ -1273,6 +1273,63 @@ class TestAssignFnName:
                 __typy_id_f_1__ = x
                 return __typy_id_f_1__""")
 
+# 
+# fn
+# 
+class TestAnaLambda:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x [: fn[num, num]] = lambda x: 3
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), fn[num, num]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                __typy_id_x_1__ = (lambda x: 3)
+                return __typy_id_x_1__""")
+
+class TestSynLambda:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x [: fn[num, ...]] = lambda x: x + 3
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), fn[num, num]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                __typy_id_x_1__ = (lambda x: (x + 3))
+                return __typy_id_x_1__""")
+
+class TestLambdaNoArgs:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            x [: fn[(), num]] = lambda: 3
+            (lambda: x) [: fn]
+        return f
+    
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), fn[(), fn[(), num]]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                x = (lambda : 3)
+                return (lambda : x)""")
+
 #
 # boolean
 #

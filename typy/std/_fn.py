@@ -285,6 +285,41 @@ class fn(typy.FnType):
             body=body_block_translation,
             decorator_list=[])
 
+    def ana_Lambda(self, ctx, e):
+        (arg_types, return_type) = self.idx
+        args, body = e.args, e.body
+        ctx.variables.push({})
+        tuple(fn._setup_args(ctx, args, arg_types, e))
+        ctx.ana(body, return_type)
+        ctx.variables.pop()
+
+    @classmethod
+    def syn_idx_Lambda(cls, ctx, e, inc_idx):
+        if inc_idx == Ellipsis:
+            arg_types = ()
+        else:
+            arg_types = inc_idx[0]
+        args, body = e.args, e.body
+        ctx.variables.push({})
+        tuple(fn._setup_args(ctx, args, arg_types, e))
+        return_type = ctx.syn(body)
+        ctx.variables.pop()
+        return (arg_types, return_type)
+
+    def translate_Lambda(self, ctx, e):
+        args_translation = ast.arguments(
+            args=[
+                ast.Name(id=arg.uniq_id)
+                for arg in e.args.args
+            ],
+            vararg=None,
+            kwarg=None,
+            defaults=[])
+        body_translation = ctx.translate(e.body)
+        return ast.Lambda(
+            args=args_translation,
+            body=body_translation)
+
     @classmethod
     def syn_Name(cls, ctx, e):
         id = e.id

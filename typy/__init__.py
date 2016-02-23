@@ -225,12 +225,6 @@ class Type(object):
     def translate_Lambda(self, ctx, e):
         raise NotSupportedError(self, "method", "translate_Lambda", e)
 
-    def ana_pat_Lambda(self, ctx, pat):
-        raise NotSupportedError(self, "method", "ana_pat_Lambda", pat)
-
-    def translate_pat_Lambda(self, ctx, pat, scrutinee_trans):
-        raise NotSupportedError(self, "method", "translate_pat_Lambda", pat)
-
     # Name_constructor
 
     def ana_Name_constructor(self, ctx, e):
