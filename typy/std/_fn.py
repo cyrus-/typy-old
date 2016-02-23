@@ -437,6 +437,29 @@ class fn(typy.FnType):
             body=body,
             orelse=orelse)
 
+    @classmethod
+    def syn_IfExp(cls, ctx, e):
+        ctx.ana(e.test, _boolean.boolean)
+        ty = ctx.syn(e.body)
+        ctx.ana(e.orelse, ty)
+        return ty
+
+    @classmethod
+    def ana_IfExp(cls, ctx, e, ty):
+        ctx.ana(e.test, _boolean.boolean)
+        ctx.ana(e.body, ty)
+        ctx.ana(e.orelse, ty)
+
+    @classmethod
+    def translate_IfExp(cls, ctx, e):
+        test_translation = ctx.translate(e.test)
+        body_translation = ctx.translate(e.body)
+        orelse_translation = ctx.translate(e.orelse)
+        return ast.IfExp(
+            test=test_translation,
+            body=body_translation,
+            orelse=orelse_translation)
+
 class Block(object):
     def __init__(self, bindings, last_expr):
         self.bindings = bindings
@@ -911,12 +934,6 @@ class BlockMatchExpr(BlockExpr):
                         return args[0]
                     else:
                         raise typy.TypeError("Invalid match scrutinee.", e)
-                else:
-                    return None
-            else:
-                return None
-        else:
-            return None
 
     def _get_asc(self, ctx):
         if hasattr(self, 'asc'): 

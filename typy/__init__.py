@@ -587,6 +587,12 @@ class Context(object):
             e.ty = ty
             e.delegate = delegate
             e.translation_method_name = 'translate_match_expr'
+        elif isinstance(e, ast.IfExp):
+            delegate = tycon(self.fn.ascription)
+            delegate.ana_IfExp(self, e, ty)
+            e.ty = ty
+            e.delegate = delegate
+            e.translation_method_name = 'translate_IfExp'
         else:
             syn_ty = self.syn(e)
             if ty != syn_ty:
@@ -726,6 +732,14 @@ class Context(object):
             else:
                 raise TypeInvariantError(
                     "syn_Attribute did not return a type.", e)
+        elif isinstance(e, ast.IfExp):
+            delegate = tycon(self.fn.ascription)
+            ty = delegate.syn_IfExp(self, e)
+            if isinstance(ty, Type):
+                e.translation_method_name = 'translate_IfExp'
+            else:
+                raise TypeInvariantError(
+                    "syn_IfExp did not return a type.", e)
         else:
             raise TypeError("Unsupported form for type synthesis: " + 
                             e.__class__.__name__, e)
@@ -758,7 +772,8 @@ class Context(object):
                 ast.BoolOp, 
                 ast.Compare, 
                 ast.BinOp, 
-                ast.UnaryOp)):
+                ast.UnaryOp,
+                ast.IfExp)):
             delegate = tree.delegate
             method = getattr(delegate, tree.translation_method_name)
             translation = method(self, tree)

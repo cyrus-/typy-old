@@ -1539,6 +1539,28 @@ class TestBooleanBlockIf:
                     return 5
                 else:
                     return 6""")
+
+class TestBooleanIfExp:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {boolean} >> num
+            x if x else not x if x and x else not not x
+            y = (False if x else True if x and x else True) [: boolean]
+            4 if y else 5 if x and y else 6
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[boolean, num]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                (x if x else ((not x) if (x and x) else (not (not x))))
+                y = (False if x else (True if (x and x) else True))
+                return (4 if y else (5 if (x and y) else 6))""")
+
 # 
 # num
 #
