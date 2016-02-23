@@ -364,13 +364,11 @@ class fn(typy.FnType):
             bindings = ctx.ana_pat(pat, scrutinee_ty)
             ctx_update = pat.ctx_update = cls._pat_ctx_update(ctx, bindings)
             ctx.variables.push(ctx_update)
-            branch_ty = ctx.syn(branch)
-            ctx.variables.pop()
             if syn_ty is None:
-                syn_ty = branch_ty
+                syn_ty = ctx.syn(branch)
             else:
-                if syn_ty != branch_ty:
-                    raise TypeError("Inconsistent branch types.", branch)
+                ctx.ana(branch, syn_ty)
+            ctx.variables.pop()
         return syn_ty
 
     @classmethod
@@ -450,27 +448,66 @@ class Block(object):
         last_binding = bindings[-1]
         if not isinstance(last_binding, BlockNoBinding):
             raise typy.TypeError(
-                "Block does not end with an expression.",
+                "Block ends with a binding.",
                 last_binding.stmt)
         return cls(all_but_last, last_binding.expr)
 
     @classmethod
     def _yield_bindings(cls, stmts):
+        match_head = None
+        match_rules = []
         for stmt in stmts:
-            if isinstance(stmt, ast.Assign):
-                yield BlockAssignBinding(stmt)
-            elif isinstance(stmt, ast.With):
-                if (BlockWithBinding.is_with_binding(stmt)):
-                    body_block = Block.from_stmts(stmt.body)
-                    yield BlockWithBinding(stmt.context_expr, body_block)
+            if match_head is not None:
+                if (isinstance(stmt, ast.With) and
+                        not BlockWithBinding.is_with_binding(stmt)):
+                    if stmt.optional_vars is not None:
+                        raise typy.TypeError("Invalid rule form.", stmt)
+                    stmt.body_block = Block.from_stmts(stmt.body)
+                    match_rules.append(stmt)
+                    continue
                 else:
-                    raise typy.TypeError("Invalid with form.", stmt)
-            elif isinstance(stmt, ast.Expr):
-                yield BlockNoBinding(BlockExprExpr(stmt))
-            elif isinstance(stmt, ast.Pass):
-                yield BlockNoBinding(BlockPassExpr(stmt))
-            else:
-                raise typy.TypeError("Statement form not supported.", stmt)
+                    match_head_stmt, match_scrutinee, match_asc = match_head
+                    if len(match_rules) == 0:
+                        raise typy.TypeError(
+                            "No match rules.", match_scrutinee)
+                    yield BlockNoBinding(
+                        BlockMatchExpr(
+                            match_head_stmt,
+                            match_scrutinee, 
+                            match_asc, 
+                            match_rules))
+                    match_head = None
+                    match_rules = []
+            if match_head is None:
+                if isinstance(stmt, ast.Expr):
+                    head = BlockMatchExpr.head_from_stmt(stmt)
+                    if head is None:
+                        yield BlockNoBinding(BlockExprExpr(stmt))
+                    else:
+                        match_head = head
+                elif isinstance(stmt, ast.With):
+                    if (BlockWithBinding.is_with_binding(stmt)):
+                        body_block = Block.from_stmts(stmt.body)
+                        yield BlockWithBinding(stmt.context_expr, body_block)
+                    else:
+                        raise typy.TypeError("Invalid with form.", stmt)
+                elif isinstance(stmt, ast.Assign):
+                    yield BlockAssignBinding(stmt)
+                elif isinstance(stmt, ast.Pass):
+                    yield BlockNoBinding(BlockPassExpr(stmt))
+                else:
+                    raise typy.TypeError("Statement form not supported.", stmt)
+        if match_head is not None:
+            match_head_stmt, match_scrutinee, match_asc_ast = match_head
+            if len(match_rules) == 0:
+                raise typy.TypeError(
+                    "No match rules.", match_scrutinee)
+            yield BlockNoBinding(
+                BlockMatchExpr(
+                    match_head_stmt,
+                    match_scrutinee,
+                    match_asc_ast,
+                    match_rules))
 
     def ana(self, ctx, ty):
         bindings = self.bindings
@@ -830,6 +867,147 @@ class BlockPassExpr(BlockExpr):
         return [ast.Assign(
             targets=[assign_to],
             value=ast.Tuple(elts=[]))]
+
+class BlockMatchExpr(BlockExpr):
+    def __init__(self, head_stmt, scrutinee, asc_ast, rule_stmts):
+        self.head_stmt = head_stmt
+        self.scrutinee = scrutinee
+        self.asc_ast = asc_ast
+        self.rule_stmts = rule_stmts
+
+    @classmethod
+    def head_from_stmt(cls, stmt):
+        if isinstance(stmt, ast.Expr):
+            expr_value = stmt.value
+            _is_ascription = typy._check_ascription_ast(expr_value)
+            if _is_ascription is None:
+                ascribed_value = expr_value
+                asc_ast = None
+            else:
+                ascribed_value, asc_ast = _is_ascription
+            scrutinee = cls._check_match_scrutinee(ascribed_value)
+            if scrutinee is not None:
+                return stmt, scrutinee, asc_ast
+
+    @classmethod
+    def _check_match_scrutinee(cls, e):
+        if isinstance(e, ast.Call):
+            if (len(e.keywords) != 0 or 
+                    e.kwargs is not None or
+                    e.starargs is not None):
+                raise typy.TypeError("Invalid match scrutinee.", e)
+            func = e.func
+            if isinstance(func, ast.Name):
+                id = func.id
+                if id == 'match':
+                    args = e.args
+                    if len(args) == 1:
+                        return args[0]
+                    else:
+                        raise typy.TypeError("Invalid match scrutinee.", e)
+                else:
+                    return None
+            else:
+                return None
+        else:
+            return None
+
+    def _get_asc(self, ctx):
+        if hasattr(self, 'asc'): 
+            return self.asc
+        asc_ast = self.asc_ast
+        if asc_ast is not None:
+            asc = typy._process_asc_ast(ctx, asc_ast)
+            if isinstance(asc, typy.IncompleteType):
+                raise typy.TypeError(
+                    "Block expression ascriptions cannot be incomplete types.",
+                    asc_ast)
+            self.asc = asc
+            return asc
+
+    def ana(self, ctx, ty):
+        asc = self._get_asc(ctx)
+        if asc is not None and asc != ty:
+            raise typy.TypeError("Inconsistent match ascription.", 
+                                 self.head_stmt)
+
+        scrutinee_ty = ctx.syn(self.scrutinee)
+        ctx_variables = ctx.variables
+        for rule_stmt in self.rule_stmts:
+            pat = rule_stmt.context_expr
+            body_block = rule_stmt.body_block
+            bindings = ctx.ana_pat(pat, scrutinee_ty)
+            ctx_update = pat.ctx_update = fn._pat_ctx_update(ctx, bindings)
+            ctx_variables.push(ctx_update)
+            body_block.ana(ctx, ty)
+            ctx_variables.pop()
+
+    def syn(self, ctx):
+        asc = self._get_asc(ctx)
+        if asc is not None:
+            self.ana(ctx, asc)
+            return asc
+        else:
+            scrutinee_ty = ctx.syn(self.scrutinee)
+            ty = None
+            ctx_variables = ctx.variables
+            for rule_stmt in self.rule_stmts:
+                pat = rule_stmt.context_expr
+                body_block = rule_stmt.body_block
+                bindings = ctx.ana_pat(pat, scrutinee_ty)
+                ctx_update = pat.ctx_update = fn._pat_ctx_update(ctx, bindings)
+                ctx_variables.push(ctx_update)
+                if ty is None:
+                    ty = body_block.syn(ctx)
+                else:
+                    body_block.ana(ctx, ty)
+                ctx_variables.pop()
+            return ty
+
+    def _translation_common(self, ctx, block_translator):
+        translation = []
+        scrutinee_var = ast.Name(id='__typy_match_scrutinee__')
+        scrutinee_trans = ctx.translate(self.scrutinee)
+        assign_scrutinee = ast.Assign(
+            targets=[scrutinee_var],
+            value=scrutinee_trans)
+        translation.append(assign_scrutinee)
+
+        cur_translation = translation
+        for rule_stmt in self.rule_stmts:
+            pat = rule_stmt.context_expr
+            condition, binding_translations = ctx.translate_pat(
+                pat, scrutinee_var)
+            ctx_update = pat.ctx_update
+            body_block = rule_stmt.body_block
+            body = [
+                ast.Assign(
+                    targets=[ast.Name(id=ctx_update[id][0])],
+                    value=binding_translation)
+                for (id, binding_translation) in 
+                binding_translations.iteritems()]
+            body.extend(block_translator(body_block, ctx))
+            orelse = []
+            cur_translation.append(ast.If(
+                test=condition,
+                body=body,
+                orelse=orelse))
+            cur_translation = orelse
+        cur_translation.append(
+            astx.stmt_Raise_Exception_string("Match failure."))
+        return translation
+
+    def translate_no_binding(self, ctx):
+        return self._translation_common(ctx, Block.translate_no_binding)
+
+    def translate_return(self, ctx):
+        return self._translation_common(ctx, Block.translate_return)
+
+    def translate_assign(self, ctx, assign_to):
+        return self._translation_common(
+            ctx, 
+            lambda block, ctx: 
+                Block.translate_assign(block, ctx, assign_to))
 
 def _target_translation_data(ctx, targets, scrutinee_trans):
     for target in targets:

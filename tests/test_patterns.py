@@ -48,6 +48,62 @@ class TestVariablePatternAnaPropagates:
                     "else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))"
                 ")(x)") 
 
+class TestVariablePatternMatchAna:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {unit} >> unit
+            match(x)
+            with y:
+                y
+            with _: # redundant
+                ()
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[unit, unit]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_match_scrutinee__ = x
+                if True:
+                    y = __typy_match_scrutinee__
+                    return y
+                elif True:
+                    return ()
+                else:
+                    raise __builtin__.Exception('Match failure.')""")
+
+class TestVariablePatternMatchAsc:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {unit}
+            match(x) [: boolean]
+            with y:
+                True
+            with _:
+                False
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[unit, boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_match_scrutinee__ = x
+                if True:
+                    y = __typy_match_scrutinee__
+                    return True
+                elif True:
+                    return False
+                else:
+                    raise __builtin__.Exception('Match failure.')""")
+
 class TestVariablePatternSyn:
     @pytest.fixture
     def f(self):
@@ -68,11 +124,49 @@ class TestVariablePatternSyn:
                     "else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))"
                 ")(x)")
 
+class TestVariablePatternMatchSyn:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {boolean}
+            match(x)
+            with True:
+                not x
+            with _:
+                False
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[boolean, boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_match_scrutinee__ = x
+                if __typy_match_scrutinee__:
+                    return (not x)
+                elif True:
+                    return False
+                else:
+                    raise __builtin__.Exception('Match failure.')""")
+
 def test_underscore_pattern():
     @fn
     def test(x):
         {boolean}
         {x} is {_: _}
+
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
+def test_underscore_pattern_match():
+    @fn
+    def test(x):
+        {boolean}
+        match(x)
+        with _:
+            _
 
     with pytest.raises(typy.TypeError):
         test.typecheck()
@@ -117,6 +211,19 @@ def test_pop():
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
+def test_match_pop():
+    @fn
+    def test(x):
+        {boolean}
+        match(x)
+        with y:
+            True
+        with z:
+            y
+
+    with pytest.raises(typy.TypeError):
+        test.typecheck()
+
 def test_invalid_form():
     @fn
     def test(x):
@@ -144,6 +251,60 @@ class TestOperations:
                     "((lambda y: y)(__typy_scrutinee__) if True "
                     "else (_ for _ in ()).throw(__builtin__.Exception('Match failure.')))"
                 ")(x) + 5)""")
+
+class TestMatchOperations:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {num}
+            with let[z]:
+                match(x)
+                with y:
+                    y
+            z + 5
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[num, num]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_match_scrutinee__ = x
+                if True:
+                    y = __typy_match_scrutinee__
+                    __typy_with_scrutinee__ = y
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                z = __typy_with_scrutinee__
+                return (z + 5)""")
+
+class TestDoMatch:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {num}
+            match(x)
+            with y:
+                pass
+            x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[num, num]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_match_scrutinee__ = x
+                if True:
+                    y = __typy_match_scrutinee__
+                    pass
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                return x""")
 
 class TestBooleanPattern:
     @pytest.fixture
@@ -175,6 +336,47 @@ class TestBooleanPattern:
                     "x if (not __typy_scrutinee__) "
                     "else (_ for _ in ()).throw("
                     "__builtin__.Exception('Match failure.')))))(x))""")
+
+class TestBooleanPatternMatch:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {boolean}
+            with let[_x]:
+                match(x)
+                with True:
+                    x
+                with False:
+                    x
+            match(_x)
+            with False:
+                x
+            with _:
+                x
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[boolean, boolean]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                __typy_match_scrutinee__ = x
+                if __typy_match_scrutinee__:
+                    __typy_with_scrutinee__ = x
+                elif (not __typy_match_scrutinee__):
+                    __typy_with_scrutinee__ = x
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                _x = __typy_with_scrutinee__
+                __typy_match_scrutinee__ = _x
+                if (not __typy_match_scrutinee__):
+                    return x
+                elif True:
+                    return x
+                else:
+                    raise __builtin__.Exception('Match failure.')""")
 
 class TestBooleanDestructuringAssign:
     @pytest.fixture
@@ -370,6 +572,41 @@ class TestCplxTuplePattern:
                        "__typy_scrutinee__.imag) if (True and True) "
                     "else (_ for _ in ()).throw("
                        "__builtin__.Exception('Match failure.')))))))(x)")
+
+class TestCplxTuplePatternMatch:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {cplx} >> ieee
+            match(x)
+            with (0, 1.0): 0 
+            with (y, 2.0): y 
+            with (3.0, y): y 
+            with (y, z): y + z 
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[cplx, ieee]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+        def f(x):
+            __typy_match_scrutinee__ = x
+            if ((__typy_match_scrutinee__.real == 0.0) and (__typy_match_scrutinee__.imag == 1.0)):
+                return 0.0
+            elif (True and (__typy_match_scrutinee__.imag == 2.0)):
+                y = __typy_match_scrutinee__.real
+                return y
+            elif ((__typy_match_scrutinee__.real == 3.0) and True):
+                __typy_id_y_1__ = __typy_match_scrutinee__.imag
+                return __typy_id_y_1__
+            elif (True and True):
+                __typy_id_y_2__ = __typy_match_scrutinee__.real
+                z = __typy_match_scrutinee__.imag
+                return (__typy_id_y_2__ + z)
+            else:
+                raise __builtin__.Exception('Match failure.')""")
 
 class TestCplxTupleLet:
     @pytest.fixture

@@ -551,12 +551,10 @@ class Context(object):
     
     def generate_fresh_tmp(self, tmp):
         _tmp_count = self._tmp_count
-        print "TMP" + tmp
         print _tmp_count
         try:
             tmp_count = _tmp_count[tmp]
         except KeyError:
-            print " ERROR "
             tmp_count = _tmp_count[tmp] = 1
         else:
             tmp_count = _tmp_count[tmp] = tmp_count + 1
@@ -867,7 +865,23 @@ def _is_match_expr(e):
             isinstance(e.left, ast.Set) and 
             isinstance(e.comparators[0], ast.Dict))
 
+def _check_ascription_ast(e):
+    if isinstance(e, ast.Subscript):
+        value, slice = e.value, e.slice
+        if isinstance(slice, ast.Slice):
+            lower, upper, step = slice.lower, slice.upper, slice.step
+            if lower is None and upper is not None and step is None:
+                return value, upper
+
+def _check_ascription(e, static_env):
+    if isinstance(e, ast.Subscript):
+        value, slice = e.value, e.slice
+        asc = _process_ascription_slice(slice, static_env)
+        return value, asc
+    return None
+
 def _process_ascription_slice(slice_, static_env):
+    # TODO make this call _process_asc_ast
     if isinstance(slice_, ast.Slice):
         lower, upper, step = slice_.lower, slice_.upper, slice_.step
         if lower is None and upper is not None and step is None:
