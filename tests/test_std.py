@@ -1487,7 +1487,59 @@ class TestBooleanBoolOps:
                 x_or_y = (x or True or True or True)
                 return x_or_y""")
 
-#
+class TestBooleanBlockIf:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x):
+            {boolean} >> num
+            if x:
+                x
+            elif x and x:
+                not x
+            else:
+                not not x
+            with let[y : boolean]:
+                if x:
+                    False
+                elif x and x:
+                    True
+                else:
+                    True
+            if y:
+                4
+            elif x and y:
+                5
+            else:
+                6
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[boolean, num]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x):
+                if x:
+                    x
+                elif (x and x):
+                    (not x)
+                else:
+                    (not (not x))
+                if x:
+                    __typy_with_scrutinee__ = False
+                elif (x and x):
+                    __typy_with_scrutinee__ = True
+                else:
+                    __typy_with_scrutinee__ = True
+                y = __typy_with_scrutinee__
+                if y:
+                    return 4
+                elif (x and y):
+                    return 5
+                else:
+                    return 6""")
+# 
 # num
 #
 

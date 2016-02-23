@@ -9,6 +9,7 @@ import typy.util
 import typy.util.astx as astx
 
 import _product
+import _boolean
 
 #
 # fn
@@ -493,6 +494,11 @@ class Block(object):
                         raise typy.TypeError("Invalid with form.", stmt)
                 elif isinstance(stmt, ast.Assign):
                     yield BlockAssignBinding(stmt)
+                elif isinstance(stmt, ast.If):
+                    body, orelse = stmt.body, stmt.orelse
+                    stmt.body_block = Block.from_stmts(body)
+                    stmt.orelse_block = Block.from_stmts(orelse)
+                    yield BlockNoBinding(BlockIfExpr(stmt))
                 elif isinstance(stmt, ast.Pass):
                     yield BlockNoBinding(BlockPassExpr(stmt))
                 else:
@@ -892,14 +898,14 @@ class BlockMatchExpr(BlockExpr):
     @classmethod
     def _check_match_scrutinee(cls, e):
         if isinstance(e, ast.Call):
-            if (len(e.keywords) != 0 or 
-                    e.kwargs is not None or
-                    e.starargs is not None):
-                raise typy.TypeError("Invalid match scrutinee.", e)
             func = e.func
             if isinstance(func, ast.Name):
                 id = func.id
                 if id == 'match':
+                    if (len(e.keywords) != 0 or 
+                            e.kwargs is not None or
+                            e.starargs is not None):
+                        raise typy.TypeError("Invalid match scrutinee.", e)
                     args = e.args
                     if len(args) == 1:
                         return args[0]
@@ -996,6 +1002,48 @@ class BlockMatchExpr(BlockExpr):
         cur_translation.append(
             astx.stmt_Raise_Exception_string("Match failure."))
         return translation
+
+    def translate_no_binding(self, ctx):
+        return self._translation_common(ctx, Block.translate_no_binding)
+
+    def translate_return(self, ctx):
+        return self._translation_common(ctx, Block.translate_return)
+
+    def translate_assign(self, ctx, assign_to):
+        return self._translation_common(
+            ctx, 
+            lambda block, ctx: 
+                Block.translate_assign(block, ctx, assign_to))
+
+class BlockIfExpr(BlockExpr):
+    def __init__(self, stmt):
+        self.stmt = stmt
+
+    def ana(self, ctx, ty):
+        stmt = self.stmt
+        test, body_block, orelse_block = stmt.test, stmt.body_block, stmt.orelse_block
+        ctx.ana(test, _boolean.boolean)
+        body_block.ana(ctx, ty)
+        orelse_block.ana(ctx, ty)
+
+    def syn(self, ctx):
+        stmt = self.stmt
+        test, body_block, orelse_block = stmt.test, stmt.body_block, stmt.orelse_block
+        ctx.ana(test, _boolean.boolean)
+        ty = body_block.syn(ctx)
+        orelse_block.ana(ctx, ty)
+        return ty
+
+    def _translation_common(self, ctx, block_translator):
+        stmt = self.stmt
+        test, body_block, orelse_block = stmt.test, stmt.body_block, stmt.orelse_block
+        test_translation = ctx.translate(test)
+        body_block_translation = block_translator(body_block, ctx)
+        orelse_block_translation = block_translator(orelse_block, ctx)
+        return [ast.If(
+            test=test_translation,
+            body=body_block_translation,
+            orelse=orelse_block_translation)]
 
     def translate_no_binding(self, ctx):
         return self._translation_common(ctx, Block.translate_no_binding)
