@@ -441,6 +441,18 @@ class FnType(Type):
     def translate_match_expr(cls, ctx, e):
         raise NotSupportedError(cls, "method", "translate_match_expr", e)
 
+    @classmethod
+    def ana_IfExp(cls, ctx, e, ty):
+        raise NotSupportedError(cls, "class method", "ana_IfExp", e)
+
+    @classmethod
+    def syn_IfExp(cls, ctx, e):
+        raise NotSupportedError(cls, "class method", "syn_IfExp", e)
+
+    @classmethod
+    def translate_IfExp(cls, ctx, e):
+        raise NotSupportedError(cls, "class method", "translate_IfExp", e)
+
 def _reflect_func(f): 
     source = textwrap.dedent(inspect.getsource(f))
     tree = ast.parse(source).body[0] # ast.parse produces a Module, so grab its only item
