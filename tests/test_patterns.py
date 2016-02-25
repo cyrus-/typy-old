@@ -54,7 +54,7 @@ class TestVariablePatternMatchAna:
         @fn
         def f(x):
             {unit} >> unit
-            match(x)
+            match[x]
             with y:
                 y
             with _: # redundant
@@ -82,7 +82,7 @@ class TestVariablePatternMatchAsc:
         @fn
         def f(x):
             {unit}
-            match(x) [: boolean]
+            match[x] [: boolean]
             with y:
                 True
             with _:
@@ -130,7 +130,7 @@ class TestVariablePatternMatchSyn:
         @fn
         def f(x):
             {boolean}
-            match(x)
+            match[x]
             with True:
                 not x
             with _:
@@ -164,7 +164,7 @@ def test_underscore_pattern_match():
     @fn
     def test(x):
         {boolean}
-        match(x)
+        match[x]
         with _:
             _
 
@@ -215,7 +215,7 @@ def test_match_pop():
     @fn
     def test(x):
         {boolean}
-        match(x)
+        match[x]
         with y:
             True
         with z:
@@ -259,7 +259,7 @@ class TestMatchOperations:
         def f(x):
             {num}
             with let[z]:
-                match(x)
+                match[x]
                 with y:
                     y
             z + 5
@@ -286,7 +286,7 @@ class TestDoMatch:
         @fn
         def f(x):
             {num}
-            match(x)
+            match[x]
             with y:
                 pass
             x
@@ -344,12 +344,12 @@ class TestBooleanPatternMatch:
         def f(x):
             {boolean}
             with let[_x]:
-                match(x)
+                match[x]
                 with True:
                     x
                 with False:
                     x
-            match(_x)
+            match[_x]
             with False:
                 x
             with _:
@@ -579,7 +579,7 @@ class TestCplxTuplePatternMatch:
         @fn
         def f(x):
             {cplx} >> ieee
-            match(x)
+            match[x]
             with (0, 1.0): 0 
             with (y, 2.0): y 
             with (3.0, y): y 
