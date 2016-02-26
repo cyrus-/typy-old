@@ -1294,6 +1294,39 @@ class TestAnaLambda:
                 __typy_id_x_1__ = (lambda x: 3)
                 return __typy_id_x_1__""")
 
+class TestAnaFunctionDef:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            {} >> fn[num, num]
+            with let[z : fn[num, num]]:
+                def f1(x):
+                    x [: num]
+                    3
+            def f(x):
+                x [: num]
+                3
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), fn[num, num]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+
+                def f1(x):
+                    x
+                    return 3
+                __typy_with_scrutinee__ = f1
+                z = __typy_with_scrutinee__
+
+                def __typy_id_f_1__(__typy_id_x_1__):
+                    __typy_id_x_1__
+                    return 3
+                return __typy_id_f_1__""")
+
 class TestSynLambda:
     @pytest.fixture
     def f(self):
@@ -1311,6 +1344,49 @@ class TestSynLambda:
             def f():
                 __typy_id_x_1__ = (lambda x: (x + 3))
                 return __typy_id_x_1__""")
+
+class TestSynFunctionDef:
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            with let[f2]:
+                @fn
+                def f1(x):
+                    {num}
+                    x + 1
+            f2 [: fn[num, num]]
+            @fn
+            def f3(y):
+                {num}
+                y + 1
+            f3 [: fn[num, num]]
+            @fn
+            def f4(z):
+                {num}
+                f2(z) + f3(z)
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), fn[num, num]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+
+                def f1(x):
+                    return (x + 1)
+                __typy_with_scrutinee__ = f1
+                f2 = __typy_with_scrutinee__
+                f2
+
+                def f3(y):
+                    return (y + 1)
+                f3
+                
+                def f4(z):
+                    return (f2(z) + f3(z))
+                return f4""")
 
 class TestLambdaNoArgs:
     @pytest.fixture

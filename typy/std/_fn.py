@@ -75,11 +75,15 @@ class fn(typy.FnType):
         return idx
 
     @classmethod
-    def preprocess_FunctionDef_toplevel(cls, fn, tree):
+    def preprocess_FunctionDef_toplevel(cls, fn, tree): 
+        cls.preprocess_FunctionDef(tree)
+        fn.__doc__ = fn.func_doc = tree.__doc__
+
+    @classmethod
+    def preprocess_FunctionDef(cls, tree):
         body = tree.body
-        (docstring, post_docstring_body) = cls._extract_docstring(body)
-        fn.__doc__ = fn.func_doc = docstring
-        tree._post_docstring_body = post_docstring_body
+        (docstring, tree._post_docstring_body) = cls._extract_docstring(body)
+        tree.__doc__ = tree.func_doc = docstring
 
     @staticmethod
     def _extract_docstring(body):
@@ -98,7 +102,10 @@ class fn(typy.FnType):
         ctx.variables = typy.util.DictStack()
         ctx.variables.push({})
 
-    def ana_FunctionDef_toplevel(self, ctx, tree):
+    def ana_FunctionDef(self, ctx, tree):
+        if not hasattr(tree, '_post_docstring_body'):
+            self.preprocess_FunctionDef(tree)
+        
         args = tree.args
         body = tree._post_docstring_body
         (arg_types, return_type) = self.idx
@@ -127,10 +134,12 @@ class fn(typy.FnType):
         body_block.ana(ctx, return_type)
 
     @classmethod
-    def syn_idx_FunctionDef_toplevel(cls, ctx, tree, inc_ty):
+    def syn_idx_FunctionDef(cls, ctx, tree, inc_idx):
+        if not hasattr(tree, '_post_docstring_body'):
+            cls.preprocess_FunctionDef(tree)
+        
         args = tree.args 
         body = tree._post_docstring_body
-        inc_idx = inc_ty.inc_idx
 
         if len(body) > 0:
             arg_names = astx._get_arg_names(args)
@@ -275,7 +284,7 @@ class fn(typy.FnType):
             variables[arg_id] = (uniq_id, arg_type)
             yield arg_id
 
-    def translate_FunctionDef_toplevel(self, ctx, tree):
+    def translate_FunctionDef(self, ctx, tree):
         argument_translation = ast.arguments(
             args=[
                 ast.Name(id=arg.uniq_id)
@@ -561,6 +570,9 @@ class Block(object):
                     yield BlockIfExpr(stmt)
                 elif isinstance(stmt, ast.Pass):
                     yield BlockPassExpr(stmt)
+                elif isinstance(stmt, ast.FunctionDef):
+                    if BlockFunctionDefExpr.check_valid_function_def(stmt):
+                        yield BlockFunctionDefExpr(stmt)
                 else:
                     raise typy.TypeError("Statement form not supported.", stmt)
         # finish making match expression at the end of the block if necessary
@@ -1184,4 +1196,109 @@ class BlockIfExpr(BlockExpr):
             test=test_translation,
             body=body_block_translation,
             orelse=orelse_block_translation)]
+
+#  both a binding and an expression form
+class BlockFunctionDefExpr(BlockBinding, BlockExpr):
+    def __init__(self, stmt):
+        BlockItem.__init__(self, (stmt,))
+        self.stmt = stmt
+    
+    @classmethod
+    def check_valid_function_def(cls, stmt):
+        if isinstance(stmt, ast.FunctionDef):
+            if cls._check_valid_args(stmt.args):
+                decorator_list = stmt.decorator_list
+                if len(decorator_list) == 0:
+                    stmt.asc_ast = None 
+                    return True
+                elif len(decorator_list) == 1:
+                    stmt.asc_ast = decorator_list[0]
+                    return True
+                else:
+                    raise typy.TypeError(
+                        """Too many decorators.""", stmt)
+        raise typy.TypeError("Not a function definition.", stmt)
+
+    @classmethod
+    def _check_valid_args(cls, args):
+        if (args.vararg is not None 
+                or args.kwarg is not None
+                or len(args.defaults) != 0):
+            raise typy.TypeError(
+                "Invalid function argument format.", args)
+        return True
+
+    @classmethod
+    def _generate_ctx_update(cls, ctx, stmt, ty):
+        name = stmt.name
+        uniq_id = stmt.uniq_id
+        ctx_update = stmt.ctx_update = {
+            name: (uniq_id, ty)
+        }
+        return ctx_update
+
+    # Common BlockItem interface
+    def check_and_push(self, ctx):
+        stmt = self.stmt
+        self.syn(ctx)
+        ctx_update = self._generate_ctx_update(ctx, stmt, stmt.ty)
+        ctx.variables.push(ctx_update)
+
+    def pop(self, ctx):
+        ctx.variables.pop()
+
+    def translate(self, ctx):
+        return self.translate_do(ctx)
+
+    # BlockExpr interface
+    def ana(self, ctx, ty):
+        stmt = self.stmt
+        asc_ast = stmt.asc_ast
+        if asc_ast is None:
+            ctx.ana(stmt, ty)
+        else:
+            syn_ty = ctx.syn(stmt)
+            if ty != syn_ty:
+                raise typy.TypeMismatchError(ty, syn_ty, stmt)
+
+    def syn(self, ctx):
+        stmt = self.stmt
+        asc_ast = stmt.asc_ast
+        if asc_ast is None:
+            raise typy.TypeError(
+                "Cannot synthesize a type for function definition "
+                "without ascription.", stmt)
+        else:
+            asc = typy._process_asc_ast(ctx, asc_ast)
+            if isinstance(asc, typy.Type):
+                ctx.ana(stmt, asc)
+                return asc
+            else: # IncompleteType
+                ty = ctx.ana_intro_inc(stmt, asc)
+                return ty
+
+    def translate_do(self, ctx):
+        return [ctx.translate(self.stmt)]
+
+    def translate_return(self, ctx):
+        stmt = self.stmt
+        fn_translation = ctx.translate(stmt)
+        uniq_id = stmt.uniq_id
+        return_translation = ast.Return(
+            value=ast.Name(id=uniq_id))
+        return [
+            fn_translation,
+            return_translation
+        ]
+
+    def translate_assign(self, ctx, assign_to):
+        stmt = self.stmt
+        fn_translation = ctx.translate(stmt)
+        uniq_id = stmt.uniq_id
+        assign_translation = ast.Assign(
+            targets=[assign_to],
+            value=ast.Name(id=uniq_id))
+        return [
+            fn_translation,
+            assign_translation]
 

@@ -406,15 +406,19 @@ class FnType(Type):
     def preprocess_FunctionDef_toplevel(cls, fn, tree):
         pass 
 
-    def ana_FunctionDef_toplevel(self, ctx, tree, ty):
-        raise NotSupportedError(self, "method", "ana_FunctionDef_toplevel", tree)
+    # FunctionDef
+
+    def ana_FunctionDef(self, ctx, tree, ty):
+        raise NotSupportedError(self, "method", "ana_FunctionDef", tree)
 
     @classmethod
-    def syn_idx_FunctionDef_toplevel(cls, ctx, tree, inc_ty):
-        raise NotSupportedError(cls, "class method", "ana_FunctionDef_toplevel", tree)
+    def syn_idx_FunctionDef(cls, ctx, tree, inc_idx):
+        raise NotSupportedError(cls, "class method", "ana_FunctionDef", tree)
 
-    def translate_FunctionDef_toplevel(self, ctx, tree):
-        raise NotSupportedError(self, "method", "translate_FunctionDef_toplevel", tree)
+    def translate_FunctionDef(self, ctx, tree):
+        raise NotSupportedError(self, "method", "translate_FunctionDef", tree)
+
+    # Name
 
     @classmethod 
     def syn_Name(cls, ctx, e):
@@ -423,6 +427,8 @@ class FnType(Type):
     def translate_Name(self, ctx, tree):
         raise NotSupportedError(self, "method", "translate_Name", tree)
 
+    # match expressions
+
     @classmethod
     def ana_match_expr(cls, ctx, e, ty):
         raise NotSupportedError(cls, "class method", "ana_match_expr", e)
@@ -430,6 +436,8 @@ class FnType(Type):
     @classmethod
     def syn_match_expr(cls, ctx, e):
         raise NotSupportedError(cls, "class method", "syn_match_expr", e)
+
+    # if expressions
 
     @classmethod
     def translate_match_expr(cls, ctx, e):
@@ -512,13 +520,10 @@ class Fn(object):
         ctx = self.ctx = Context(self)
         tycon(ascription).init_ctx(ctx)
         if isinstance(ascription, Type):
-            delegate = ty = ascription
-            delegate.ana_FunctionDef_toplevel(ctx, tree)
+            ctx.ana(tree, ascription)
         else: # IncompleteType
-            delegate = ascription.tycon
-            idx = delegate.syn_idx_FunctionDef_toplevel(ctx, tree, ascription)
-            ty = _construct_ty(delegate, idx)
-        tree.ty, tree.delegate = ty, delegate
+            ctx.ana_intro_inc(tree, ascription)
+        ty = tree.ty
         self.typechecked = True
         return ty
 
@@ -528,7 +533,7 @@ class Fn(object):
             return
         tree, ctx = self.tree, self.ctx
         ty = tree.ty
-        translation = ty.translate_FunctionDef_toplevel(ctx, tree)
+        translation = ty.translate_FunctionDef(ctx, tree)
         self.translation = translation
         self.compiled = True
         return translation
@@ -567,8 +572,6 @@ class Context(object):
         return '__typy_tmp_' + tmp + '_' + str(tmp_count) + '__'
 
     def ana(self, e, ty):
-        if not isinstance(e, ast.expr):
-            raise UsageError("Cannot analyze a non-expression.")
         if not isinstance(ty, Type):
             raise UsageError("Cannot analyze an expression against a non-type.")
         if _is_intro_form(e):
@@ -606,7 +609,7 @@ class Context(object):
 
     def ana_intro_inc(self, value, inc_ty):
         if not _is_intro_form(value):
-            raise UsageError("Expression is not an intro form.")
+            raise UsageError("Term is not an intro form.")
         if not isinstance(inc_ty, IncompleteType):
             raise UsageError("No incomplete type provided.")
         classname = value.__class__.__name__
@@ -756,9 +759,6 @@ class Context(object):
         return ty 
 
     def translate(self, tree):
-        if not isinstance(tree, ast.expr):
-            raise UsageError("Cannot translate non-expression.")
-
         if hasattr(tree, "is_ascription"):
             translation = self.translate(tree.value)
         elif hasattr(tree, "is_match_expr"):
@@ -791,7 +791,7 @@ class Context(object):
         return translation
 
     def ana_pat(self, pat, ty):
-        if _is_intro_form(pat):
+        if _is_pat_intro_form(pat):
             classname = pat.__class__.__name__
             if classname == "Name":
                 classname = "Name_constructor"
@@ -823,7 +823,7 @@ class Context(object):
         return bindings
 
     def translate_pat(self, pat, scrutinee_trans):
-        if _is_intro_form(pat):
+        if _is_pat_intro_form(pat):
             classname = pat.__class__.__name__
             if classname == "Name":
                 classname = "Name_constructor"
@@ -850,6 +850,7 @@ class Context(object):
         return condition, binding_translations
 
 _intro_forms = (
+    ast.FunctionDef, # only stmt intro form
     ast.Lambda, 
     ast.Dict, 
     ast.Set, 
@@ -866,6 +867,19 @@ def _is_intro_form(e):
             _is_Name_constructor(e) or
             _is_Unary_Name_constructor(e) or 
             _is_Call_constructor(e))
+
+_pat_intro_forms = (
+    ast.Dict,
+    ast.Set,
+    ast.Num,
+    ast.Str,
+    ast.List,
+    ast.Tuple)
+def _is_pat_intro_form(pat):
+    return (isinstance(pat, _pat_intro_forms) or
+            _is_Name_constructor(pat) or 
+            _is_Unary_Name_constructor(pat) or
+            _is_Call_constructor(pat))
 
 def _is_Name_constructor(e):
     return isinstance(e, ast.Name) and e.id[0].isupper()
