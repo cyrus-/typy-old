@@ -2908,7 +2908,7 @@ class TestConvertFC():
 from typy.std import string
 from typy.std._string import string_
 
-class TeststringingIntro:
+class TestStringIntro:
     @pytest.fixture
     def f(self):
         @fn
@@ -2924,7 +2924,7 @@ class TeststringingIntro:
             def f():
                 return 'test'""")
 
-class TeststringingIncIntro:
+class TestStringIncIntro:
     @pytest.fixture
     def f(self):
         @fn
@@ -2940,14 +2940,14 @@ class TeststringingIncIntro:
             def f():
                 return 'test'""")
 
-def test_stringing_num_Intro():
+def test_string_num_Intro():
     @fn
     def test(self):
         123 [: string]
     with pytest.raises(typy.TypeError):
         test.typecheck()
 
-class TeststringingAdd:
+class TestStringAdd:
     @pytest.fixture
     def f(self):
         @fn
@@ -2963,7 +2963,7 @@ class TeststringingAdd:
             def f():
                 return ('test' + 'test')""")
 
-class TeststringingCompare:
+class TestStringCompare:
     @pytest.fixture
     def f(self):
         @fn
@@ -3001,7 +3001,7 @@ class TeststringingCompare:
                 x6 = ('abc' not in 'def' not in 'ghi')
                 return x6""") 
 
-class TeststringingSubscript:
+class TestStringSubscript:
     @pytest.fixture
     def f(self):
         @fn
@@ -3415,4 +3415,226 @@ class TestTplSubscript():
         translation_eq(f, """
             def f(x):
                 return (x[0], x[1])""")
+
+#
+# finsum
+# 
+from typy.std import finsum
+
+def test_finsum_formation_no_variants():
+    assert finsum[()].idx == odict()
+
+def test_finsum_formation_one_variant_unit():
+    assert finsum['A'].idx == odict((
+        ('A', unit),
+    ))
+
+def test_finsum_formation_one_variant_num():
+    assert finsum['A': num].idx == odict((
+        ('A', num),
+    ))
+
+def test_finsum_formation_multi_variants():
+    assert finsum['A': num, 'B', 'C': ieee].idx == odict((
+        ('A', num),
+        ('B', unit),
+        ('C', ieee)
+    ))
+
+def test_finsum_equality():
+    assert finsum['A': num, 'B', 'C': ieee] == finsum['A': num, 'B', 'C': ieee]
+    assert finsum['A': num, 'B', 'C': ieee] == finsum['A': num, 'B': unit, 'C': ieee]
+
+def test_finsum_variant_ordering():
+    assert finsum['A': num, 'B'] != finsum['B', 'A': num]
+
+def test_finsum_bad_variants():
+    with pytest.raises(typy.TypeFormationError):
+        finsum['']
+    with pytest.raises(typy.TypeFormationError):
+        finsum['': num]
+    with pytest.raises(typy.TypeFormationError):
+        finsum[0]
+    with pytest.raises(typy.TypeFormationError):
+        finsum[0: num]
+    with pytest.raises(typy.TypeFormationError):
+        finsum['x']
+    with pytest.raises(typy.TypeFormationError):
+        finsum['x': num]
+    with pytest.raises(typy.TypeFormationError):
+        finsum['A': num, 'A': num]
+    with pytest.raises(typy.TypeFormationError):
+        finsum['A': 0]
+    with pytest.raises(typy.TypeFormationError):
+        finsum[...]
+    with pytest.raises(typy.TypeFormationError):
+        finsum['A': int : int]
+    with pytest.raises(typy.TypeFormationError):
+        finsum['A': int, ...]
+    
+class TestFinSumIntro():
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f():
+            X [: finsum['X']]
+            X [: finsum['X': unit]]
+            X(3) [: finsum['X': num]]
+        return f
+    
+    def test_type(self, f):
+        assert f.typecheck() == fn[(), finsum['X': num]]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f():
+                'X'
+                'X'
+                return ('X', 3)""")
+
+class TestFinSumMatch():
+    @pytest.fixture
+    def f(self):
+        @fn
+        def f(x, y):
+            {x : finsum['X'], y : finsum['Y' : num]} >> num
+            X = x
+            match[x]
+            with X: x
+            let [Y(z)] = y
+            match[y]
+            with Y(3): 3
+            with Y(z): z
+        return f
+
+    def test_type(self, f):
+        assert f.typecheck() == fn[finsum['X'], finsum['Y' : num], num]
+
+    def test_translation(self, f):
+        translation_eq(f, """
+            def f(x, y):
+                __typy_let_scrutinee__ = x
+                if (__typy_let_scrutinee__ == 'X'):
+                    pass
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                __typy_match_scrutinee__ = x
+                if (__typy_match_scrutinee__ == 'X'):
+                    x
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                __typy_let_scrutinee__ = y
+                if ((__typy_let_scrutinee__[0] == 'Y') and True):
+                    z = __typy_let_scrutinee__[1]
+                else:
+                    raise __builtin__.Exception('Match failure.')
+                __typy_match_scrutinee__ = y
+                if ((__typy_match_scrutinee__[0] == 'Y') and (__typy_match_scrutinee__[1] == 3)):
+                    return 3
+                elif ((__typy_match_scrutinee__[0] == 'Y') and True):
+                    __typy_id_z_1__ = __typy_match_scrutinee__[1]
+                    return __typy_id_z_1__
+                else:
+                    raise __builtin__.Exception('Match failure.')""")
+
+def test_finsum_bad_label():
+    @fn
+    def f():
+        A [: finsum['B']]
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_finsum_bad_label_2():
+    @fn
+    def f(x):
+        {x : num}
+        A(x) [: finsum['B': num]]
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_finsum_missing_payload():
+    @fn
+    def f():
+        A [: finsum['A': num]]
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_finsum_bad_args_1():
+    @fn
+    def f(x):
+        {x : num}
+        A(*x) [: finsum['A': num]]
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_finsum_bad_args_2():
+    @fn
+    def f(x):
+        {x : num}
+        A(**x) [: finsum['A': num]]
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_finsum_bad_args_3():
+    @fn
+    def f(x):
+        {x : num}
+        A(x=x) [: finsum['A': num]]
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_finsum_match_bad_label():
+    @fn
+    def f(x):
+        {x : finsum['B']}
+        match[x]
+        with A: x
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_finsum_match_bad_label_2():
+    @fn
+    def f(x):
+        {x : finsum['B': num]}
+        match[x]
+        with A(x): x
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_finsum_match_missing_payload():
+    @fn
+    def f(x):
+        {x : finsum['A': num]}
+        match[x]
+        with A: x
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_finsum_match_bad_args_1():
+    @fn
+    def f(x):
+        {x : finsum['A': num]}
+        match[x]
+        with A(*x): x
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_finsum_match_bad_args_2():
+    @fn
+    def f(x):
+        {x : finsum['A': num]}
+        match[x]
+        with A(**x): x
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
+def test_finsum_match_bad_args_3():
+    @fn
+    def f(x):
+        {x : finsum['A': num]}
+        match[x]
+        with A(x=x): x
+    with pytest.raises(typy.TypeError):
+        f.typecheck()
+
 

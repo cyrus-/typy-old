@@ -813,9 +813,11 @@ class Context(object):
         elif isinstance(pat, ast.Name):
             id = pat.id
             if id == "_":
-                bindings = {}
+                bindings = odict()
             else:
-                bindings = {id : ty}
+                bindings = odict((
+                    (id, ty),
+                ))
         else:
             raise TypeError("Invalid pattern form", pat)
         pat.bindings = bindings
@@ -882,7 +884,10 @@ def _is_pat_intro_form(pat):
             _is_Call_constructor(pat))
 
 def _is_Name_constructor(e):
-    return isinstance(e, ast.Name) and e.id[0].isupper()
+    return isinstance(e, ast.Name) and _is_Name_constructor_id(e.id)
+
+def _is_Name_constructor_id(id):
+    return id != "" and id[0].isupper()
 
 def _is_Unary_Name_constructor(e):
     return (isinstance(e, ast.UnaryOp) and 

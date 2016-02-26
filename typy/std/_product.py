@@ -147,7 +147,9 @@ class tpl(typy.Type):
             idx_mapping.append(i)
         arg_translation = ast.Tuple(elts=elt_translation)
 
-        return ast.copy_location(_labeled_translation(idx_mapping, arg_translation), e)
+        return ast.copy_location(
+            _labeled_translation(idx_mapping, arg_translation), 
+            e)
 
     def ana_pat_Dict(self, ctx, pat):
         keys, values = pat.keys, pat.values
@@ -265,7 +267,9 @@ class tpl(typy.Type):
             idx_mapping.append(n)
         arg_translation = ast.Tuple(elts=elt_translation)
 
-        return ast.copy_location(_labeled_translation(idx_mapping, arg_translation), e)
+        return ast.copy_location(_labeled_translation(idx_mapping, 
+                                                      arg_translation), 
+                                 e)
 
     def ana_pat_Call_constructor(self, ctx, pat):
         id = pat.func.id
@@ -431,6 +435,9 @@ def _normalize_tuple_idx(idx):
         elif isinstance(component, slice):
             label = component.start
             ty = component.stop
+            if component.step is not None:
+                raise typy.TypeFormationError(
+                    "Invalid tuple component: " + str(label))
         elif isinstance(component, tuple):
             if len(component) != 2:
                 raise typy.TypeFormationError(
