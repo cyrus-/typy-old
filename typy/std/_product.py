@@ -2,8 +2,6 @@
 import ast 
 
 import six
-import ordereddict
-_odict = ordereddict.OrderedDict
 
 import typy
 import typy.util
@@ -18,7 +16,7 @@ import _boolean
 class tpl(typy.Type):
     @classmethod
     def init_idx(cls, idx):
-        return _odict(_normalize_tuple_idx(idx)) 
+        return typy.util.odict(_normalize_tuple_idx(idx)) 
 
     @classmethod
     def init_inc_idx(cls, inc_idx):
@@ -28,13 +26,27 @@ class tpl(typy.Type):
             raise typy.TypeFormationError(
                 "Incomplete tuple type must have Ellipsis index.")
 
-    def __str__(self):
+    def anon_to_str(self):
         idx = self.idx
         return (
             "tpl[" + 
-            (str.join(", ", _idx_to_str(idx)) if len(idx) > 0 else "()") + 
+            (str.join(", ", self._idx_to_str())
+             if len(idx) > 0 
+             else "()") + 
             "]"
         )
+
+    def _idx_to_str(self):
+        idx = self.idx
+        str_label_seen = False
+        for i, (label, ty) in enumerate(idx.iteritems()):
+            if i == label:
+                if not str_label_seen:
+                    yield str(ty)
+                    continue
+            else:
+                str_label_seen = True
+            yield repr(label) + " : " + str(ty)
 
     def ana_Tuple(self, ctx, e):
         elts = e.elts
@@ -73,7 +85,7 @@ class tpl(typy.Type):
             raise typy.TypeError(
                 "Too many components in tpl pattern.", elts[n_idx])
         
-        bindings = _odict()
+        bindings = typy.util.odict()
         n_bindings = 0
         for elt, ty in zip(elts, idx.itervalues()):
             elt_bindings = ctx.ana_pat(elt, ty)
@@ -91,7 +103,7 @@ class tpl(typy.Type):
         elts = pat.elts
         idx = self.idx
         conditions = []
-        binding_translations = _odict()
+        binding_translations = typy.util.odict()
         for n, (elt, ty) in enumerate(zip(elts, idx.itervalues())):
             elt_scrutinee_trans = astx.make_Subscript_Num_Index(
                 scrutinee_trans_copy,
@@ -161,7 +173,7 @@ class tpl(typy.Type):
             raise typy.TypeError("Too many elements in pattern.", keys[n_idx])
 
         used_labels = set()
-        bindings = _odict()
+        bindings = typy.util.odict()
         n_bindings = 0 
         for key, value in zip(keys, values):
             label = _read_label(key)
@@ -189,7 +201,7 @@ class tpl(typy.Type):
         keys, values = pat.keys, pat.values
         idx = self.idx
         conditions = []
-        binding_translations = _odict()
+        binding_translations = typy.util.odict()
         for key, value in zip(keys, values):
             label = key.label
             n = typy.util.odict_idx_of(idx, label)
@@ -284,7 +296,7 @@ class tpl(typy.Type):
         keywords = pat.keywords
         idx = self.idx
 
-        bindings = _odict()
+        bindings = typy.util.odict()
         n_bindings = 0
         
         for i, arg in enumerate(args):
@@ -322,7 +334,7 @@ class tpl(typy.Type):
         args, keywords = pat.args, pat.keywords
         idx = self.idx
         conditions = []
-        binding_translations = _odict()
+        binding_translations = typy.util.odict()
         for i, arg in enumerate(args):
             n = typy.util.odict_idx_of(idx, i)
             elt_scrutinee_trans = astx.make_Subscript_Num_Index(
@@ -446,7 +458,7 @@ def _normalize_tuple_idx(idx):
             ty = component[1]
         else:
             raise typy.TypeFormationError(
-                "Invalid component definition.")
+                "Invalid component definition: " + str(component))
 
         if isinstance(label, six.string_types):
             if len(label) == 0:
@@ -469,17 +481,6 @@ def _normalize_tuple_idx(idx):
                 "Component labeled " + label + " has invalid type specification.")
 
         yield (label, ty)
-
-def _idx_to_str(idx):
-    str_label_seen = False
-    for i, (label, ty) in enumerate(idx.iteritems()):
-        if i == label:
-            if not str_label_seen:
-                yield str(ty)
-                continue
-        else:
-            str_label_seen = True
-        yield repr(label) + " : " + str(ty)
 
 def _syn_idx_Tuple(cls, ctx, elts):
     for i, elt in enumerate(elts):

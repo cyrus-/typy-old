@@ -1,9 +1,6 @@
 """typy functions"""
 import ast
 
-import ordereddict
-_odict = ordereddict.OrderedDict
-
 import typy
 import typy.util 
 import typy.util.astx as astx
@@ -73,6 +70,14 @@ class fn(typy.FnType):
             return_type = idx[-1]
             idx = (arg_types, return_type)
         return idx
+
+    def anon_to_str(self):
+        arg_types, return_type = self.idx
+        return "fn[" + str.join(", ", (
+            str(ty) 
+            for ty in reversed(
+                typy.util.tpl_cons(return_type, reversed(arg_types)))
+        )) + "]"
 
     @classmethod
     def preprocess_FunctionDef_toplevel(cls, fn, tree): 

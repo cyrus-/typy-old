@@ -47,6 +47,15 @@ def contains_ellipsis(idx):
                 return True
     return False 
 
+# 
+# odict
+# 
+
+import ordereddict
+odict = ordereddict.OrderedDict 
+# may use a different library later, so only use typy.util.odict, 
+# not ordereddict.OrderedDict directly
+
 def odict_idx_of(od, key):
     for idx, k in enumerate(od.iterkeys()):
         if k == key:

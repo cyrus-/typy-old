@@ -1,19 +1,14 @@
 """typy string types"""
 import ast 
 
-import ordereddict
-_OD = ordereddict.OrderedDict
-
 import typy
 import typy.util
 import typy.util.astx as astx
-import _boolean as _boolean
-import _numeric as _numeric
+
+import _boolean
+import _numeric
 
 class string_(typy.Type):
-    def __str__(self):
-        return "string"
-
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
@@ -26,6 +21,9 @@ class string_(typy.Type):
             raise typy.TypeFormationError("Incomplete index of float_ type must be () or Ellipsis.")
         return inc_idx
 
+    def anon_to_str(self):
+        return "string"
+
     def ana_Str(self, ctx, e):
         return # all string literals are ok
 
@@ -37,7 +35,7 @@ class string_(typy.Type):
         return astx.copy_node(e)
 
     def ana_pat_Str(self, ctx, pat):
-        return _OD()
+        return typy.util.odict()
 
     def translate_pat_Str(self, ctx, pat, scrutinee_trans):
         scrutinee_trans_copy = astx.copy_node(scrutinee_trans)
@@ -46,7 +44,7 @@ class string_(typy.Type):
             left=scrutinee_trans_copy,
             ops=[ast.Eq()],
             comparators=[pat_copy])
-        return (condition, _OD())
+        return (condition, typy.util.odict())
 
     def syn_BinOp(self, ctx, e):
         op = e.op

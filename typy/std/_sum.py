@@ -2,10 +2,9 @@
 import ast
 
 import six
-import ordereddict
-_odict = ordereddict.OrderedDict
 
 import typy
+import typy.util
 
 import _product
 
@@ -31,7 +30,7 @@ class finsum(typy.Type):
     def _normalize_user_idx(cls, provided_idx):
         if not isinstance(provided_idx, tuple):
             provided_idx = (provided_idx,)
-        idx = _odict()
+        idx = typy.util.odict()
         for item in provided_idx:
             if isinstance(item, six.string_types):
                 lbl, ty = (item, _product.unit)
@@ -61,6 +60,13 @@ class finsum(typy.Type):
     def init_inc_idx(cls, inc_idx):
         raise typy.TypeFormationError("finsum types cannot be incomplete.")
 
+    def anon_to_str(self):
+        return "finsum[" + str.join(", ", (
+            "'" + lbl + (
+                ("': " + str(ty)) if ty != _product.unit else "'")
+            for lbl, ty in self.idx.iteritems()
+        )) + "]"
+
     def ana_Name_constructor(self, ctx, e):
         idx = self.idx
         lbl = e.id
@@ -86,7 +92,7 @@ class finsum(typy.Type):
         if ty != _product.unit:
             raise typy.TypeError(
                 "Label has non-unit type but no payload pattern was applied: " + lbl, pat)
-        return _odict()
+        return typy.util.odict()
 
     def translate_Name_constructor(self, ctx, e):
         lbl = e.id
@@ -98,7 +104,7 @@ class finsum(typy.Type):
             left=scrutinee_trans,
             ops=[ast.Eq()],
             comparators=[ast.Str(s=lbl)])
-        return condition, _odict()
+        return condition, typy.util.odict()
     
     def ana_Call_constructor(self, ctx, e):
         if e.starargs is not None:

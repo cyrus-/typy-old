@@ -3,8 +3,7 @@ import pytest
 
 import typy
 from typy.std import *
-
-from utils import *
+from typy.util.testing import *
 
 # pattern matching basics
 class TestVariablePatternAna:

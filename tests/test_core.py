@@ -6,7 +6,8 @@ To run:
 import pytest
 import ast
 
-from typy import Type, TypeFormationError, tycon, is_tycon, IncompleteType, FnType, Fn, StaticEnv
+from typy import (Type, TypeFormationError, tycon, is_tycon, 
+                  IncompleteType, FnType, Fn, StaticEnv)
 
 # Test type construction and index validation
 
@@ -30,7 +31,7 @@ def test_unit_construction_bad_idx():
         unit_[0]
 
 def test_unit_construction_direct():
-    with pytest.raises(TypeFormationError):
+    with pytest.raises(TypeError):
         unit_(())
 
 def test_unit_eq():

@@ -1,16 +1,11 @@
 """Python booleans"""
 import ast
 
-import ordereddict
-_OD = ordereddict.OrderedDict
-
 import typy
+import typy.util
 import typy.util.astx as astx
 
 class boolean_(typy.Type):
-    def __str__(self):
-        return "boolean"
-
     @classmethod
     def init_idx(cls, idx):
         if idx != ():
@@ -23,6 +18,9 @@ class boolean_(typy.Type):
             raise typy.TypeFormationError(
                 "Incomplete index of boolean type must be () or Ellipsis.")
         return inc_idx
+
+    def anon_to_str(self):
+        return "boolean"
 
     def ana_Name_constructor(self, ctx, e):
         id = e.id
@@ -92,14 +90,14 @@ class boolean_(typy.Type):
         id = pat.id
         if id != "True" and id != "False":
             raise typy.TypeError("Boolean values only match 'True' and 'False'")
-        return _OD()
+        return typy.odict()
 
     def translate_pat_Name_constructor(self, ctx, pat, scrutinee):
         id = pat.id
         if id == "True":
-            return (scrutinee, _OD())
+            return (scrutinee, typy.odict())
         elif id == "False":
-            return (ast.UnaryOp(op=ast.Not(), operand=scrutinee), _OD())
+            return (ast.UnaryOp(op=ast.Not(), operand=scrutinee), typy.odict())
 
 boolean = boolean_[()]
 

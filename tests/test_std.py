@@ -3,7 +3,7 @@ import ast
 
 import pytest
 
-from utils import * 
+from typy.util.testing import translation_eq
 
 import typy
 from typy.std import *
@@ -3064,8 +3064,7 @@ class TestStringSubscript:
 #
 
 from typy.std import tpl
-import ordereddict
-odict = ordereddict.OrderedDict
+odict = typy.util.odict
 
 def test_tpl_formation_unit():
     assert isinstance(tpl[()], typy.Type)
@@ -3637,4 +3636,93 @@ def test_finsum_match_bad_args_3():
     with pytest.raises(typy.TypeError):
         f.typecheck()
 
+# 
+# _equirec
+# 
+
+class TestEquirecNum:
+    @pytest.fixture
+    def ty(self):
+        return typy._construct_equirec_ty(num_, lambda t: (), "num")
+
+    def test_type_formation(self, ty):
+        assert isinstance(ty, typy.Type)
+    
+    def test_type_refl(self, ty):
+        assert ty == ty
+
+    def test_type_refl_non_syntactic(self, ty):
+        assert ty == typy._construct_equirec_ty(num_, lambda t: (), "num")
+
+    def test_type_equirecursive(self, ty):
+        assert ty == num
+
+    def test_to_str(self, ty):
+        assert str(ty) == "num"
+
+    def test_anon_to_str(self, ty):
+        assert ty.anon_to_str() == "num"
+
+class TestEquirecRightNestedPair:
+    @pytest.fixture
+    def ty(self):
+        return typy._construct_equirec_ty(tpl, lambda t: (num, t), "rnpair")
+
+    def test_type_formation(self, ty):
+        return isinstance(ty, typy.Type)
+
+    def test_type_refl(self, ty):
+        return ty == ty
+
+    def test_type_refl_non_syntactic(self, ty):
+        assert ty == typy._construct_equirec_ty(
+            tpl, lambda t: (num, t), "rnpair2") # notice that the shortnames don't matter
+
+    def test_type_equirecursive(self, ty):
+        assert ty == tpl[num, ty] # the magic of imperative programming!
+
+    def test_to_str(self, ty):
+        assert str(ty) == "rnpair"
+
+    def test_anon_to_str(self, ty):
+        assert ty.anon_to_str() == "tpl[num, rnpair]"
+
+def linkedlist(A):
+    return typy._construct_equirec_ty(
+        finsum,
+        lambda t: (
+            'Nil',
+            slice('Cons', tpl[num, t])
+        ),
+        'linkedlist(' + str(A) + ')')
+
+class TestEquirecNumList:
+    @pytest.fixture
+    def ty(self):
+        return linkedlist(num)
+
+    def test_type_formation(self, ty):
+        return isinstance(ty, typy.Type)
+
+    def test_type_refl(self, ty):
+        return ty == ty
+
+    def test_type_refl_non_syntactic(self, ty):
+        assert ty == linkedlist(num)
+
+    def test_type_equirecursive(self, ty):
+        assert ty == finsum[
+            'Nil',
+            'Cons': tpl[num, ty]]
+
+    def test_to_str(self, ty):
+        assert str(ty) == "linkedlist(num)"
+
+    def test_anon_to_str(self, ty):
+        assert (
+            (finsum[
+                'Nil',
+                'Cons': tpl[num, ty]])
+            .anon_to_str()
+            == "finsum['Nil', 'Cons': tpl[num, linkedlist(num)]]")
 

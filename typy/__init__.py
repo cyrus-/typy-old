@@ -59,13 +59,29 @@ class _TypeMetaclass(type): # here, type is Python's "type" builtin
         else: 
             return _construct_ty(self, idx)
 
-def _construct_incty(tycon, inc_idx):
+def _construct_incty(tycon, inc_idx, shortname=None):
     inc_idx = tycon.init_inc_idx(inc_idx)
-    return IncompleteType(tycon, inc_idx, from_construct_incty=True)
+    return IncompleteType(tycon, inc_idx, shortname, None, 
+                          from_construct_incty=True)
 
-def _construct_ty(tycon, idx):
+def _construct_ty(tycon, idx, shortname=None):
     idx = tycon.init_idx(idx)
-    return tycon(idx, from_construct_ty=True)
+    return tycon(idx, shortname, None, 
+                 from_construct_ty=True)
+
+def _construct_equirec_ty(tycon, equirec_idx_schema, shortname):
+    ty = tycon(None, shortname, equirec_idx_schema, 
+               from_construct_ty=True)
+    provided_idx_unfolded = equirec_idx_schema(ty)
+    ty.idx = tycon.init_idx(provided_idx_unfolded)
+    return ty
+
+def _construct_equirec_incty(tycon, equirec_idx_schema, shortname):
+    inc_ty = IncompleteType(tycon, None, equirec_idx_schema, 
+                            from_construct_incty=True)
+    provided_inc_idx_unfolded = equirec_idx_schema(inc_ty)
+    inc_ty.inc_idx = tycon.init_inc_idx(provided_inc_idx_unfolded)
+    return inc_ty
 
 @six.add_metaclass(_TypeMetaclass)
 class Type(object):
@@ -74,25 +90,56 @@ class Type(object):
     An typy type is an instance of Type.
     An typy tycon is a subclass of Type.
     """
-    def __init__(self, idx, from_construct_ty=False):
+    def __init__(self, idx, shortname, equirec_idx_schema, from_construct_ty=False):
         if not from_construct_ty:
             raise TypeFormationError(
                 "Types should not be constructed directly. Use tycon[idx].")
         self.idx = idx
+        self.shortname = shortname
+        self.equirec_idx_schema = equirec_idx_schema
 
     def __call__(self, f):
         raise TypeError("Non-FnType used as a top-level function decorator.")
 
     def __eq__(self, other):
-        return isinstance(other, Type) \
-            and tycon(self) is tycon(other) \
-            and self.idx == other.idx
+        if self is other:
+            return True
+        else:
+            if isinstance(other, Type):
+                tycon_self = tycon(self)
+                if tycon_self is tycon(other):
+                    self_equirec_idx_schema = self.equirec_idx_schema
+                    if self_equirec_idx_schema is None:
+                        return self.idx == other.idx
+                    else:
+                        other_equirec_idx_schema = other.equirec_idx_schema
+                        if other_equirec_idx_schema is None:
+                            return self.idx == other.idx
+                        else:
+                            self_idx = tycon_self.init_idx(self_equirec_idx_schema(self))
+                            other_idx = tycon_self.init_idx(other_equirec_idx_schema(self))
+                            return self_idx == other_idx
+                else:
+                    return False
+            else:
+                return False
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
     def __str__(self):
+        shortname = self.shortname
+        if self.shortname is not None:
+            return shortname
+        else:
+            return self.anon_to_str()
+
+    def anon_to_str(self):
         return str(self.__class__.__name__) + "[" + str(self.idx) + "]"
+
+    @classmethod
+    def anon_inc_to_str(cls, inc_idx):
+        return str(cls.__name__) + "[" + str(inc_idx) + "]"
 
     def __repr__(self):
         return self.__str__()
@@ -347,12 +394,15 @@ class IncompleteType(object):
     not typically be called directly):
         tycon[a, ..., b]
     """
-    def __init__(self, tycon, inc_idx, from_construct_incty=False):
+    def __init__(self, tycon, inc_idx, shortname, equirec_idx_schema, 
+                 from_construct_incty=False):
         if not from_construct_incty:
             raise TypeFormationError(
                 "Incomplete types should not be constructed directly. Use tycon[idx].")
         self.tycon = tycon
         self.inc_idx = inc_idx
+        self.shortname = shortname
+        self.equirec_idx_schema = equirec_idx_schema
 
     def __call__(self, f):
         if issubclass(self.tycon, FnType):
@@ -371,6 +421,16 @@ class IncompleteType(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __str__(self):
+        shortname = self.shortname
+        if shortname is not None:
+            return shortname
+        else:
+            return self.tycon.anon_inc_to_str(self.inc_idx)
+
+    def __repr__(self):
+        return self.__str__()
+
 def tycon(ty):
     """Returns the tycon of the provided type or incomplete type ."""
     if isinstance(ty, Type):
@@ -386,13 +446,17 @@ def is_tycon(x):
 
 class FnType(Type):
     """Base class for typy function types."""
-    def __new__(cls, idx_or_f, from_construct_ty=False):
+    def __new__(cls, idx_or_f, shortname=None, equirec_idx_schema=None,
+                from_construct_ty=False):
         # override __new__ to allow the class to be used as fn decorator
+        # at the top level
         if not from_construct_ty and inspect.isfunction(idx_or_f):
             (tree, static_env) = _reflect_func(idx_or_f)
             return Fn(tree, static_env, cls[...])
         else: 
-            return super(FnType, cls).__new__(cls, idx_or_f, from_construct_ty)
+            return super(FnType, cls).__new__(cls, idx_or_f, shortname, 
+                                              equirec_idx_schema,
+                                              from_construct_ty)
 
     def __call__(self, f):
         (tree, static_env) = _reflect_func(f)
