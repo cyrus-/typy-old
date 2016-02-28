@@ -47,6 +47,13 @@ def contains_ellipsis(idx):
                 return True
     return False 
 
+_py_fn_type = type(lambda x: x) # can use any function
+def is_py_fn(obj):
+    return isinstance(obj, _py_fn_type)
+
+def fn_argcount(obj):
+    return obj.func_code.co_argcount
+
 # 
 # odict
 # 
