@@ -1,63 +1,48 @@
 **typy**
 ========
-NOTE: Some of the statements below are false -- **WIP**!
+A programming language with a type system  in the ML (i.e. Standard ML, Caml) tradition, implemented as a library within Python.
 
-A statically typed functional programming language with a semantics in the ML tradition implemented as a library inside Python, using[1] Python's own syntax.
+NOTE: This is not even remotely ready to be released. Some of the statements below are not true, and may never be true. Don't get too excited/disappointed juuuust yet.
 
-[1] depending on your aesthetic preferences, this can also be pronounced "misusing"
-
-### Summary of Features
-
-If these words make you feel good, you'll probably like **typy**:
-* Local type and type parameter inference
+### Feature Summary
+Here are the three most powerful features of ``typy``:
 * Recursive datatypes
 * Nested pattern matching
-* A powerful ML-style module system (called the _component system_ in typy, to avoid conflicting with Python's existing use of the term "module")
-* Low-cost, disciplined interaction with Python (by treating Python values as values of a big ol' recursive datatype called ``dyn`` that you can pattern match over, and using type inference to determine whether you want a piece of syntax to have type `dyn` or to have some other type)
+* ML-style modules (called _**components**_ in typy, to avoid conflicting with Python's existing use of the term "module")
 
-If these words are only vaguely familiar to you, perhaps read on -- they sound more complicated now than they will ultimately seem to you, I'll bet. If these words are completely unfamiliar to you, the best thing to do would be to learn a language like Ocaml, Standard ML, Scala or Haskell (in decreasing order of similarity to typy) using some of the many wonderful resources out there -- if for no other reason than because, for the time being, there is no comparable introductory-level material for learning `typy`.
+``typy`` differs from most other ML dialects in a few ways, the most pervasive of which is that it has a _bidirectional type system_, in lieu of a Hindley-Milner-style type inference mechanism. There are several semantic reasons for this, which we will get to, as well as a tooling reason: it makes it easier for ``typy`` to provide you with clear and localized error messages.
 
-### Why Might I Want This?
+##### A who in the what now?
+If you're a Python programmer and the words above are approximately gibberish, that's great too -- I think ``typy`` is a unique vehicle for learning about them, and integrating the concepts they encompass gradually into your work and play, because:
+ * ``typy`` uses Python's syntax (and parser) without modification and adopts many of its syntactic conventions (while introducing a few novel ones that will look strange at first.)
+ * You can import and use existing Python libraries  exactly as you're used to using them (and, once you get the hang of things, also in a uniquely more disciplined way) -- Python values are available to ``typy`` components as values of a recursive type called ``dyn`` (that you can pattern match over, in addition to the usual operations). This is particularly important if you work or play in an area where Python has a lot of library support, like many scientific disciplines (e.g. ``scipy`` et al.)
 
-If you're currently a Python programmer:
- - In short, by working within a semantics that enforces a static type discipline, you'll end up making fewer mistakes, writing fewer checks/assertions/tests, and your programs will run faster (though they will take a bit longer to compile). You'll save time in the long run. 
- - You can continue using existing libraries, and it's not even inconvenient.
-
-If you're currently use/want to use a functional language like those I mentioned above:
- - Python has a lot of libraries that you don't have that may actually be really useful (e.g. numpy)
- - In my opinion, Python's syntax is a lot cleaner and less error-prone than Ocaml's.
- - typy is a fairly modern ML, and includes some conveniences that make it even easier to use than Ocaml/SML
+As for _why_ you should learn about these things? Much ink has been spilled on this topic. Here are some of my favorite arguments:
 
 ### Installation
-The easiest way to get it is off of PyPI, using pip:
-  
-    pip install typy
+The easiest way to get ``typy`` is from PyPI: ``pip install typy``. It only works in Python 2.7 at the moment (though support for 3.4(?)+ is planned).
 
-This is also how you should distribute libraries that use typy.
-
-**Requirements**: Python 2.7 at the moment (though support for 3.4(?)+ is planned).
-
-typy By Example
+Trees
 ===============
-
+OK an example.
 ```python
-from typy.std import ty, component, finsum
+from typy import component
 
 @component
 def Tree():
-    tree(+a) [type] = finsum[
-        Empty,
-        Node: (tree(+a), tree(+a)),
-        Leaf: +a
-    ]
-
-    def sum_over(t):
-        {tree(+a)} > +a
-        match[t]
+    # first, define a recursive sum type
+    numtree [type] = [Empty + Node(numtree, numtree) + Leaf(num)]
+    """the type of binary trees with numbers at the leaves"""
+    
+    # then a recursive function over values of that type
+    sum_leaves [: numtree > num]
+    """sums up all the leaves of the tree"""
+    def sum_leaves(tree):
+        match[tree]
         with Empty: 0
         with Node(left, right):
-            left_sum = sum_over(left)
-            right_sum = sum_over(right)
+            left_sum = sum_leaves(left)
+            right_sum = sum_leaves(right)
             left_sum + right_sum
         with Leaf(n): n
 ```
@@ -125,6 +110,105 @@ sig
     val sum_over : num tree -> num
 end
 ```
+
+
+Interaction with Python
+=======================
+Not the best example:
+
+```python
+import sys
+from typy.std import fn, dyn
+
+@fn
+def main(argv):
+	{argv : dyn}
+    match[argv]
+	with [str(_), str(name)] or [str(_), str(_), str(name)]: 
+		print("Hello, " + name + "!")
+    with [_]:
+		print("Hm, something went wrong.")
+
+main(sys.argv)
+```
+
+Hypothetical error message once I get dyn AND pattern matching exhaustiveness checking together:
+
+```
+Exception: typy.TyErr
+Lines 10-12.
+typy.TyErr: Pattern matching non-exhaustive.
+Here are some examples of patterns that are not matched:
+  
+    with None: _
+    with True or False: _
+    with 0 | 1 | 2 | int(_): _
+    with "" | "abc" | str(_): _
+    with () | (_,) | (_, _) | tuple(_): _
+    with {} | {_: _} | {_: _, _: _} | dict(_): _
+	with [] | [_] | list(_): _
+    with ast.Func[_ | _.func is ast.Name[_ | _.id is id], 
+                      match[_.args]]:
+        with []: _
+        with _: _
+
+This list is not exhaustive.
+```
+
+```python
+if isinstance(e, ast.Func) and isinstance(e.func, ast.Name):
+    id = e.func.id
+    if isinstance(e.func.args, []) and len(e.func.args) == 0:
+        _
+    else:
+        _
+```
+
+Differences Between Ocaml and typy
+==================================
+    Summary of Syntactic Differences
+    Equirecursive vs. Isorecursive Types
+        type [list(+a)] = finsum[
+            Nil,
+            Cons: (+a, list(+a))
+        ]
+        type [t(+a)] = finsum[
+            Nil,
+            Cons: (+a, list(+a))
+        ]
+        # Isorecursive: list(+a) and t(+a) are different types.
+        # Equirecursive: list(+a) and t(+a) are equal types.
+        # Infinite regress is prevented by forcing all 
+        # recursive type definitions to immediately apply a type
+        # operator, so definitions like this are not allowed:
+        type [list(+a)] = list(+a)
+
+        # types like this can be defined
+        type [t] = (num, t)
+
+        # no self-reference via binding
+        x [: t] = (0, x) # TyErr: x is unbound
+        
+        # you can do stuff like this, but you'll just get 
+        # an infinite loop
+        def f(x):
+            {num} > t
+            (x, f(x+1))
+        f(0) # = (0, f(1)) = (0, (1, f(2)) = ...
+
+        xrange [: coroutine[(num, num, num), num]]
+
+    Bidirectional Typing vs. Local Type Inference
+        Introductory Forms
+    Currying and Named Arguments
+    Components vs. Modules vs. Objects
+        Generative component functions
+        First-class modules (~ like 1ML)
+        Operations on values of abstract type
+        Subtyping
+
+Implementation
+==============
 
 Why Mightn't I Want This?
 -------------------------
