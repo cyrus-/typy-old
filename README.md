@@ -1,89 +1,135 @@
-**typy**
-========
-A programming language with a type system  in the ML (i.e. Standard ML, Caml) tradition, implemented as a library within Python.
+Tydy 
+============================
+Tydy (pronounced "tidy") is a statically typed, functional-first programming language (in the ML tradition). ``tydy`` (pronounced "tie dye") is an implementation of Tydy as a Python library.
 
-NOTE: This is not even remotely ready to be released. Some of the statements below are not true, and may never be true. Don't get too excited/disappointed juuuust yet.
+You can install ``tydy`` with ``pip install tydy``. Here is the obligatory "Hello, world!" program, which should be fairly self-explanatory:
 
-### Feature Summary
-Here are the three most powerful features of ``typy``:
-* Recursive datatypes
-* Nested pattern matching
-* ML-style modules (called _**components**_ in typy, to avoid conflicting with Python's existing use of the term "module")
+```python
+from tydy import module
 
-``typy`` differs from most other ML dialects in a few ways, the most pervasive of which is that it has a _bidirectional type system_, in lieu of a Hindley-Milner-style type inference mechanism. There are several semantic reasons for this, which we will get to, as well as a tooling reason: it makes it easier for ``typy`` to provide you with clear and localized error messages.
+@module
+def Main():
+    print("Hello, world!")
+```
+
+Put that into ``hello.py`` then run ``python hello.py`` at the shell to make sure everything installed correctly. This will print ``Hello, world!``.
+
+Let's look at a more idiomatic Tydy program.
+
+```python
+from tydy import interface, module
+
+@interface
+def IGreeting():
+    greeting [: string > string]
+    """Produces a greeting."""
+
+@module
+def Hello():
+	"""An implementation of IGreeting."""
+    _ [: IGreeting]
+
+    def greeting(name):
+        "Hello, " + name + "!"
+
+@module
+def Main():
+	print(Hello.greeting("tydy"))
+
+    # Static type errors:
+	# print(Hello.greetng("tydy"))
+	# print(greeting("tydy")) 
+    # print(Hello.greeting(42))
+```
+
+Here, we've defined:
+  - a Tydy interface, ``IGreeting`` 
+  - a Tydy module that implements that interface, ``Hello`` 
+  - and another Tydy module, ``Main``, that we are only evaluating for its effect, namely to print the result of applying the function ``Hello.greeting`` to the string ``"tydy"``
+
+Put this example into ``greet.py`` then run ``python greet.py`` at the shell to say hello.
+
+Here's what's happening: the definition of ``IGreeting``, together with the interface ascription ``_ [: IGreeting]`` (which can be pronounced "the present module implements the interface ``IGreeting``") compels ``Hello`` to define a value labeled ``greeting`` of type ``string > string``. This type classifies functions that take a ``string`` as input, and produce a ``string`` as output. 
+
+Notice that in the definition of ``Hello.greeting``, no type annotations were necessary -- the interface ascription is sufficient to determine what the type of ``name`` should be in the body of ``greeting``. Notice also that the body of ``greeting`` does not use the ``return`` keyword. The final term in the body of a function is the value that is returned. 
+
+You can see some of the mistakes that the Tydy type system catches, and that ``tydy`` helpfully reports, by uncommenting the lines at the end of the example above in turn. Notice in each case that although the lines in question appear after the well-typed print expression just discussed, nothing is printed when there is a type error. The checks are truly at compile-time (which happens to coincide with the top-level Python script's run-time in this mode of use of ``tydy``).
+
+#### More Features
+
+The example above is but the tip of the iceberg, of course. Like other functional languages in the ML tradition, Tydy allows you to:
+
+* Define **recursive datatypes**
+* Deconstruct values by **pattern matching**
+* Define **mutable reference cells, fields, arrays** and **stack assignables** for when you want to do some imperative programming
+* Package both **types** and **values** into modules
+  * Tydy interfaces behave like ML signatures, i.e. **interface checking is structural** (if a module statically quacks like an IDuck...)
+  * An interface can **selectively abstract away the identity of a type** defined in a module, which makes it possible to reason locally about internal invariants (see example below)
+  * Unlike most ML dialects, **modules are themselves values**
+
+If you're not familiar with some of these ideas, don't worry, you're not alone. For reasons that have little to do with their intrinsic value, they have been slow to make their way into major programming languages. Tydy is an effort to change that, because:
+ * Tydy adopts **Python's syntax** directly (although it creatively repurposes it at times, as you can see above!)
+ * **Every Python value is also a Tydy value**, of a type called ``dy`` (pronounced "dee"). You can pattern match over values of this type, in addition to all the usual Python operations. This means that **all Python libraries** are available to you.
+   * If you use ``tydy``, which is presently the only implementation of Tydy, then you can use any library that your Python run-time understands what to do with, including ones that use foreign functions (e.g. ``numpy`` etc.)
+   * This introduces absolutely no run-time overhead -- nothing is "boxed" or otherwise intercepted. You're as close to the metal as something running inside a Python run-time can be.
+
+Tydy diverges from other descendents of ML in how it approaches a few things as well. The most pervasive semantic difference is that it has an easy-to-understand _bidirectional type system_, in lieu of a Hindley-Milner-style type inference mechanism. We'll detail some of the powerful conveniences this enables later, but in short:
+ * **Type annotations are rarely needed** (mostly only at interface boundaries, which is good because that doubles as documentation)
+ * **Introductory forms** (e.g. string, number, list and set literals) **and elimination forms** (e.g. field projection) **are available at many types**. Indeed, this is a key part of why interfacing with Python libraries has little or no syntactic overhead. 
+   * This **includes abstract types** -- in particular:
+     * You can **access values that are known to be packaged alongside an abstract type using field projection syntax**. For example, ``n.succ.succ.to_num`` rather than ``AbsNat.to_num(AbsNat.succ(AbsNat.succ(n)))`` (see example below).
+     * You can also **pattern match over values of abstract type**, if its interface defines a mapping onto a suitable recursive datatype (also described below).
+ * ``tydy`` is able to report **clear, localized type errors** (no unification variables)
 
 ##### A who in the what now?
-If you're a Python programmer and the words above are approximately gibberish, that's great too -- I think ``typy`` is a unique vehicle for learning about them, and integrating the concepts they encompass gradually into your work and play, because:
- * ``typy`` uses Python's syntax (and parser) without modification and adopts many of its syntactic conventions (while introducing a few novel ones that will look strange at first.)
- * You can import and use existing Python libraries  exactly as you're used to using them (and, once you get the hang of things, also in a uniquely more disciplined way) -- Python values are available to ``typy`` components as values of a recursive type called ``dyn`` (that you can pattern match over, in addition to the usual operations). This is particularly important if you work or play in an area where Python has a lot of library support, like many scientific disciplines (e.g. ``scipy`` et al.)
+Tydy is still an emerging language, so for now, I'm going to assume that you're at least vaguely familiar with some of the things I just mentioned.
 
-As for _why_ you should learn about these things? Much ink has been spilled on this topic. Here are some of my favorite arguments:
+If you aren't, don't worry, I still like you and want you to like me. Hopefully, we'll be able to put together some truly introductory-level learning material using Tydy soon. But for now, I'll have to direct you to learning material on languages like Standard ML, OCaml, Scala or Haskell, in decreasing order of similarity to Tydy. Knowing at least one of these is a good idea in any case, even if you don't end up using Tydy, so it won't be for naught.
 
-### Installation
-The easiest way to get ``typy`` is from PyPI: ``pip install typy``. It only works in Python 2.7 at the moment (though support for 3.4(?)+ is planned).
 
 Trees
 ===============
-OK an example.
-```python
-from typy import component
+Alright, let's show off some of the fun features.
 
-@component
-def Tree():
-    # first, define a recursive sum type
-    numtree [type] = [Empty + Node(numtree, numtree) + Leaf(num)]
+```python
+from tydy import module
+
+@module
+def Example():
+    numtree == [Empty | Node(numtree * numtree) | Leaf(num)]
     """the type of binary trees with numbers at the leaves"""
     
-    # then a recursive function over values of that type
+    a_lil_tree [: numtree] = Node(Leaf(3), Node(Leaf(4), Leaf(5)))
+
     sum_leaves [: numtree > num]
-    """sums up all the leaves of the tree"""
     def sum_leaves(tree):
-        match[tree]
-        with Empty: 0
+        """sums up all the leaves of the tree"""
+        match(tree)
+		with Empty: 0
         with Node(left, right):
             left_sum = sum_leaves(left)
             right_sum = sum_leaves(right)
             left_sum + right_sum
         with Leaf(n): n
 ```
+The ``@module`` function annotation is where the magic starts. It's not, like, real magic though -- ``typy.module`` just uses Python's standard ``inspect`` and ``ast`` modules to retrieve and parse the source of the Python function it decorates, then throws the function itself into the garbage. It's body will never be evaluated. (Play with ``ast.dump(ast.parse(inspect.getsource(f)))`` if you're curious about what the syntax trees look like!) 
 
-Tree is a component that defines:
-    - a recursive type function, tree, that takes one 
-      type parameter, +a, returning a finite sum type
-      with three variants:
-          - a variant labeled Empty, with payload type unit
-          - a variant labeled Node, with payload of the tpl type 
-            (tree(+a), (tree(+a)). 
-          - a a variant labeled Leaf, with payload type +a
-    - a recursive function, sum_over, that takes one
-      argument of type tree(num), i.e. tree applied to num, 
-      returning a value of type num
-    - sum_over proceeds by structural pattern matching on the first 
-      argument, identified as t
-             - if t matches the pattern Empty, the match expression 
-             - if t matches the pattern Node(left, right), for any 
-               values of type tree(+a) bound to variables left and right,
-               the match expression returns the value of
-                    sum_over(left) + sum_over(right)
-             - if t matches the pattern Leaf(n), for any value of type
-               num bound to variable n, the match expression returns n
-             - the semantics guarantees that there are no other cases to
-               consider
+(TODO: more descriptions)
 
+Here is the same thing written in OCaml:
 ```ocaml
-module Tree = 
+module Example = 
 struct
-    type 'a tree = 
-        Empty
-        | Node of 'a tree * 'a tree 
-        | Leaf of 'a
+    type numtree = Empty | Node of numtree * numtree | Leaf of int
 
-    fun sum_over(t : int tree) : int = 
+	let a_lil_tree : numtree = Node(Leaf(3), Node(Leaf(4), Leaf(5)))
+
+    fun sum_leaves(t : numtree) : int = 
         match(t) with 
         | Empty -> 0
         | Node(left, right) -> 
-            let left_sum = sum_over left in 
-            let right_sum = sum_over right in 
+            let left_sum = sum_leaves left in 
+            let right_sum = sum_leaves right in 
             left_sum + right_sum
         | Leaf(n) -> n
 end
@@ -93,11 +139,11 @@ Interfaces are module types are signatures are structural object types with type
 ```python
 @interface
 def ITree():
-    tree(+a) [type] = finsum[
+    tree(+a) == finsum[
         Empty,
         Node: (tree(+a), tree(+a)),
         Leaf: +a]
-    sum_over [: tree(num) > num]
+    sum_leaves [: tree(num) > num]
 ```
 
 ```ocaml
@@ -107,7 +153,7 @@ sig
         Empty
       | Node of 'a tree * 'a tree
       | Leaf of 'a
-    val sum_over : num tree -> num
+    val sum_leaves : num tree -> num
 end
 ```
 
@@ -207,16 +253,6 @@ Differences Between Ocaml and typy
         Operations on values of abstract type
         Subtyping
 
-Implementation
-==============
-
-Why Mightn't I Want This?
--------------------------
-This library is not currently for you if:
-* You think you'll write a huge code base in `typy` before the contributors to this project get to the point where optimizing for compilation speed is an important priority (which, I mean, eventually, it will be).
-* You don't have any time to play with new technology that's not 100% mature.
-* If when your program goes wrong, bad things happen to good people, or good things happen to bad people.
-
 Contributors
 ============
 
@@ -227,3 +263,4 @@ License
 Copyright 2016 Cyrus Omar.
 
 typy is released under the permissive MIT License, requiring only attribution in derivative works. See LICENSE for full terms.
+
