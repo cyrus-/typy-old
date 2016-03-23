@@ -144,4 +144,4 @@ def test_incfnty_direct_decorator():
     assert isinstance(test, Fn)
     assert test.ascription == fn[...]
 
-# see standard library tests for remaining functionality
+# see tydy tests for remaining functionality
