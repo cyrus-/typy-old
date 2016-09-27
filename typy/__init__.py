@@ -207,7 +207,8 @@ class TypeMember(ComponentMember):
         self.ucon = ucon
 
     def check(self, ctx):
-        raise NotImplementedError()
+        ty = ctx.ana_ucon(self.ucon, self.k_asc)
+        ctx.push_ucon_binding(self.name, SingletonKind(ty))
 
     def translate(self, ctx): 
         pass
@@ -294,7 +295,7 @@ class UCon(object):
         if isinstance(expr, ast.Name):
             return UName(expr)
         elif isinstance(expr, ast.Subscript):
-            return UCanonicalTy(expr.target, expr.slice)
+            return UCanonicalTy(expr.value, expr.slice)
         else:
             return None
 
@@ -317,8 +318,8 @@ class CanonicalTy(Con):
         self.idx = idx
 
     @classmethod
-    def new(cls, fragment, idx_ast):
-        return cls(fragment, fragment.init_idx(idx_ast))
+    def new(cls, ctx, fragment, idx_ast):
+        return cls(fragment, fragment.init_idx(ctx, idx_ast))
 
 class ConVar(Con):
     def __init__(self, ctx, name_ast, uniq_id):
@@ -343,6 +344,10 @@ class TypeKind(Kind):
     def __str__(self):
         return "type"
 TypeKind = TypeKind()
+
+class SingletonKind(Kind):
+    def __init__(self, ty):
+        self.ty = ty
 
 #
 # Contexts
@@ -376,7 +381,8 @@ class Context(object):
                 static_val = self.static_env[id]
                 if issubclass(static_val, Fragment):
                     if k == TypeKind:
-                        return CanonicalTy.new(static_val, _astx.empty_tuple_ast)
+                        return CanonicalTy.new(self, static_val, 
+                                               _astx.empty_tuple_ast)
                     else:
                         raise KindError(
                             "Fragment '" + id + "' by itself can only have " + 
@@ -393,15 +399,15 @@ class Context(object):
                 raise KindError(
                     "Type expression '" + 
                     id + 
-                    "' is unbound.", ty_expr)
+                    "' is unbound.", ucon)
         elif isinstance(ucon, UCanonicalTy):
             # TODO test this branch
             fragment_ast = ucon.fragment_ast
             idx_ast = ucon.idx_ast
             static_env = self.static_env
             fragment = static_env.eval_expr_ast(fragment_ast)
-            if isinstance(fragment, Fragment):
-                return CanonicalTy.new(fragment, idx_ast)
+            if issubclass(fragment, Fragment):
+                return CanonicalTy.new(self, fragment, idx_ast)
             else:
                 raise KindError(
                     "Term did not evaluate to a fragment in static environment.",
@@ -410,9 +416,19 @@ class Context(object):
             raise KindError(
                 "Invalid type expression: " + repr(ucon), ucon)
 
+    def as_type(self, expr):
+        ucon = UCon.parse(expr)
+        return self.ana_ucon(ucon, TypeKind)
+
     def canonicalize(self, ty):
         if isinstance(ty, CanonicalTy): return ty
-        else: return None 
+        elif isinstance(ty, ConVar):
+            k = self.syn_ucon(ty)
+            if isinstance(k, TypeKind):
+                return ty
+            elif isinstance(k, SingletonKind):
+                return self.canonicalize(k.ty)
+        return None 
 
     def ana(self, e, ty):
         if _is_intro_form(e):
@@ -473,7 +489,7 @@ class Fragment(object):
         raise NotImplementedError()
 
     @classmethod
-    def init_idx(cls, idx_ast):
+    def init_idx(cls, ctx, idx_ast):
         raise FragmentError("Does not implement init_idx.", cls)
 
     @classmethod

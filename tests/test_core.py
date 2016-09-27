@@ -7,7 +7,7 @@ import pytest
 import ast
 
 import typy
-from typy.std import component, unit
+from typy.std import component, unit, record, string, py
 
 def test_unit_intro():
     @component
@@ -39,6 +39,44 @@ def test_unit_intro():
 
     # evaluation
     assert c._members[0].value == ()
+
+def test_gpce_paper_example_1():
+    # simplified to use string rather than string_in for now
+    @component
+    def Listing1():
+        Account [: type] = record[
+            name        : string,
+            account_num : string,
+            memo        : py
+        ]
+
+        test_acct [: Account] = {
+            name: "Harry Q. Bovik",
+            account_num: "00-1245678",
+            memo: { }
+        }
+
+    assert isinstance(c, typy.Component)
+
+    # parsing
+    assert isinstance(c._members, tuple)
+    assert len(c._members) == 2
+    
+    assert isinstance(c._members[0], typy.TypeMember)
+    assert c._members[0].name == "Account"
+    assert isinstance(c._members[0].uty, typy.UCanonicalTy)
+    assert isinstance(c._members[0].uty.fragment_ast, ast.Name)
+    assert isinstance(c._members[0].uty.idx_ast, ast.ExtSlice)
+
+    assert isinstance(c._members[1], typy.ValueMember)
+    assert c._members[1].name == "test_acct"
+    assert isinstance(c._members[1].uty, typy.UName)
+    assert c._members[1].uty.id == "Account"
+    assert isinstance(c._members[1].expr, ast.Dict)
+
+    # TODO checking
+    # TODO translation
+    # TODO evaluation
 
 def test_component_args():
     with pytest.raises(typy.ComponentFormationError):
