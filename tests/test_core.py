@@ -20,7 +20,7 @@ def test_unit_intro():
     assert isinstance(c._members, tuple)
     assert len(c._members) == 1
     assert isinstance(c._members[0], typy.ValueMember)
-    assert c._members[0].name == "x"
+    assert c._members[0].name.id == "x"
     assert isinstance(c._members[0].uty, typy.UName)
     assert isinstance(c._members[0].uty.name_ast, ast.Name)
     assert c._members[0].uty.id == "unit"
@@ -56,6 +56,7 @@ def test_gpce_paper_example_1():
             memo: { }
         }
 
+    c = Listing1
     assert isinstance(c, typy.Component)
 
     # parsing
@@ -63,13 +64,13 @@ def test_gpce_paper_example_1():
     assert len(c._members) == 2
     
     assert isinstance(c._members[0], typy.TypeMember)
-    assert c._members[0].name == "Account"
-    assert isinstance(c._members[0].uty, typy.UCanonicalTy)
-    assert isinstance(c._members[0].uty.fragment_ast, ast.Name)
-    assert isinstance(c._members[0].uty.idx_ast, ast.ExtSlice)
+    assert c._members[0].name.id == "Account"
+    assert isinstance(c._members[0].ucon, typy.UCanonicalTy)
+    assert isinstance(c._members[0].ucon.fragment_ast, ast.Name)
+    assert isinstance(c._members[0].ucon.idx_ast, ast.ExtSlice)
 
     assert isinstance(c._members[1], typy.ValueMember)
-    assert c._members[1].name == "test_acct"
+    assert c._members[1].name.id == "test_acct"
     assert isinstance(c._members[1].uty, typy.UName)
     assert c._members[1].uty.id == "Account"
     assert isinstance(c._members[1].expr, ast.Dict)

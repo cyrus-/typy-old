@@ -66,13 +66,14 @@ def deep_copy_node(node, *args, **kwargs):
     return new_node
 
 empty_tuple_ast = ast.Tuple(elts=[])
+load_ctx = ast.Load()
 
 def builtin_call(name, args):
     return ast.Call(
         func=ast.Attribute(
             value=ast.Name(
-                id='__builtin__', ctx=ast.Load()), 
-            attr=name, ctx=ast.Load()),
+                id='__builtin__', ctx=load_ctx), 
+            attr=name, ctx=load_ctx),
         args=args, 
         keywords=[], 
         starargs=None, 
@@ -86,7 +87,7 @@ def method_call(obj, method_name, args):
         func=ast.Attribute(
             value=obj,
             attr=method_name,
-            ctx=ast.Load()),
+            ctx=load_ctx),
         args=args,
         keywords=[],
         starargs=None,
@@ -123,15 +124,15 @@ def expr_Raise_Exception_string(message):
     return ast.Call(
         func=ast.Attribute(
             value=ast.GeneratorExp(
-                elt=ast.Name(id='_', ctx=ast.Load()),
+                elt=ast.Name(id='_', ctx=load_ctx),
                 generators=[
                     ast.comprehension(
                         target=ast.Name(id='_', ctx=ast.Store()),
                         iter=ast.Tuple(
                             elts=[], 
-                            ctx=ast.Load()), 
+                            ctx=load_ctx), 
                         ifs=[])]), 
-            attr='throw', ctx=ast.Load()),
+            attr='throw', ctx=load_ctx),
         args=[builtin_call('Exception', [ast.Str(s=message)])],
         keywords=[],
         starargs=None,
@@ -152,7 +153,7 @@ def make_Attribute(value, attr):
     return ast.Attribute(
         value=value,
         attr=attr,
-        ctx=ast.Load())
+        ctx=load_ctx)
 
 def make_Subscript_Num_Index(value, n):
     return ast.Subscript(
@@ -160,7 +161,7 @@ def make_Subscript_Num_Index(value, n):
         slice=ast.Index(
             value=ast.Num(n=n)
         ),
-        ctx=ast.Load())
+        ctx=load_ctx)
 
 def cond_vacuously_true(cond):
     if isinstance(cond, ast.Name) and cond.id == "True":

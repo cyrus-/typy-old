@@ -8,6 +8,11 @@ class TypyError(Exception):
     """Base class for typy errors."""
     pass
 
+class InternalError(TypyError):
+    """Raised when an internal invariant has been violated."""
+    def __init__(self, message):
+        TypyError.__init__(self, message)
+
 class UsageError(TypyError):
     """Raised by typy to indicate incorrect usage of the typy API."""
     def __init__(self, message):
@@ -114,7 +119,7 @@ class Component(object):
 
         def _process_target(target):
             if isinstance(target, ast.Name):
-                return target.id, None
+                return target, None
             elif isinstance(target, ast.Subscript):
                 result = _parse_ascription(target)
                 if result is None:
@@ -123,7 +128,7 @@ class Component(object):
                 else:
                     value, asc = result
                     if isinstance(value, ast.Name):
-                        return value.id, asc
+                        return value, asc
                     else:
                         raise ComponentFormationError(
                             "Invalid member name", target)
@@ -136,7 +141,7 @@ class Component(object):
         def _determine_exports():
             for member in _members:
                 if not isinstance(member, StmtMember):
-                    yield (member.name, member)
+                    yield (member.name.id, member)
         self._exports = dict(_determine_exports())
 
         self._parsed = True
@@ -359,34 +364,124 @@ import typy.util.astx as _astx
 class Context(object):
     def __init__(self, static_env):
         self.static_env = static_env
-        self.ty_vars = { } # map from id to (uniq_id, kind)
-        self.vars = { } # map from id to (uniq_id, con)
+        self.ty_ids = { } # map from id to ConVar
+        self.ty_vars = { } # map from uniq_id to kind 
+        self.exp_ids = { } # map from id to uniq_id
+        self.exp_vars = { } # map from uniq_id to ty
+        self.last_ty_var = 0
+        self.last_exp_var = 0
+
+    def push_ucon_binding(self, name_ast, k):
+        uniq_id = self.last_ty_var
+        self.ty_ids[name_ast.id] = ConVar(self, name_ast, uniq_id)
+        self.ty_vars[uniq_id] = k
+        uniq_id += 1
+
+    def is_kind(self, k):
+        if k == TypeKind: return True
+        elif isinstance(k, SingletonKind):
+            self.ana(k.ty, TypeKind)
+            return True
+        else:
+            raise UsageError("Invalid kind")
+    
+    def kind_eq(self, k1, k2):
+        if k1 is k2:
+            return True
+        elif isinstance(k1, SingletonKind) and isinstance(k2, SingletonKind):
+            return self.con_eq(k1.ty, k2.ty, TypeKind)
+        else:
+            return False
+
+    def subkind(self, k1, k2):
+        if self.kind_eq(k1, k2): 
+            return True
+        elif isinstance(k1, SingletonKind) and k2 == TypeKind:
+            return True
+        else:
+            return False
+
+    def syn_con(self, c):
+        if isinstance(c, ConVar):
+            uniq_id = c.uniq_id
+            try:
+                return self.ty_vars[uniq_id]
+            except KeyError:
+                raise KindError("Unbound type variable: " + c.name_ast.id,
+                                c)
+        elif isinstance(c, CanonicalTy):
+            return SingletonKind(c)
+        else:
+            raise UsageError("Invalid kind.")
+
+    def ana_con(self, c, k):
+        syn_k = self.syn_con(c)
+        if self.subkind(syn_k, k): return
+        else:
+            raise KindError(
+                "Kind mismatch. Expected: '" + str(k) + "'. Got: '" + str(syn_k) + "'.",
+                c)
+
+    def con_eq(self, c1, c2, k):
+        if c1 == c2:
+            return self.ana_con(c1, k)
+        elif k == TypeKind:
+            k1 = self.syn_con(c1)
+            if isinstance(k1, SingletonKind):
+                k2 = self.syn_con(c2)
+                if isinstance(k2, SingletonKind):
+                    return self.con_eq(k1.ty, k2.ty, k)
+                else:
+                    return self.con_eq(c2, k1.ty, k)
+            elif isinstance(k2, SingletonKind):
+                return self.con_eq(c1, k2.ty, k)
+            if isinstance(c1, CanonicalTy):
+                if isinstance(c2, CanonicalTy):
+                    return (c1.fragment == c2.fragment 
+                            and c1.fragment.idx_eq(self, c1.idx, c2.idx))
+                else:
+                    return False
+            else:
+                return False
+        elif isinstance(k, SingletonKind):
+            try:
+                return self.ana_con(c1, k) and self.ana_con(c2, k)
+            except KindError:
+                return False
+
+    def canonicalize(self, ty):
+        if isinstance(ty, CanonicalTy): return ty
+        elif isinstance(ty, ConVar):
+            k = self.syn_con(ty)
+            if k == TypeKind:
+                return ty
+            elif isinstance(k, SingletonKind):
+                return self.canonicalize(k.ty)
+            else:
+                raise UsageError("Invalid kind.")
+        else:
+            raise UsageError("Invalid construction.")
+
+    def syn_ucon(self, ucon):
+        raise NotImplementedError()
 
     def ana_ucon(self, ucon, k):
         if isinstance(ucon, UName):
             id = ucon.id
+            print(id)
             static_env = self.static_env
-            ty_vars = self.ty_vars
-            if id in ty_vars:
-                # TODO test this branch
-                (uniq_id, id_k) = ty_vars[id]
-                if id_k == k:
-                    return ConVar(self, ucon.name_ast, uniq_id) # unchanged
-                else:
-                    raise KindError(
-                        "Kind mismatch: expected '" + 
-                        repr(k) + "' but got '" + 
-                        repr(id_k) + "'", ucon)
+            ty_ids = self.ty_ids
+            if id in ty_ids:
+                convar = ty_ids[id]
+                self.ana_con(convar, k)
+                return convar
             elif id in static_env:
                 static_val = self.static_env[id]
                 if issubclass(static_val, Fragment):
-                    if k == TypeKind:
-                        return CanonicalTy.new(self, static_val, 
-                                               _astx.empty_tuple_ast)
-                    else:
-                        raise KindError(
-                            "Fragment '" + id + "' by itself can only have " + 
-                            "kind 'type'.", ucon)
+                    ty = CanonicalTy.new(self, static_val, 
+                                         _astx.empty_tuple_ast)
+                    self.ana_con(ty, k)
+                    return ty
                 else:
                     raise KindError(
                         "Type expression '" + 
@@ -401,13 +496,14 @@ class Context(object):
                     id + 
                     "' is unbound.", ucon)
         elif isinstance(ucon, UCanonicalTy):
-            # TODO test this branch
             fragment_ast = ucon.fragment_ast
             idx_ast = ucon.idx_ast
             static_env = self.static_env
             fragment = static_env.eval_expr_ast(fragment_ast)
             if issubclass(fragment, Fragment):
-                return CanonicalTy.new(self, fragment, idx_ast)
+                ty = CanonicalTy.new(self, fragment, idx_ast)
+                self.ana_con(ty, k)
+                return ty
             else:
                 raise KindError(
                     "Term did not evaluate to a fragment in static environment.",
@@ -419,16 +515,6 @@ class Context(object):
     def as_type(self, expr):
         ucon = UCon.parse(expr)
         return self.ana_ucon(ucon, TypeKind)
-
-    def canonicalize(self, ty):
-        if isinstance(ty, CanonicalTy): return ty
-        elif isinstance(ty, ConVar):
-            k = self.syn_ucon(ty)
-            if isinstance(k, TypeKind):
-                return ty
-            elif isinstance(k, SingletonKind):
-                return self.canonicalize(k.ty)
-        return None 
 
     def ana(self, e, ty):
         if _is_intro_form(e):
@@ -446,6 +532,7 @@ class Context(object):
             ana_method(self, e, idx)
             e.ty = canonical_ty
             e.delegate = fragment
+            e.delegate_idx = idx
             e.translation_method_name = "trans_" + classname
         else:
             raise NotImplementedError()
@@ -461,9 +548,10 @@ class Context(object):
 
     def trans(self, e):
         fragment = e.delegate
+        idx = e.delegate_idx
         translation_method_name = e.translation_method_name
         translation_method = getattr(fragment, translation_method_name)
-        translation = e.translation = translation_method(self, e)
+        translation = e.translation = translation_method(self, e, idx)
         return translation
 
 _intro_forms = (
@@ -493,10 +581,87 @@ class Fragment(object):
         raise FragmentError("Does not implement init_idx.", cls)
 
     @classmethod
-    def ana_Tuple(cls, ctx, e, idx):
-        raise FragmentError("Does not implement ana_Tuple.", cls)
+    def idx_eq(cls, ctx, idx1, idx2):
+        return idx1 == idx2
+
+    # intro forms
+    @classmethod
+    def ana_FunctionDef(cls, ctx, stmt, idx):
+        raise TyError("Does not support def literals.", cls)
+
+    @classmethod
+    def trans_FunctionDef(cls, ctx, stmt, idx):
+        raise FragmentError("Missing translation method: trans_FunctionDef.", cls)
+
+    @classmethod
+    def ana_Lambda(cls, ctx, e, idx):
+        raise TyError("Does not support lambda literals.", cls)
+
+    @classmethod
+    def trans_Lambda(cls, ctx, e, idx):
+        raise FragmentError("Missing translation method: trans_Lambda.", cls)
+
+    @classmethod
+    def ana_Dict(cls, ctx, e, idx):
+        raise TyError("Does not support dictionary literals.", cls)
+
+    @classmethod
+    def trans_Dict(cls, ctx, e, idx):
+        raise FragmentError("Missing translation method: trans_Dict.", cls)
+
+    @classmethod
+    def ana_Set(cls, ctx, e, idx):
+        raise TyError("Does not support set literals.", cls)
+
+    @classmethod
+    def trans_Set(cls, ctx, e, idx):
+        raise FragmentError("Missing translation method: trans_Set.", cls)
+
+    @classmethod
+    def ana_Num(cls, ctx, e, idx):
+        raise TyError("Does not support number literals.", cls)
+
+    @classmethod
+    def trans_Num(cls, ctx, e, idx):
+        raise FragmentError("Missing translation method: trans_Num.", cls)
+
+    @classmethod
+    def ana_Str(cls, ctx, e, idx):
+        raise TyError("Does not support string literals.", cls)
+
+    @classmethod
+    def trans_Str(cls, ctx, e, idx):
+        raise FragmentError("Missing translation method: trans_Str.", cls)
+
+    @classmethod # TODO what are these
+    def ana_Bytes(cls, ctx, e, idx):
+        raise TyError("Does not support byte literals.", cls)
+
+    @classmethod
+    def trans_Bytes(cls, ctx, e, idx):
+        raise FragmentError("Missing translation method: trans_Bytes.", cls)
+
+    @classmethod # TODO what are these
+    def ana_NameConstant(cls, ctx, e, idx):
+        raise TyError("Does not support name constant literals.", cls)
+
+    @classmethod
+    def trans_NameConstant(cls, ctx, e, idx):
+        raise FragmentError("Missing translation method: trans_NameConstant.", cls)
+
+    @classmethod
+    def ana_List(cls, ctx, e, idx):
+        raise TyError("Does not support list literals.", cls)
     
     @classmethod
-    def trans_Tuple(cls, ctx, e):
-        raise FragmentError("Does not implement trans_Tuple.", cls)
+    def trans_List(cls, ctx, e, idx):
+        raise FragmentError("Missing translation method: trans_List.", cls)
+
+    @classmethod
+    def ana_Tuple(cls, ctx, e, idx):
+        raise TyError("Does not support tuple literals.", cls)
+    
+    @classmethod
+    def trans_Tuple(cls, ctx, e, idx):
+        raise FragmentError("Missing translation method: trans_Tuple.", cls)
 

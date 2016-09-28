@@ -23,7 +23,7 @@ class unit(Fragment):
                 "Tuple must be empty to be a unit value.", e)
 
     @classmethod
-    def trans_Tuple(cls, ctx, e):
+    def trans_Tuple(cls, ctx, e, idx):
         return astx.copy_node(e)
 
     # TODO pattern matching
@@ -58,8 +58,31 @@ class record(Fragment):
             raise typy.TypeValidationError(
                 "Invalid record specification.", idx_ast)
 
-    # TODO ana_Dict
-    # TODO trans_Dict
+    @classmethod
+    def ana_Dict(cls, ctx, e, idx):
+        for lbl, value in zip(e.keys, e.values):
+            if isinstance(lbl, ast.Name):
+                id = lbl.id
+                if id in idx: ctx.ana(value, idx[id])
+                else:
+                    raise TyError("Invalid label: " + id, lbl)
+            else:
+                raise TyError("Label is not a name.", lbl)
+        
+        if len(idx) != len(e.keys):
+            raise TyError("Labels do not match those in type.", e)
+
+    @classmethod
+    def trans_Dict(cls, ctx, e, idx):
+        ast_dict = dict((k.id, v)
+                        for k, v in zip(e.keys, e.values))
+        return ast.Tuple(
+            elts=list(
+                ctx.trans(ast_dict[lbl]) # TODO fix typo in paper
+                for lbl in sorted(idx.keys())
+            ),
+            lineno=e.lineno, col_offset=e.col_offset, ctx=astx.load_ctx)
+
     # TODO syn_Attribute
     # TODO trans_Attribute
     # TODO pattern matching
@@ -81,8 +104,14 @@ class string(Fragment):
     def init_idx(self, ctx, idx_ast):
         return _check_trivial_idx_ast(idx_ast)
 
-    # TODO ana_Str
-    # TODO trans_Str
+    @classmethod
+    def ana_Str(cls, ctx, e, idx):
+        return
+
+    @classmethod
+    def trans_Str(cls, ctx, e, idx):
+        return astx.copy_node(e)
+
     # TODO decide which other operations are exposed
     # TODO pattern matching
     pass
@@ -126,6 +155,15 @@ class py(Fragment):
     def init_idx(cls, ctx, idx_ast):
         return _check_trivial_idx_ast(idx_ast)
     
+    @classmethod
+    def ana_Dict(cls, ctx, e, idx):
+        return
+
+    @classmethod
+    def trans_Dict(cls, ctx, e, idx):
+        # TODO: deep copy
+        return astx.copy_node(e)
+
     # TODO intro forms
     # TODO other operations
     # TODO pattern matching
