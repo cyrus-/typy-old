@@ -196,7 +196,6 @@ class ValueMember(ComponentMember):
         else:
             self.ty = ty = ctx.ana_ucon(uty, TypeKind)
             ctx.ana(self.expr, ty)
-            self.ty = ty
 
     def translate(self, ctx):
         ctx.trans(self.expr)
