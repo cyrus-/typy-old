@@ -25,8 +25,6 @@ def test_unit_intro():
     assert isinstance(c._members[0].uty.name_ast, ast.Name)
     assert c._members[0].uty.id == "unit"
     assert isinstance(c._members[0].expr, ast.Tuple)
-    assert len(c._exports) == 1
-    assert c._exports['x'] == c._members[0]
     
     # checking 
     assert isinstance(c._members[0].ty, typy.CanonicalTy)
@@ -46,7 +44,7 @@ class TestGPCEExamples:
         # simplified to use string rather than string_in for now
         @component
         def Listing1():
-            Account [: type] = record[
+            Account [type] = record[
                 name        : string,
                 account_num : string,
                 memo        : py

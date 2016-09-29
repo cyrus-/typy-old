@@ -105,45 +105,19 @@ class Component(object):
                     if len(targets) != 1:
                         raise ComponentFormationError(
                             "Too many assignment targets.", stmt)
-                    name, asc = _process_target(targets[0])
-                    k_asc = Kind.parse(asc)
-                    if k_asc is not None:
-                        # TODO test this branch
-                        ucon = UCon.parse(value)
-                        yield TypeMember(name, k_asc, ucon)
+                    target = targets[0]
+                    type_member = TypeMember.parse_Assign(target, value)
+                    if type_member is not None: yield type_member
                     else:
-                        uty = UCon.parse(asc)
-                        yield ValueMember(name, uty, value)
+                        value_member = ValueMember.parse_Assign(target, value)
+                        if value_member is not None: yield value_member
+                        else: 
+                            raise ComponentFormationError(
+                                "Invalid member definition.", stmt)
                 else:
                     yield StmtMember(stmt)
-
-        def _process_target(target):
-            if isinstance(target, ast.Name):
-                return target, None
-            elif isinstance(target, ast.Subscript):
-                result = _parse_ascription(target)
-                if result is None:
-                    raise ComponentFormationError(
-                        "Invalid member signature", target)
-                else:
-                    value, asc = result
-                    if isinstance(value, ast.Name):
-                        return value, asc
-                    else:
-                        raise ComponentFormationError(
-                            "Invalid member name", target)
-            else:
-                raise ComponentFormationError("Invalid member", target)
-
         self._members = _members = tuple(_parse_members())
         
-        # determine the exports
-        def _determine_exports():
-            for member in _members:
-                if not isinstance(member, StmtMember):
-                    yield (member.name.id, member)
-        self._exports = dict(_determine_exports())
-
         self._parsed = True
 
     def _check(self):
@@ -169,17 +143,37 @@ class Component(object):
             member.evaluate(self.ctx)
         self._evaluated = True
 
-def _parse_ascription(expr):
-    if isinstance(expr, ast.Subscript):
-        value, slice = expr.value, expr.slice
-        if isinstance(slice, ast.Slice):
-            lower, upper, step = slice.lower, slice.upper, slice.step
-            if lower is None and upper is not None and step is None:
-                return value, upper
-    return None
-
 class ComponentMember(object):
     """Base class for component members."""
+
+class TypeMember(ComponentMember):
+    """Type members."""
+    def __init__(self, name, ucon):
+        self.name = name
+        self.ucon = ucon
+
+    @classmethod
+    def parse_Assign(cls, target, value):
+        if isinstance(target, ast.Subscript):
+            target_value = target.value
+            if isinstance(target_value, ast.Name):
+                slice = target.slice
+                if isinstance(slice, ast.Index):
+                    slice_value = slice.value
+                    if isinstance(slice_value, ast.Name):
+                        if slice_value.id == "type":
+                            ucon = UCon.parse(value)
+                            return cls(target_value, ucon)
+
+    def check(self, ctx):
+        ty = self.ty = ctx.ana_ucon(self.ucon, TypeKind)
+        ctx.push_ucon_binding(self.name, SingletonKind(ty))
+
+    def translate(self, ctx): 
+        pass
+
+    def evaluate(self, ctx):
+        pass
 
 class ValueMember(ComponentMember):
     """Value members."""
@@ -187,6 +181,20 @@ class ValueMember(ComponentMember):
         self.name = name
         self.uty = uty
         self.expr = expr
+
+    @classmethod
+    def parse_Assign(cls, target, value):
+        if isinstance(target, ast.Subscript):
+            target_value = target.value
+            if isinstance(target_value, ast.Name):
+                slice = target.slice
+                if isinstance(slice, ast.Slice):
+                    lower, upper, step = slice.lower, slice.upper, slice.step
+                    if lower is None and upper is not None and step is None:
+                        uty = UCon.parse(upper)
+                        return cls(target_value, uty, value)
+        elif isinstance(target, ast.Name):
+            return cls(target, None, value)
 
     def check(self, ctx):
         uty = self.uty
@@ -202,23 +210,6 @@ class ValueMember(ComponentMember):
 
     def evaluate(self, ctx):
         self.value = ctx.static_env.eval_expr_ast(self.expr.translation)
-
-class TypeMember(ComponentMember):
-    """Type members."""
-    def __init__(self, name, k_asc, ucon):
-        self.name = name
-        self.k_asc = k_asc
-        self.ucon = ucon
-
-    def check(self, ctx):
-        ty = self.ty = ctx.ana_ucon(self.ucon, self.k_asc)
-        ctx.push_ucon_binding(self.name, SingletonKind(ty))
-
-    def translate(self, ctx): 
-        pass
-
-    def evaluate(self, ctx):
-        pass
 
 class StmtMember(ComponentMember):
     """Statement members (not exported)."""
