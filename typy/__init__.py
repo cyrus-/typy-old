@@ -212,7 +212,7 @@ class TypeMember(ComponentMember):
         self.ucon = ucon
 
     def check(self, ctx):
-        ty = ctx.ana_ucon(self.ucon, self.k_asc)
+        ty = self.ty = ctx.ana_ucon(self.ucon, self.k_asc)
         ctx.push_ucon_binding(self.name, SingletonKind(ty))
 
     def translate(self, ctx): 

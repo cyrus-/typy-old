@@ -52,7 +52,7 @@ def test_gpce_paper_example_1():
 
         test_acct [: Account] = {
             name: "Harry Q. Bovik",
-            account_num: "00-1245678",
+            account_num: "00-12345678",
             memo: { }
         }
 
@@ -75,9 +75,19 @@ def test_gpce_paper_example_1():
     assert c._members[1].uty.id == "Account"
     assert isinstance(c._members[1].expr, ast.Dict)
 
-    # TODO checking
-    # TODO translation
-    # TODO evaluation
+    # checking
+    assert isinstance(c._members[0].ty, typy.CanonicalTy)
+    assert c._members[0].ty.fragment == record
+    assert isinstance(c._members[0].ty.idx, dict)
+    assert c._members[0].ty.idx["name"].fragment == string
+    assert c._members[0].ty.idx["account_num"].fragment == string
+    assert c._members[0].ty.idx["memo"].fragment == py
+    
+    assert isinstance(c._members[1].ty, typy.ConVar)
+    assert c._members[1].ty.name_ast.id == "Account"
+
+    # translation and evaluation
+    assert c._members[1].value == ("00-12345678", { }, "Harry Q. Bovik")
 
 def test_component_args():
     with pytest.raises(typy.ComponentFormationError):
