@@ -174,4 +174,9 @@ def cond_vacuously_true(cond):
             return True
     return False
 
+def is_empty_args(args):
+    return (len(args.args) == 0 and 
+            args.vararg is None and 
+            len(args.kwonlyargs) == 0 and 
+            args.kwarg is None)
 

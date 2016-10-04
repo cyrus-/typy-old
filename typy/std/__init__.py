@@ -1,15 +1,10 @@
 """typy standard library"""
 import ast
+from collections import OrderedDict
 
+from .. import util as _util 
 from ..util import astx
-from .. import component, Fragment, TypeValidationError
-
-def _check_trivial_idx_ast(idx_ast):
-    if isinstance(idx_ast, ast.Tuple) and len(idx_ast.elts) == 0:
-        return ()
-    else:
-        raise TypeValidationError(
-            "unit type can only have trivial index.", idx_ast)
+from .. import component, Fragment, TypeValidationError, CanonicalTy
 
 class unit(Fragment):
     @classmethod
@@ -83,10 +78,24 @@ class record(Fragment):
             ),
             lineno=e.lineno, col_offset=e.col_offset, ctx=astx.load_ctx)
 
-    # TODO syn_Attribute
-    # TODO trans_Attribute
+    @classmethod
+    def syn_Attribute(cls, ctx, e, idx):
+        try:
+            return idx[e.attr]
+        except KeyError:
+            raise TyError("Invalid field label: " + e.attr, e)
+
+    @classmethod
+    def trans_Attribute(cls, ctx, e, idx):
+        pos = _util._seq_pos_of(e.attr, sorted(idx.keys()))
+        return ast.fix_missing_locations(ast.copy_location(
+            ast.Subscript(
+                value=ctx.trans(e.value),
+                slice=ast.Index(ast.Num(n=pos)),
+                ctx=e.ctx),
+            e))
+
     # TODO pattern matching
-    pass
 
 class tpl(Fragment):
     # TODO init_idx
@@ -112,9 +121,28 @@ class string(Fragment):
     def trans_Str(cls, ctx, e, idx):
         return astx.copy_node(e)
 
-    # TODO decide which other operations are exposed
+    @classmethod
+    def syn_BinOp(cls, ctx, e):
+        left, op, right = e.left, e.op, e.right
+        string_ty = CanonicalTy(cls, ())
+        if isinstance(op, ast.Add):
+            ctx.ana(left, string_ty)
+            ctx.ana(right, string_ty)
+            return string_ty
+        else:
+            raise TyError("Invalid string operator.", e)
+        # TODO decide which other operations are exposed
+
+    @classmethod
+    def trans_BinOp(cls, ctx, e):
+        return ast.copy_location(
+            ast.BinOp(
+                left=ctx.trans(e.left),
+                op=e.op,
+                right=ctx.trans(e.right)),
+        e)
+
     # TODO pattern matching
-    pass
 
 class num(Fragment):
     # TODO init_idx
@@ -145,10 +173,225 @@ class finsum(Fragment):
     pass
 
 class fn(Fragment):
-    # TODO init_idx
-    # TODO intro forms
-    # TODO call
-    pass
+    @classmethod
+    def init_idx(cls, ctx, idx_ast):
+        # TODO init_idx
+        raise NotImplementedError()
+
+    @classmethod
+    def syn_FunctionDef(cls, ctx, stmt):
+        # process decorators
+        decorator_list = stmt.decorator_list
+        if len(decorator_list) > 1:
+            raise TyError(
+                "fn does not support additional decorators.",
+                decorator_list[1])
+
+        # process args
+        arguments = stmt.args
+        if arguments.vararg is not None:
+            raise TyError(
+                "fn does not support varargs", arguments)
+        if len(arguments.kwonlyargs) > 0:
+            raise TyError(
+                "fn does not support kw only args", arguments)
+        if arguments.kwarg is not None:
+            raise TyError(
+                "fn does not support kw arg", arguments)
+        if len(arguments.defaults) > 0:
+            raise TyError(
+                "fn does not support defaults", arguments)
+        args = arguments.args
+        def _process_args():
+            for arg in args:
+                arg_id = arg.arg
+                arg_ann = arg.annotation
+                if arg_ann is None:
+                    raise TyError(
+                        "Missing argument type on " + arg_id,
+                        arg)
+                arg_ty = ctx.as_type(arg_ann)
+                # simulate a name for the error reporting system
+                name = ast.Name(id=arg_id, 
+                                lineno=arg.lineno, 
+                                col_offset=arg.col_offset)
+                yield (name, arg_ty)
+        arg_sig = stmt.arg_sig = OrderedDict(_process_args())
+
+        # TODO process return type annotation
+        
+        # push bindings
+        stmt.uniq_arg_sig = ctx.push_var_bindings(dict(arg_sig))
+
+        # TODO recursive functions
+
+        # process docstring
+        body = stmt.body
+        if (len(body) > 0 
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Str)):
+            proper_body = stmt.proper_body = body[1:]
+            docstring = stmt.docstring = body[0].value.s
+        else:
+            proper_body = stmt.proper_body = body
+            docstring = stmt.docstring = None
+
+        # make sure there is at least one remaining statement
+        if len(proper_body) == 0:
+            raise TyError(
+                "Must be at least one statement, "
+                "other than the docstring, in the body.",
+                stmt)
+
+        # check statements in proper_body
+        for stmt in proper_body:
+            ctx.check(stmt, cls)
+
+        # synthesize return type from last statement
+        last_stmt = proper_body[-1]
+        if isinstance(last_stmt, ast.Expr):
+            rty = last_stmt.value.ty
+        else:
+            raise TyError(
+                "Last statement must be an expression.", 
+                last_stmt)
+        
+        # bindings
+        ctx.pop_var_bindings()
+
+        # return canonical type
+        return CanonicalTy(fn, (arg_sig, rty))
+
+    # TODO ana_FunctionDef
+
+    @classmethod
+    def trans_FunctionDef(cls, ctx, stmt, id):
+        # translate arguments
+        arguments_tr = ast.arguments(
+            args= [
+                ast.arg(
+                    arg=stmt.uniq_arg_sig[arg.arg][0],
+                    annotation=None,
+                    lineno=arg.lineno,
+                    col_offset=arg.col_offset)
+                for arg in stmt.args.args
+            ],
+            vararg=None,
+            kwonlyargs=[],
+            kw_defaults=[],
+            kwarg=None,
+            defaults=[])
+
+        # translate body
+        body_tr = [
+            ctx.trans(stmt)
+            for stmt in stmt.proper_body
+        ]
+
+        # translate return
+        last_stmt = body_tr[-1]
+        body_tr[-1] = ast.copy_location(
+            ast.Return(value=last_stmt.value), 
+            last_stmt)
+
+        return [ast.copy_location(
+            ast.FunctionDef(
+                name=id,
+                args=arguments_tr,
+                body=body_tr,
+                decorator_list=[],
+                returns=None), 
+            stmt)]
+
+    # TODO lambdas
+
+    @classmethod
+    def syn_Call(cls, ctx, e, idx):
+        if len(e.keywords) != 0:
+            raise TyError("fn does not support keyword arguments.", e)
+
+        # check args
+        args = e.args
+        arg_sig, rty = idx
+        n_args = len(args)
+        n_args_reqd = len(arg_sig)
+        if n_args < n_args_reqd:
+            raise TyError("Too few arguments provided.", e)
+        elif n_args > n_args_reqd:
+            raise TyError("Too many arguments provided.", e)
+        for arg, arg_ty in zip(args, arg_sig.values()):
+            ctx.ana(arg, arg_ty)
+        
+        # return type
+        return rty
+
+    @classmethod
+    def trans_Call(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Call(
+                func=ctx.trans(e.func),
+                args=[
+                    ctx.trans(arg)
+                    for arg in e.args],
+                keywords=[]),
+            e)
+
+    @classmethod
+    def check_Assign(cls, ctx, stmt):
+        targets = stmt.targets
+        if len(targets) != 1:
+            # TODO support for multiple targets
+            raise TyError(
+                "Too many assignment targets.", targets[1])
+        target = targets[0]
+        pat, ann = cls._get_pat_and_ann(target)
+        if ann is not None:
+            ty = ctx.as_type(ann)
+            ctx.ana(stmt.value, ty)
+        else:
+            ty = ctx.syn(stmt.value)
+        bindings = stmt.bindings = ctx.ana_pat(pat, ty)
+        stmt.uniq_bindings = ctx.add_bindings(bindings)
+    
+    @staticmethod
+    def _get_pat_and_ann(target):
+        if isinstance(target, ast.Subscript):
+            subscript_target = target.target
+            slice = target.slice
+            if isinstance(slice, ast.Slice):
+                start, stop, step = slice.start, slice.stop, slice.step
+                if start is None and stop is not None and step is None:
+                    return (subscript_target, slice)
+        return target, None
+
+    @classmethod
+    def trans_Assign(cls, ctx, stmt):
+        assert len(stmt.bindings) == 1
+        target_name = tuple(stmt.bindings.keys())[0]
+        target_tr = ast.copy_location(
+            ast.Name(id=stmt.uniq_bindings[target_name.id][0],
+                     ctx=target_name.ctx),
+            target_name)
+        value = stmt.value
+        value_tr = ast.copy_location(
+            ctx.trans(value),
+            value)
+        return ast.copy_location(
+            ast.Assign(
+                targets=[target_tr],
+                value=value_tr),
+            stmt)
+
+    @classmethod
+    def check_Expr(self, ctx, stmt):
+        ctx.syn(stmt.value)
+
+    @classmethod
+    def trans_Expr(self, ctx, stmt):
+        return ast.copy_location(
+            ast.Expr(
+                value=ctx.trans(stmt.value)),
+            stmt)
 
 class py(Fragment):
     @classmethod
@@ -168,6 +411,13 @@ class py(Fragment):
     # TODO other operations
     # TODO pattern matching
     pass
+
+def _check_trivial_idx_ast(idx_ast):
+    if isinstance(idx_ast, ast.Tuple) and len(idx_ast.elts) == 0:
+        return ()
+    else:
+        raise TypeValidationError(
+            "unit type can only have trivial index.", idx_ast)
 
 # Maybe not in the standard library?
 # TODO proto

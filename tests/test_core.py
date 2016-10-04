@@ -6,6 +6,8 @@ To run:
 import pytest
 import ast
 
+import astunparse
+
 import typy
 from typy.std import component, unit, record, string, py, fn, finsum, tpl
 
@@ -20,23 +22,19 @@ def test_unit_intro():
     assert isinstance(c._members, tuple)
     assert len(c._members) == 1
     assert isinstance(c._members[0], typy.ValueMember)
-    assert c._members[0].name.id == "x"
+    assert c._members[0].id == "x"
     assert isinstance(c._members[0].uty, typy.UName)
     assert isinstance(c._members[0].uty.name_ast, ast.Name)
     assert c._members[0].uty.id == "unit"
-    assert isinstance(c._members[0].expr, ast.Tuple)
+    assert isinstance(c._members[0].tree, ast.Assign)
     
     # checking 
     assert isinstance(c._members[0].ty, typy.CanonicalTy)
     assert c._members[0].ty.fragment == unit
     assert c._members[0].ty.idx == ()
 
-    # translation
-    assert isinstance(c._members[0].expr.translation, ast.Tuple)
-    assert len(c._members[0].expr.translation.elts) == 0
-
     # evaluation
-    assert c._members[0].value == ()
+    assert c._module.x == ()
 
 class TestGPCEExamples:
     @pytest.fixture
@@ -67,16 +65,15 @@ class TestGPCEExamples:
         assert len(c._members) == 2
         
         assert isinstance(c._members[0], typy.TypeMember)
-        assert c._members[0].name.id == "Account"
+        assert c._members[0].id == "Account"
         assert isinstance(c._members[0].ucon, typy.UCanonicalTy)
         assert isinstance(c._members[0].ucon.fragment_ast, ast.Name)
         assert isinstance(c._members[0].ucon.idx_ast, ast.ExtSlice)
 
         assert isinstance(c._members[1], typy.ValueMember)
-        assert c._members[1].name.id == "test_acct"
+        assert c._members[1].id == "test_acct"
         assert isinstance(c._members[1].uty, typy.UName)
         assert c._members[1].uty.id == "Account"
-        assert isinstance(c._members[1].expr, ast.Dict)
 
         # checking
         assert isinstance(c._members[0].ty, typy.CanonicalTy)
@@ -86,11 +83,12 @@ class TestGPCEExamples:
         assert c._members[0].ty.idx["account_num"].fragment == string
         assert c._members[0].ty.idx["memo"].fragment == py
         
-        assert isinstance(c._members[1].ty, typy.ConVar)
-        assert c._members[1].ty.name_ast.id == "Account"
+        assert isinstance(c._members[1].ty, typy.CanonicalTy)
+        assert c._members[1].ty.fragment == record
 
         # translation and evaluation
-        assert c._members[1].value == ("00-12345678", { }, "Harry Q. Bovik")
+        assert c._module.test_acct == ("00-12345678", 
+                                       { }, "Harry Q. Bovik")
 
     @pytest.fixture
     def Listing4(self, Listing1):
@@ -99,31 +97,26 @@ class TestGPCEExamples:
             @fn
             def hello(account : Listing1.Account):
                 """Computes a string greeting."""
-                name = account.name
+                name = account.name 
                 "Hello, " + name
-
-            print(hello(Listing1.test_acct))
+            
+            hello_test = hello(Listing1.test_acct)
         
         return Listing4
-        # TODO fn value member parsing
-        # TODO def literal logic
-        # TODO fn init_idx
-        # TODO fn literal logic
-        # TODO let binding in fn
-        # TODO cross component references (type-level)
-        # TODO cross component references (value-level)
-        # TODO attribute logic
-        # TODO record attribute logic
-        # TODO binop logic
-        # TODO string concatenation
-        # TODO print
-        # TODO fn call logic
+
+    def test_Listing4(self, Listing4):
+        c = Listing4
+        assert isinstance(c, typy.Component)
+        
+        assert c._module.hello(("00-12345678", 
+                               { }, "Harry Q. Bovik")) == "Hello, Harry Q. Bovik"
+        assert c._module.hello_test == "Hello, Harry Q. Bovik"
 
     @pytest.fixture
     def Listing7(self):
         @component
         def Listing7():
-            tree(+a) [: type] = finsum[
+            tree(+a) [type] = finsum[
                 Empty,
                 Node(tree(+a), tree(+a)),
                 Leaf(+a)
@@ -151,14 +144,14 @@ class TestGPCEExamples:
     def Listing9(self, Listing1):
         @component
         def Listing9():
-            Transaction [: type] = proto[
+            Transaction [type] = proto[
                 amount : decimal,
                 incr   : fn[Transaction, unit],
                 proto  : Listing1.Account
             ]
 
-            @Transaction
-            def test_trans():
+            test_trans [: Transaction]
+            def _():
                 amount = 36.50
                 def incr(self): self.amount += 1
                 proto = Listing1.test_account
