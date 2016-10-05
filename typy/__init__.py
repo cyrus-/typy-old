@@ -463,6 +463,8 @@ import typy.util.astx as _astx
 class Context(object):
     def __init__(self, static_env):
         self.static_env = static_env
+        self.default_fragments = []
+
         # stack of maps from id to TyExprVar
         self.ty_ids = _util.DictStack([{}])         
         # stack of maps from uniq_id to kind 
@@ -737,7 +739,9 @@ class Context(object):
             fragment = self.static_env.eval_expr_ast(asc)
             if not issubclass(fragment, Fragment):
                 raise TyError("First decorator is not a fragment.", asc)
+            self.default_fragments.append(fragment)
             ty = fragment.syn_FunctionDef(self, tree)
+            self.default_fragments.pop()
             self.ana_ty_expr(ty, TypeKind)
             delegate = fragment
             delegate_idx = None
@@ -801,17 +805,23 @@ class Context(object):
         tree.translation_method_name = translation_method_name
         return ty
 
-    def check(self, stmt, default_fragment):
+    def check(self, stmt):
         if isinstance(stmt, ast.Assign):
-            delegate = default_fragment
+            try:
+                delegate = self.default_fragments[-1]
+            except IndexError:
+                raise TyError("No default fragment.", stmt)
             delegate_idx = None
             translation_method_name = "trans_Assign"
-            default_fragment.check_Assign(self, stmt)
+            delegate.check_Assign(self, stmt)
         elif isinstance(stmt, ast.Expr):
-            delegate = default_fragment
+            try:
+                delegate = self.default_fragments[-1]
+            except IndexError:
+                raise TyError("No default fragment.", stmt)
             delegate_idx = None
             translation_method_name = "trans_Expr"
-            default_fragment.check_Expr(self, stmt)
+            delegate.check_Expr(self, stmt)
         else:
             raise NotImplementedError(stmt.__class__.__name__)
         stmt.delegate = delegate

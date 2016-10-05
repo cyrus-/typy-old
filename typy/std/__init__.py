@@ -247,7 +247,7 @@ class fn(Fragment):
 
         # check statements in proper_body
         for stmt in proper_body:
-            ctx.check(stmt, cls)
+            ctx.check(stmt)
 
         # synthesize return type from last statement
         last_stmt = proper_body[-1]
