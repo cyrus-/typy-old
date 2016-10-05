@@ -52,6 +52,8 @@ class record(Fragment):
         else:
             raise typy.TypeValidationError(
                 "Invalid record specification.", idx_ast)
+    
+    # TODO idx_eq
 
     @classmethod
     def ana_Dict(cls, ctx, e, idx):
@@ -62,7 +64,7 @@ class record(Fragment):
                 else:
                     raise TyError("Invalid label: " + id, lbl)
             else:
-                raise TyError("Label is not a name.", lbl)
+                raise TyError("Label is not an identifier.", lbl)
         
         if len(idx) != len(e.keys):
             raise TyError("Labels do not match those in type.", e)
@@ -71,12 +73,12 @@ class record(Fragment):
     def trans_Dict(cls, ctx, e, idx):
         ast_dict = dict((k.id, v)
                         for k, v in zip(e.keys, e.values))
-        return ast.Tuple(
+        return ast.copy_location(ast.Tuple(
             elts=list(
-                ctx.trans(ast_dict[lbl]) # TODO fix typo in paper
+                ctx.trans(ast_dict[lbl])
                 for lbl in sorted(idx.keys())
-            ),
-            lineno=e.lineno, col_offset=e.col_offset, ctx=astx.load_ctx)
+            ), ctx=ast.Load()), 
+            e)
 
     @classmethod
     def syn_Attribute(cls, ctx, e, idx):

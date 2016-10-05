@@ -126,6 +126,7 @@ class Component(object):
         self._members = members = tuple(_parse_members())
 
         # determine exports
+        # TODO separate type and value exports?
         exports = self._exports = { }
         for member in members:
             if isinstance(member, (ValueMember, TypeMember)):
@@ -143,7 +144,6 @@ class Component(object):
         ctx = self.ctx = Context(self.static_env)
         for member in self._members:
             member.check(ctx)
-        # TODO determine signature
         self._checked = True
 
     def _translate(self):
@@ -180,10 +180,10 @@ class ComponentMember(object):
 
 class TypeMember(ComponentMember):
     """Type members."""
-    def __init__(self, id, name_ast, ucon, tree):
+    def __init__(self, id, name_ast, uty_expr, tree):
         self.id = id
         self.name_ast = name_ast
-        self.ucon = ucon
+        self.uty_expr = uty_expr
         self.tree = tree
 
     @classmethod
@@ -201,14 +201,14 @@ class TypeMember(ComponentMember):
                     slice_value = slice.value
                     if isinstance(slice_value, ast.Name):
                         if slice_value.id == "type":
-                            ucon = UCon.parse(value)
+                            uty_expr = UTyExpr.parse(value)
                             return cls(target_value.id, 
-                                       target_value, ucon, stmt)
+                                       target_value, uty_expr, stmt)
 
     def check(self, ctx):
-        ty = self.ty = ctx.ana_ucon(self.ucon, TypeKind)
+        ty = self.ty = ctx.ana_uty_expr(self.uty_expr, TypeKind)
         kind = self.kind = SingletonKind(ctx.canonicalize(ty))
-        ctx.push_ucon_binding(self.name_ast, kind)
+        ctx.push_uty_expr_binding(self.name_ast, kind)
 
     def translate(self, ctx): 
         return []
@@ -234,7 +234,7 @@ class ValueMember(ComponentMember):
                 if isinstance(slice, ast.Slice):
                     lower, upper, step = slice.lower, slice.upper, slice.step
                     if lower is None and upper is not None and step is None:
-                        uty = UCon.parse(upper)
+                        uty = UTyExpr.parse(upper)
                         return cls(target_value.id, uty, stmt)
         elif isinstance(target, ast.Name):
             return cls(target.id, None, stmt)
@@ -251,13 +251,13 @@ class ValueMember(ComponentMember):
             if uty is None:
                 ty = ctx.syn(value)
             else:
-                ty = ctx.ana_ucon(uty, TypeKind)
+                ty = ctx.ana_uty_expr(uty, TypeKind)
                 ctx.ana(value, ty)
         elif isinstance(tree, ast.FunctionDef):
             if uty is None:
                 ty = ctx.syn(tree)
             else:
-                ty = ctx.ana_ucon(uty, TypeKind)
+                ty = ctx.ana_uty_expr(uty, TypeKind)
                 ctx.ana(tree, ty)
         else:
             raise InternalError("Invalid form.")
@@ -358,12 +358,12 @@ class StaticEnv(object):
 import astunparse
 
 #
-# Type Constructions
+# Type Expressions
 #
 
 import ast
 
-class UCon(object):
+class UTyExpr(object):
     @classmethod
     def parse(cls, expr):
         if isinstance(expr, ast.Name):
@@ -375,25 +375,25 @@ class UCon(object):
         else:
             raise TypeFormationError("Malformed type.", expr)
 
-class UCanonicalTy(UCon):
+class UCanonicalTy(UTyExpr):
     def __init__(self, fragment_ast, idx_ast):
         self.fragment_ast = fragment_ast
         self.idx_ast = idx_ast
 
-class UName(UCon):
+class UName(UTyExpr):
     def __init__(self, name_ast):
         self.name_ast = name_ast
         self.id = name_ast.id
 
-class UProjection(UCon):
+class UProjection(UTyExpr):
     def __init__(self, path_ast, lbl):
         self.path_ast = path_ast
         self.lbl = lbl
 
-class Con(object):
+class TyExpr(object):
     pass
 
-class CanonicalTy(Con):
+class CanonicalTy(TyExpr):
     def __init__(self, fragment, idx):
         self.fragment = fragment
         self.idx = idx
@@ -408,14 +408,14 @@ class CanonicalTy(Con):
     def __repr__(self):
         return self.__str__()
 
-class ConVar(Con):
+class TyExprVar(TyExpr):
     def __init__(self, ctx, name_ast, uniq_id):
         self.ctx = ctx
         self.name_ast = name_ast
         self.uniq_id = uniq_id
 
     def __eq__(self, other):
-        if isinstance(other, ConVar):
+        if isinstance(other, TyExprVar):
             return self.ctx == other.ctx and self.uniq_id == other.uniq_id
         else:
             return False
@@ -423,7 +423,7 @@ class ConVar(Con):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-class ConPrj(Con):
+class TyExprPrj(TyExpr):
     def __init__(self, path_ast, path_val, lbl):
         self.path_ast = path_ast
         self.path_val = path_val
@@ -463,7 +463,7 @@ import typy.util.astx as _astx
 class Context(object):
     def __init__(self, static_env):
         self.static_env = static_env
-        # stack of maps from id to ConVar
+        # stack of maps from id to TyExprVar
         self.ty_ids = _util.DictStack([{}])         
         # stack of maps from uniq_id to kind 
         self.ty_vars = _util.DictStack([{}]) 
@@ -474,9 +474,9 @@ class Context(object):
         self.last_ty_var = 0
         self.last_exp_var = 0
 
-    def push_ucon_binding(self, name_ast, k):
+    def push_uty_expr_binding(self, name_ast, k):
         uniq_id = "_ty_" + name_ast.id + "_" + str(self.last_ty_var)
-        self.ty_ids[name_ast.id] = ConVar(self, name_ast, uniq_id)
+        self.ty_ids[name_ast.id] = TyExprVar(self, name_ast, uniq_id)
         self.ty_vars[uniq_id] = k
         self.last_ty_var += 1
 
@@ -536,8 +536,8 @@ class Context(object):
         else:
             return False
 
-    def syn_con(self, c):
-        if isinstance(c, ConVar):
+    def syn_ty_expr(self, c):
+        if isinstance(c, TyExprVar):
             uniq_id = c.uniq_id
             try:
                 return self.ty_vars[uniq_id]
@@ -547,15 +547,15 @@ class Context(object):
                     c)
         elif isinstance(c, CanonicalTy):
             return SingletonKind(c)
-        elif isinstance(c, ConPrj):
+        elif isinstance(c, TyExprPrj):
             path_val = c.path_val
             lbl = c.lbl
             return path_val.kind_of(lbl)
         else:
             raise UsageError("Invalid construction.")
 
-    def ana_con(self, c, k):
-        syn_k = self.syn_con(c)
+    def ana_ty_expr(self, c, k):
+        syn_k = self.syn_ty_expr(c)
         if self.subkind(syn_k, k): return
         else:
             raise KindError(
@@ -565,7 +565,7 @@ class Context(object):
 
     def con_eq(self, c1, c2, k):
         if c1 == c2:
-            self.ana_con(c1, k) 
+            self.ana_ty_expr(c1, k) 
             return True
         elif k == TypeKind:
             if isinstance(c1, CanonicalTy):
@@ -578,7 +578,7 @@ class Context(object):
                 return self.con_eq(self.canonicalize(c1), c2, k)
         elif isinstance(k, SingletonKind):
             try:
-                return self.ana_con(c1, k) and self.ana_con(c2, k)
+                return self.ana_ty_expr(c1, k) and self.ana_ty_expr(c2, k)
             except KindError:
                 return False
         else:
@@ -586,8 +586,8 @@ class Context(object):
 
     def canonicalize(self, ty):
         if isinstance(ty, CanonicalTy): return ty
-        elif isinstance(ty, ConVar) or isinstance(ty, ConPrj):
-            k = self.syn_con(ty)
+        elif isinstance(ty, TyExprVar) or isinstance(ty, TyExprPrj):
+            k = self.syn_ty_expr(ty)
             if k == TypeKind:
                 return ty
             elif isinstance(k, SingletonKind):
@@ -597,21 +597,21 @@ class Context(object):
         else:
             raise UsageError("Invalid construction.")
 
-    def ana_ucon(self, ucon, k):
-        if isinstance(ucon, UName):
-            id = ucon.id
+    def ana_uty_expr(self, uty_expr, k):
+        if isinstance(uty_expr, UName):
+            id = uty_expr.id
             static_env = self.static_env
             ty_ids = self.ty_ids
             if id in ty_ids:
                 convar = ty_ids[id]
-                self.ana_con(convar, k)
+                self.ana_ty_expr(convar, k)
                 return convar
             elif id in static_env:
                 static_val = self.static_env[id]
                 if is_fragment(static_val):
                     ty = CanonicalTy.new(self, static_val, 
                                          _astx.empty_tuple_ast)
-                    self.ana_con(ty, k)
+                    self.ana_ty_expr(ty, k)
                     return ty
                 else:
                     raise KindError(
@@ -620,32 +620,32 @@ class Context(object):
                         "' is bound to static value '" + 
                         repr(static_val) + 
                         "', which is neither a fragment nor a " +
-                        "type expression.", ucon)
+                        "type expression.", uty_expr)
             else:
                 raise KindError(
                     "Type expression '" + 
                     id + 
-                    "' is unbound.", ucon)
-        elif isinstance(ucon, UCanonicalTy):
-            fragment_ast = ucon.fragment_ast
-            idx_ast = ucon.idx_ast
+                    "' is unbound.", uty_expr)
+        elif isinstance(uty_expr, UCanonicalTy):
+            fragment_ast = uty_expr.fragment_ast
+            idx_ast = uty_expr.idx_ast
             static_env = self.static_env
             fragment = static_env.eval_expr_ast(fragment_ast)
             if is_fragment(fragment):
                 ty = CanonicalTy.new(self, fragment, idx_ast)
-                self.ana_con(ty, k)
+                self.ana_ty_expr(ty, k)
                 return ty
             else:
                 raise KindError(
                     "Term did not evaluate to a fragment in "
                     "static environment.",
                     fragment_ast)
-        elif isinstance(ucon, UProjection):
-            path_ast, lbl = ucon.path_ast, ucon.lbl
+        elif isinstance(uty_expr, UProjection):
+            path_ast, lbl = uty_expr.path_ast, uty_expr.lbl
             path_val = self.static_env.eval_expr_ast(path_ast)
             if is_component(path_val):
-                con = ConPrj(path_ast, path_val, lbl)
-                self.ana_con(con, k)
+                con = TyExprPrj(path_ast, path_val, lbl)
+                self.ana_ty_expr(con, k)
                 return con
             else:
                 raise KindError(
@@ -654,11 +654,11 @@ class Context(object):
                     path_ast)
         else:
             raise KindError(
-                "Invalid type expression: " + repr(ucon), ucon)
+                "Invalid type expression: " + repr(uty_expr), uty_expr)
 
     def as_type(self, expr):
-        ucon = UCon.parse(expr)
-        return self.ana_ucon(ucon, TypeKind)
+        uty_expr = UTyExpr.parse(expr)
+        return self.ana_uty_expr(uty_expr, TypeKind)
 
     def ana(self, tree, ty):
         if _is_intro_form(tree):
@@ -738,7 +738,7 @@ class Context(object):
             if not issubclass(fragment, Fragment):
                 raise TyError("First decorator is not a fragment.", asc)
             ty = fragment.syn_FunctionDef(self, tree)
-            self.ana_con(ty, TypeKind)
+            self.ana_ty_expr(ty, TypeKind)
             delegate = fragment
             delegate_idx = None
             translation_method_name = None # TODO
@@ -988,7 +988,7 @@ class Fragment(object):
 
     @classmethod
     def trans_NameConstant(cls, ctx, e, idx):
-        raise FragmentError("Missing translation method: trans_NameConstant.", cls)
+        raise FragmentError("Missing translation method: trans_NameTyExprstant.", cls)
 
     @classmethod
     def ana_List(cls, ctx, e, idx):

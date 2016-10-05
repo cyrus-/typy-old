@@ -66,9 +66,9 @@ class TestGPCEExamples:
         
         assert isinstance(c._members[0], typy.TypeMember)
         assert c._members[0].id == "Account"
-        assert isinstance(c._members[0].ucon, typy.UCanonicalTy)
-        assert isinstance(c._members[0].ucon.fragment_ast, ast.Name)
-        assert isinstance(c._members[0].ucon.idx_ast, ast.ExtSlice)
+        assert isinstance(c._members[0].uty_expr, typy.UCanonicalTy)
+        assert isinstance(c._members[0].uty_expr.fragment_ast, ast.Name)
+        assert isinstance(c._members[0].uty_expr.idx_ast, ast.ExtSlice)
 
         assert isinstance(c._members[1], typy.ValueMember)
         assert c._members[1].id == "test_acct"
@@ -101,6 +101,7 @@ class TestGPCEExamples:
                 "Hello, " + name
             
             hello_test = hello(Listing1.test_acct)
+            # TODO print
         
         return Listing4
 
