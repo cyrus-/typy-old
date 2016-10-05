@@ -663,9 +663,29 @@ class Context(object):
         return self.ana_uty_expr(uty_expr, TypeKind)
 
     def ana(self, tree, ty):
+        # handle the case where neither left or right synthesize a type
+        if isinstance(tree, ast.BinOp):
+            left, right = tree.left, tree.right
+            try:
+                self.syn(left)
+            except:
+                try:
+                    self.syn(right)
+                except:
+                    ty = self.canonicalize(ty)
+                    delegate = ty.fragment
+                    delegate_idx = None
+
+                    # will get picked up by subsumption below
+                    tree.ty = delegate.syn_BinOp(self, tree)
+                    tree.delegate = delegate
+                    tree.delegate_idx = delegate_idx
+                    tree.translation_method_name = "trans_BinOp"
+
+        subsumed = False
         if _is_intro_form(tree):
-            canonical_ty = self.canonicalize(ty)
-            if canonical_ty is None:
+            ty = self.canonicalize(ty)
+            if ty is None:
                 raise TyError(
                     "Cannot analyze an intro form against non-canonical "
                     "type.",
@@ -673,15 +693,13 @@ class Context(object):
             tree.is_intro_form = True
             classname = tree.__class__.__name__
             ana_method_name = "ana_" + classname
-            fragment = canonical_ty.fragment
-            idx = canonical_ty.idx
-            ana_method = getattr(fragment, ana_method_name)
-            ana_method(self, tree, idx)
-            ty = canonical_ty
-            delegate = fragment
-            delegate_idx = idx
+            delegate = ty.fragment
+            delegate_idx = ty.idx
+            ana_method = getattr(delegate, ana_method_name)
+            ana_method(self, tree, delegate_idx)
             translation_method_name = "trans_" + classname
         else:
+            subsumed = True
             syn_ty = self.syn(tree)
             if self.con_eq(ty, syn_ty, TypeKind):
                 return
@@ -689,9 +707,11 @@ class Context(object):
                 raise TyError(
                     "Type inconsistency. Expected: " + str(ty) + 
                     ". Got: " + str(syn_ty) + ".", tree)
-        tree.delegate = delegate
-        tree.delegate_idx = delegate_idx
-        tree.translation_method_name = translation_method_name
+
+        if not subsumed:
+            tree.delegate = delegate
+            tree.delegate_idx = delegate_idx
+            tree.translation_method_name = translation_method_name
 
     def syn(self, tree):
         if hasattr(tree, "ty"): return tree.ty
