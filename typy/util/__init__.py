@@ -43,3 +43,8 @@ def _seq_pos_of(key, seq):
     for i, k in enumerate(seq):
         if key == k: return i
 
+def seq_cons(hd, tl):
+    yield hd
+    for x in tl:
+        yield x 
+

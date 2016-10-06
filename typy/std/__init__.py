@@ -4,7 +4,10 @@ from collections import OrderedDict
 
 from .. import util as _util 
 from ..util import astx
-from .. import component, Fragment, TypeValidationError, CanonicalTy
+from .._components import component
+from .._fragments import Fragment
+from .._ty_exprs import CanonicalTy
+from .._errors import TypeValidationError
 
 class unit(Fragment):
     @classmethod

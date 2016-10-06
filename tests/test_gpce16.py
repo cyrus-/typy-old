@@ -13,6 +13,7 @@ class TestGPCEExamples:
     @pytest.fixture
     def Listing1(self):
         # simplified to use string rather than string_in for now
+        # TODO string_in
         @component
         def Listing1():
             Account [type] = record[
@@ -37,26 +38,26 @@ class TestGPCEExamples:
         assert isinstance(c._members, tuple)
         assert len(c._members) == 2
         
-        assert isinstance(c._members[0], typy.TypeMember)
+        assert isinstance(c._members[0], typy._components.TypeMember)
         assert c._members[0].id == "Account"
-        assert isinstance(c._members[0].uty_expr, typy.UCanonicalTy)
+        assert isinstance(c._members[0].uty_expr, typy._ty_exprs.UCanonicalTy)
         assert isinstance(c._members[0].uty_expr.fragment_ast, ast.Name)
         assert isinstance(c._members[0].uty_expr.idx_ast, ast.ExtSlice)
 
-        assert isinstance(c._members[1], typy.ValueMember)
+        assert isinstance(c._members[1], typy._components.ValueMember)
         assert c._members[1].id == "test_acct"
-        assert isinstance(c._members[1].uty, typy.UName)
+        assert isinstance(c._members[1].uty, typy._ty_exprs.UName)
         assert c._members[1].uty.id == "Account"
 
         # checking
-        assert isinstance(c._members[0].ty, typy.CanonicalTy)
+        assert isinstance(c._members[0].ty, typy._ty_exprs.CanonicalTy)
         assert c._members[0].ty.fragment == record
         assert isinstance(c._members[0].ty.idx, dict)
         assert c._members[0].ty.idx["name"].fragment == string
         assert c._members[0].ty.idx["account_num"].fragment == string
         assert c._members[0].ty.idx["memo"].fragment == py
         
-        assert isinstance(c._members[1].ty, typy.CanonicalTy)
+        assert isinstance(c._members[1].ty, typy._ty_exprs.CanonicalTy)
         assert c._members[1].ty.fragment == record
 
         # translation and evaluation
