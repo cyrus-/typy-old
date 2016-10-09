@@ -8,8 +8,9 @@ from .util import astx as _astx
 from ._errors import ComponentFormationError, InternalError
 from ._fragments import Fragment
 from ._static_envs import StaticEnv
-from ._contexts import _unsupported_stmt_forms, Context
+from ._contexts import Context
 from ._ty_exprs import UTyExpr, UName, TypeKind, SingletonKind
+from . import _terms
 
 __all__ = ('component', 'Component', 'is_component')
 
@@ -236,7 +237,7 @@ class StmtMember(ComponentMember):
 
     @classmethod
     def parse_stmt(cls, stmt):
-        if not isinstance(stmt, _unsupported_stmt_forms):
+        if not isinstance(stmt, _terms.unsupported_stmt_forms):
             if not isinstance(stmt, (ast.Return, ast.Delete)):
                 return cls(stmt)
 

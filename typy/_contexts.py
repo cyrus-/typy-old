@@ -7,6 +7,7 @@ from ._ty_exprs import TyExprVar, TypeKind, SingletonKind, UName, CanonicalTy, U
 from ._errors import UsageError, KindError, TyError
 from ._fragments import is_fragment, Fragment
 from . import _components
+from . import _terms
 
 __all__ = ("Context",)
 
@@ -233,7 +234,7 @@ class Context(object):
                     tree.translation_method_name = "trans_BinOp"
 
         subsumed = False
-        if _is_intro_form(tree):
+        if _terms.is_intro_form(tree):
             ty = self.canonicalize(ty)
             if ty is None:
                 raise TyError(
@@ -284,8 +285,9 @@ class Context(object):
                     translation_method_name = "trans_Name"
                 else:
                     raise TyError("Invalid name.", tree)
-        elif _is_targeted_form(tree):
-            target, form_name = _target_and_name_of(tree)
+        elif _terms.is_targeted_expr_form(tree):
+            target = tree._typy_target # side effect of guard call
+            form_name = tree.__class__.__name__
             target_ty = self.syn(target)
             can_target_ty = self.canonicalize(target_ty)
             if isinstance(can_target_ty, CanonicalTy):
@@ -376,7 +378,18 @@ class Context(object):
         return ty
 
     def check(self, stmt):
-        if isinstance(stmt, _stmt_forms):
+        if _terms.is_targeted_stmt_form(stmt):
+            target = stmt._typy_target # side effect of the guard call
+            form_name = stmt.__class__.__name__
+            target_ty = self.syn(target)
+            c_target_ty = self.canonicalize(c_target_ty)
+            delegate = c_target_ty.fragment
+            delegate_idx = c_target_ty.idx
+            check_method_name = "check_" + form_name
+            translation_method_name = "trans_" + form_name
+            check_method = getattr(delegate, check_method_name)
+            check_method(self, stmt, delegate_idx)
+        elif isinstance(stmt, _terms.stmt_forms):
             try:
                 delegate = self.default_fragments[-1]
             except IndexError:
@@ -387,7 +400,7 @@ class Context(object):
             translation_method_name = "trans_" + cls_name
             check_method = getattr(delegate, check_method_name)
             check_method(self, stmt)
-        elif isinstance(stmt, _unsupported_stmt_forms):
+        elif isinstance(stmt, _terms.unsupported_stmt_forms):
             raise TyError("Unsupported statement form.", stmt)
         else:
             raise TyError("Unknown statement form: " + 
@@ -441,76 +454,4 @@ class Context(object):
             return translation
         else:
             raise NotImplementedError()
-
-_intro_expr_forms = (
-    ast.Lambda, 
-    ast.Dict, 
-    ast.Set, 
-    ast.ListComp,
-    ast.SetComp,
-    ast.DictComp,
-    ast.Num, 
-    ast.Str, 
-    ast.Bytes,
-    ast.NameConstant,
-    ast.List, 
-    ast.Tuple)
-
-_intro_forms = tuple(_util.seq_cons(
-    ast.FunctionDef, _intro_expr_forms))
-
-def _is_intro_form(e):
-    return isinstance(e, _intro_forms) 
-
-_targeted_forms = (
-    ast.UnaryOp,
-    ast.IfExp,
-    ast.Call,
-    ast.Attribute,
-    ast.Subscript)
-
-def _is_targeted_form(e):
-    return isinstance(e, _targeted_forms)
-
-def _target_and_name_of(e):
-    if isinstance(e, ast.UnaryOp):
-        return e.operand, "UnaryOp"
-    elif isinstance(e, ast.IfExp):
-        return e.test, "IfExp"
-    elif isinstance(e, ast.Call):
-        return e.func, "Call"
-    elif isinstance(e, ast.Attribute):
-        return e.value, "Attribute"
-    elif isinstance(e, ast.Subscript):
-        return e.value, "Subscript"
-    else:
-        raise UsageError("e is not a targeted expression.")
-
-_stmt_forms = (
-    ast.FunctionDef,
-    ast.Return,
-    ast.Delete,
-    ast.Assign,
-    ast.AugAssign,
-    ast.For,
-    ast.While,
-    ast.If,
-    ast.With,
-    ast.Raise,
-    ast.Try,
-    ast.Assert,
-    ast.Expr,
-    ast.Pass,
-    ast.Break,
-    ast.Continue)
-
-_unsupported_stmt_forms = (
-    ast.AsyncFunctionDef,
-    ast.ClassDef,
-    ast.AsyncFor,
-    ast.AsyncWith,
-    ast.Import,
-    ast.ImportFrom,
-    ast.Global,
-    ast.Nonlocal)
 
