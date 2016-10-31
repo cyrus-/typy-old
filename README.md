@@ -7,18 +7,21 @@ Information
 * The typy.std library implements a number of useful semantic fragments.
 * See tests directory for examples.
 * See Omar and Aldrich, GPCE 2016 [1] for a description of how typy is implemented.
+
+Project Status and Contributions
+================================
+The fragment system was significantly revamped just prior to the GPCE paper, so many previously running examples do not currently work. Working on it!
+
 * Subscribe to typy-announce to get occasional updates on the status of typy and the standard library:
 
     https://groups.google.com/d/forum/typy-announce
 
-Project Status
-==============
-The fragment system was significantly revamped just prior to the GPCE paper, so many of the examples no longer work. I'm actively 
+* Contact Cyrus if you're interested in contributing.
 
 Contributors
 ============
 
-@cyrus-
+Cyrus Omar (@cyrus-)
 
 License
 =======
