@@ -3,7 +3,10 @@
 import ast
 from . import util as _util
 from .util import astx as _astx
-from ._ty_exprs import TyExprVar, TypeKind, SingletonKind, UName, CanonicalTy, UCanonicalTy, UTyExpr, UProjection, TyExprPrj
+from ._ty_exprs import (
+    TyExprVar, TypeKind, SingletonKind, UName, 
+    CanonicalTy, UCanonicalTy, UTyExpr, UProjection, 
+    TyExprPrj)
 from ._errors import UsageError, KindError, TyError
 from ._fragments import is_fragment, Fragment
 from . import _components
@@ -15,7 +18,7 @@ class Context(object):
     def __init__(self, static_env):
         self.static_env = static_env
         self.default_fragments = []
-
+        
         # stack of maps from id to TyExprVar
         self.ty_ids = _util.DictStack([{}])         
         # stack of maps from uniq_id to kind 
@@ -26,6 +29,11 @@ class Context(object):
         self.exp_vars = _util.DictStack([{}]) 
         self.last_ty_var = 0
         self.last_exp_var = 0
+
+    #
+    # Bindings
+    # 
+    # TODO clean up all this
 
     def push_uty_expr_binding(self, name_ast, k):
         uniq_id = "_ty_" + name_ast.id + "_" + str(self.last_ty_var)
@@ -64,154 +72,45 @@ class Context(object):
         uniq_id = self.exp_ids[id]
         return uniq_id, self.exp_vars[uniq_id]
 
-    def is_kind(self, k):
-        if k == TypeKind: return True
-        elif isinstance(k, SingletonKind):
-            self.ana(k.ty, TypeKind)
-            return True
-        else:
-            raise UsageError("Invalid kind")
-    
-    def kind_eq(self, k1, k2):
-        if k1 is k2:
-            return True
-        elif (isinstance(k1, SingletonKind) 
-              and isinstance(k2, SingletonKind)):
-            return self.ty_expr_eq(k1.ty, k2.ty, TypeKind)
-        else:
-            return False
+    # 
+    # Statements and expressions
+    # 
 
-    def subkind(self, k1, k2):
-        if self.kind_eq(k1, k2): 
-            return True
-        elif isinstance(k1, SingletonKind) and k2 == TypeKind:
-            return True
-        else:
-            return False
-
-    def syn_ty_expr(self, c):
-        if isinstance(c, TyExprVar):
-            uniq_id = c.uniq_id
+    def check(self, stmt):
+        if _terms.is_targeted_stmt_form(stmt):
+            target = stmt._typy_target # side effect of the guard call
+            form_name = stmt.__class__.__name__
+            target_ty = self.syn(target)
+            c_target_ty = self.canonicalize(c_target_ty)
+            delegate = c_target_ty.fragment
+            delegate_idx = c_target_ty.idx
+            check_method_name = "check_" + form_name
+            translation_method_name = "trans_" + form_name
+            check_method = getattr(delegate, check_method_name)
+            check_method(self, stmt, delegate_idx)
+        elif _terms.is_default_stmt_form(stmt):
             try:
-                return self.ty_vars[uniq_id]
-            except KeyError:
-                raise KindError(
-                    "Unbound type variable: " + c.name_ast.id,
-                    c)
-        elif isinstance(c, CanonicalTy):
-            return SingletonKind(c)
-        elif isinstance(c, TyExprPrj):
-            path_val = c.path_val
-            lbl = c.lbl
-            return path_val.kind_of(lbl)
+                delegate = self.default_fragments[-1]
+            except IndexError:
+                raise TyError("No default fragment.", stmt)
+            delegate_idx = None
+            cls_name = stmt.__class__.__name__
+            check_method_name = "check_" + cls_name
+            translation_method_name = "trans_" + cls_name
+            check_method = getattr(delegate, check_method_name)
+            check_method(self, stmt)
+        elif False:
+            # TODO function def
+            pass
+        elif _terms.is_unsupported_stmt_form(stmt):
+            raise TyError("Unsupported statement form.", stmt)
         else:
-            raise UsageError("Invalid construction.")
+            raise TyError("Unknown statement form: " + 
+                          stmt.__class__.__name__, stmt)
 
-    def ana_ty_expr(self, c, k):
-        syn_k = self.syn_ty_expr(c)
-        if self.subkind(syn_k, k): return
-        else:
-            raise KindError(
-                "Kind mismatch. Expected: '" + str(k) + 
-                "'. Got: '" + str(syn_k) + "'.",
-                c)
-
-    def ty_expr_eq(self, c1, c2, k):
-        if c1 == c2:
-            self.ana_ty_expr(c1, k) 
-            return True
-        elif k == TypeKind:
-            if isinstance(c1, CanonicalTy):
-                if isinstance(c2, CanonicalTy):
-                    return (c1.fragment == c2.fragment 
-                            and c1.fragment.idx_eq(self, c1.idx, c2.idx))
-                else:
-                    return self.ty_expr_eq(c1, self.canonicalize(c2), k)
-            else:
-                return self.ty_expr_eq(self.canonicalize(c1), c2, k)
-        elif isinstance(k, SingletonKind):
-            try:
-                return self.ana_ty_expr(c1, k) and self.ana_ty_expr(c2, k)
-            except KindError:
-                return False
-        else:
-            raise KindError("Invalid kind.", k)
-
-    def canonicalize(self, ty):
-        if isinstance(ty, CanonicalTy): return ty
-        elif isinstance(ty, TyExprVar) or isinstance(ty, TyExprPrj):
-            k = self.syn_ty_expr(ty)
-            if k == TypeKind:
-                return ty
-            elif isinstance(k, SingletonKind):
-                return self.canonicalize(k.ty)
-            else:
-                raise UsageError("Invalid kind.")
-        else:
-            raise UsageError("Invalid construction.")
-
-    def ana_uty_expr(self, uty_expr, k):
-        if isinstance(uty_expr, UName):
-            id = uty_expr.id
-            static_env = self.static_env
-            ty_ids = self.ty_ids
-            if id in ty_ids:
-                convar = ty_ids[id]
-                self.ana_ty_expr(convar, k)
-                return convar
-            elif id in static_env:
-                static_val = self.static_env[id]
-                if is_fragment(static_val):
-                    ty = CanonicalTy.new(self, static_val, 
-                                         _astx.empty_tuple_ast)
-                    self.ana_ty_expr(ty, k)
-                    return ty
-                else:
-                    raise KindError(
-                        "Type expression '" + 
-                        id + 
-                        "' is bound to static value '" + 
-                        repr(static_val) + 
-                        "', which is neither a fragment nor a " +
-                        "type expression.", uty_expr)
-            else:
-                raise KindError(
-                    "Type expression '" + 
-                    id + 
-                    "' is unbound.", uty_expr)
-        elif isinstance(uty_expr, UCanonicalTy):
-            fragment_ast = uty_expr.fragment_ast
-            idx_ast = uty_expr.idx_ast
-            static_env = self.static_env
-            fragment = static_env.eval_expr_ast(fragment_ast)
-            if is_fragment(fragment):
-                ty = CanonicalTy.new(self, fragment, idx_ast)
-                self.ana_ty_expr(ty, k)
-                return ty
-            else:
-                raise KindError(
-                    "Term did not evaluate to a fragment in "
-                    "static environment.",
-                    fragment_ast)
-        elif isinstance(uty_expr, UProjection):
-            path_ast, lbl = uty_expr.path_ast, uty_expr.lbl
-            path_val = self.static_env.eval_expr_ast(path_ast)
-            if _components.is_component(path_val):
-                con = TyExprPrj(path_ast, path_val, lbl)
-                self.ana_ty_expr(con, k)
-                return con
-            else:
-                raise KindError(
-                    "Path did not evaluate to a component in "
-                    "static environment.",
-                    path_ast)
-        else:
-            raise KindError(
-                "Invalid type expression: " + repr(uty_expr), uty_expr)
-
-    def as_type(self, expr):
-        uty_expr = UTyExpr.parse(expr)
-        return self.ana_uty_expr(uty_expr, TypeKind)
+        stmt.delegate = delegate
+        stmt.delegate_idx = delegate_idx
+        stmt.translation_method_name = translation_method_name
 
     def ana(self, tree, ty):
         # handle the case where neither left or right synthesize a type
@@ -377,49 +276,6 @@ class Context(object):
         tree.translation_method_name = translation_method_name
         return ty
 
-    def check(self, stmt):
-        if _terms.is_targeted_stmt_form(stmt):
-            target = stmt._typy_target # side effect of the guard call
-            form_name = stmt.__class__.__name__
-            target_ty = self.syn(target)
-            c_target_ty = self.canonicalize(c_target_ty)
-            delegate = c_target_ty.fragment
-            delegate_idx = c_target_ty.idx
-            check_method_name = "check_" + form_name
-            translation_method_name = "trans_" + form_name
-            check_method = getattr(delegate, check_method_name)
-            check_method(self, stmt, delegate_idx)
-        elif isinstance(stmt, _terms.stmt_forms):
-            try:
-                delegate = self.default_fragments[-1]
-            except IndexError:
-                raise TyError("No default fragment.", stmt)
-            delegate_idx = None
-            cls_name = stmt.__class__.__name__
-            check_method_name = "check_" + cls_name
-            translation_method_name = "trans_" + cls_name
-            check_method = getattr(delegate, check_method_name)
-            check_method(self, stmt)
-        elif isinstance(stmt, _terms.unsupported_stmt_forms):
-            raise TyError("Unsupported statement form.", stmt)
-        else:
-            raise TyError("Unknown statement form: " + 
-                          stmt.__class__.__name__, stmt)
-        stmt.delegate = delegate
-        stmt.delegate_idx = delegate_idx
-        stmt.translation_method_name = translation_method_name
-
-    def ana_pat(self, pat, ty):
-        if isinstance(pat, ast.Name):
-            id = pat.id
-            if id == "_":
-                return { }
-            else:
-                return { pat: ty }
-        else:
-            raise NotImplementedError()
-        raise NotImplementedError()
-
     def trans(self, tree):
         if isinstance(tree, ast.Name):
             if hasattr(tree, "uniq_id"):
@@ -454,4 +310,181 @@ class Context(object):
             return translation
         else:
             raise NotImplementedError()
+
+    # 
+    # Patterns
+    # 
+
+    def ana_pat(self, pat, ty):
+        if isinstance(pat, ast.Name):
+            id = pat.id
+            if id == "_":
+                return { }
+            else:
+                return { pat: ty }
+        else:
+            raise NotImplementedError()
+        raise NotImplementedError()
+
+    # 
+    # Kinds and type expressions
+    # 
+
+    def is_kind(self, k):
+        if k == TypeKind: return True
+        elif isinstance(k, SingletonKind):
+            self.ana(k.ty, TypeKind)
+            return True
+        else:
+            raise UsageError("Invalid kind")
+    
+    def kind_eq(self, k1, k2):
+        if k1 is k2:
+            return True
+        elif (isinstance(k1, SingletonKind) 
+              and isinstance(k2, SingletonKind)):
+            return self.ty_expr_eq(k1.ty, k2.ty, TypeKind)
+        else:
+            return False
+
+    def subkind(self, k1, k2):
+        if self.kind_eq(k1, k2): 
+            return True
+        elif isinstance(k1, SingletonKind) and k2 == TypeKind:
+            return True
+        else:
+            return False
+
+    def syn_ty_expr(self, c):
+        if isinstance(c, TyExprVar):
+            uniq_id = c.uniq_id
+            try:
+                return self.ty_vars[uniq_id]
+            except KeyError:
+                raise KindError(
+                    "Unbound type variable: " + c.name_ast.id,
+                    c)
+        elif isinstance(c, CanonicalTy):
+            return SingletonKind(c)
+        elif isinstance(c, TyExprPrj):
+            path_val = c.path_val
+            lbl = c.lbl
+            return path_val.kind_of(lbl)
+        else:
+            raise UsageError("Invalid construction.")
+
+    def ana_ty_expr(self, c, k):
+        syn_k = self.syn_ty_expr(c)
+        if self.subkind(syn_k, k): return
+        else:
+            raise KindError(
+                "Kind mismatch. Expected: '" + str(k) + 
+                "'. Got: '" + str(syn_k) + "'.",
+                c)
+
+    def ty_expr_eq(self, c1, c2, k):
+        if c1 == c2:
+            self.ana_ty_expr(c1, k) 
+            return True
+        elif k == TypeKind:
+            if isinstance(c1, CanonicalTy):
+                if isinstance(c2, CanonicalTy):
+                    return (c1.fragment == c2.fragment 
+                            and c1.fragment.idx_eq(self, c1.idx, c2.idx))
+                else:
+                    return self.ty_expr_eq(c1, self.canonicalize(c2), k)
+            else:
+                return self.ty_expr_eq(self.canonicalize(c1), c2, k)
+        elif isinstance(k, SingletonKind):
+            try:
+                return self.ana_ty_expr(c1, k) and self.ana_ty_expr(c2, k)
+            except KindError:
+                return False
+        else:
+            raise KindError("Invalid kind.", k)
+
+    def canonicalize(self, ty):
+        if isinstance(ty, CanonicalTy): return ty
+        elif isinstance(ty, TyExprVar) or isinstance(ty, TyExprPrj):
+            k = self.syn_ty_expr(ty)
+            if k == TypeKind:
+                return ty
+            elif isinstance(k, SingletonKind):
+                return self.canonicalize(k.ty)
+            else:
+                raise UsageError("Invalid kind.")
+        else:
+            raise UsageError("Invalid construction.")
+
+    def ana_uty_expr(self, uty_expr, k):
+        if isinstance(uty_expr, UName):
+            id = uty_expr.id
+            static_env = self.static_env
+            ty_ids = self.ty_ids
+            if id in ty_ids:
+                convar = ty_ids[id]
+                self.ana_ty_expr(convar, k)
+                return convar
+            elif id in static_env:
+                static_val = self.static_env[id]
+                if is_fragment(static_val):
+                    ty = CanonicalTy.new(self, static_val, 
+                                         _astx.empty_tuple_ast)
+                    self.ana_ty_expr(ty, k)
+                    return ty
+                else:
+                    raise KindError(
+                        "Type expression '" + 
+                        id + 
+                        "' is bound to static value '" + 
+                        repr(static_val) + 
+                        "', which is neither a fragment nor a " +
+                        "type expression.", uty_expr)
+            else:
+                raise KindError(
+                    "Type expression '" + 
+                    id + 
+                    "' is unbound.", uty_expr)
+        elif isinstance(uty_expr, UCanonicalTy):
+            fragment_ast = uty_expr.fragment_ast
+            idx_ast = uty_expr.idx_ast
+            static_env = self.static_env
+            fragment = static_env.eval_expr_ast(fragment_ast)
+            if is_fragment(fragment):
+                ty = CanonicalTy.new(self, fragment, idx_ast)
+                self.ana_ty_expr(ty, k)
+                return ty
+            else:
+                raise KindError(
+                    "Term did not evaluate to a fragment in "
+                    "static environment.",
+                    fragment_ast)
+        elif isinstance(uty_expr, UProjection):
+            path_ast, lbl = uty_expr.path_ast, uty_expr.lbl
+            path_val = self.static_env.eval_expr_ast(path_ast)
+            if _components.is_component(path_val):
+                con = TyExprPrj(path_ast, path_val, lbl)
+                self.ana_ty_expr(con, k)
+                return con
+            else:
+                try:
+                    fragment = getattr(path_val, lbl)
+                except AttributeError:
+                    raise KindError(
+                        "Invalid projection.", path_ast)
+                else:
+                    if is_fragment(fragment):
+                        ty = CanonicalTy.new(self, fragment, _astx.empty_tuple_ast)
+                        self.ana_ty_expr(ty, k)
+                        return ty
+                    else:
+                        raise KindError(
+                            "Invalid projection.", path_ast)
+        else:
+            raise KindError(
+                "Invalid type expression: " + repr(uty_expr), uty_expr)
+
+    def as_type(self, expr):
+        uty_expr = UTyExpr.parse(expr)
+        return self.ana_uty_expr(uty_expr, TypeKind)
 

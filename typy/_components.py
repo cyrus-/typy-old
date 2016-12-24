@@ -237,7 +237,8 @@ class StmtMember(ComponentMember):
 
     @classmethod
     def parse_stmt(cls, stmt):
-        if not isinstance(stmt, _terms.unsupported_stmt_forms):
+        # TODO more sophisticated statement parser
+        if _terms.is_supported_stmt_form(stmt):
             if not isinstance(stmt, (ast.Return, ast.Delete)):
                 return cls(stmt)
 

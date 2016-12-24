@@ -3,6 +3,113 @@ import ast
 
 from . import util as _util
 
+# 
+# Statements
+# 
+
+_supported_stmt_forms = (
+    ast.FunctionDef,
+    ast.Return,
+    ast.Delete,
+    ast.Assign,
+    ast.AugAssign,
+    ast.For,
+    ast.While,
+    ast.If,
+    ast.With,
+    ast.Raise,
+    ast.Try,
+    ast.Assert,
+    ast.Expr,
+    ast.Pass,
+    ast.Break,
+    ast.Continue)
+
+def is_supported_stmt_form(stmt):
+    return isinstance(stmt, _supported_stmt_forms)
+
+_unsupported_stmt_forms = (
+    ast.AsyncFunctionDef,
+    ast.ClassDef,
+    ast.AsyncFor,
+    ast.AsyncWith,
+    ast.Import,
+    ast.ImportFrom,
+    ast.Global,
+    ast.Nonlocal)
+
+def is_unsupported_stmt_form(stmt):
+    return isinstance(stmt, _unsupported_stmt_forms)
+
+def is_targeted_stmt_form(stmt):
+    if isinstance(stmt, ast.Delete):
+        targets = stmt.targets
+        if len(targets) != 1:
+            # TODO support multiple targets
+            raise TyError(
+                "typy does not support multiple deletion targets.", targets[1])
+        target = targets[0]
+        stmt._typy_target = target
+        return True
+    elif isinstance(stmt, ast.Assign):
+        targets = stmt.targets
+        if len(targets) != 1:
+            # TODO support multiple targets
+            raise TyError(
+                "typy does not support multiple targets.", targets[1])
+        target = targets[0]
+        if isinstance(target, ast.Attribute):
+            stmt._typy_target = target.value
+            return True
+        elif isinstance(target, ast.Subscript):
+            # TODO exclude ascriptions
+            stmt._typy_target = target.value
+            return True
+        else:
+            return False
+    elif isinstance(stmt, ast.AugAssign):
+        stmt._typy_target = stmt.target
+        return True
+    elif isinstance(stmt, ast.For):
+        stmt._typy_target = stmt.iter
+        return True
+    elif isinstance(stmt, ast.While):
+        stmt._typy_target = stmt.test
+        return True
+    elif isinstance(stmt, ast.If):
+        stmt._typy_target = stmt.test
+        return True
+    else:
+        return False
+
+def is_default_stmt_form(stmt):
+    if isinstance(stmt, (
+            ast.Return,
+            ast.Raise,
+            ast.Try,
+            ast.Assert,
+            ast.Expr,
+            ast.Pass,
+            ast.Break,
+            ast.Continue)):
+        return True
+    elif isinstance(stmt, ast.Assign):
+        targets = stmt.targets
+        if len(targets) != 1:
+            # TODO support multiple targets
+            raise TyError(
+                "typy does not support multiple targets.", targets[1])
+        target = targets[0]
+        if isinstance(target, ast.Attribute):
+            return False
+        elif isinstance(target, ast.Subscript):
+            # TODO include ascriptions
+            return False
+        else:
+            return True
+    else:
+        return False
+
 _intro_expr_forms = (
     ast.Lambda, 
     ast.Dict, 
@@ -43,81 +150,6 @@ def is_targeted_expr_form(e):
         return True
     else:
         return False
-
-def is_targeted_stmt_form(stmt):
-    if isinstance(stmt, ast.Delete):
-        targets = stmt.targets
-        if len(targets) != 1:
-            # TODO support multiple targets
-            raise TyError(
-                "typy does not support multiple deletion targets.", targets[1])
-        target = targets[0]
-        stmt._typy_target = target
-        return True
-    elif isinstance(stmt, ast.Assign):
-        targets = stmt.targets
-        if len(targets) != 1:
-            # TODO support multiple targets
-            raise TyError(
-                "typy does not support multiple targets.", targets[1])
-        target = targets[0]
-        if isinstance(target, ast.Attribute):
-            stmt._typy_target = target.value
-            return True
-        elif isinstance(target, ast.Subscript):
-            # TODO exclude ascriptions
-            stmt._typy_target = target.value
-            return True
-        else:
-            return False
-    elif isinstance(stmt, ast.AugAssign):
-        stmt._typy_target = stmt.target
-        return True
-    elif isinstance(stmt, ast.For):
-        stmt._typy_target = stmt.iter
-        return True
-    elif isinstance(stmt, ast.While):
-        stmt._typy_target = stmt.test
-        return True
-    elif isinstance(stmt, ast.If):
-        stmt._typy_target = stmt.test
-        return True
-    elif isinstance(stmt, ast.Raise):
-        if stmt.exc is not None:
-            stmt._typy_target = stmt.exc
-            return True
-        else:
-            return False
-    else:
-        return False
-
-stmt_forms = (
-    ast.FunctionDef,
-    ast.Return,
-    ast.Delete,
-    ast.Assign,
-    ast.AugAssign,
-    ast.For,
-    ast.While,
-    ast.If,
-    ast.With,
-    ast.Raise,
-    ast.Try,
-    ast.Assert,
-    ast.Expr,
-    ast.Pass,
-    ast.Break,
-    ast.Continue)
-
-unsupported_stmt_forms = (
-    ast.AsyncFunctionDef,
-    ast.ClassDef,
-    ast.AsyncFor,
-    ast.AsyncWith,
-    ast.Import,
-    ast.ImportFrom,
-    ast.Global,
-    ast.Nonlocal)
 
 unsupported_expr_forms = (
     ast.Await,
