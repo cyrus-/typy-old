@@ -151,6 +151,17 @@ def is_targeted_expr_form(e):
     else:
         return False
 
+def is_ascription(e):
+    if hasattr(e, 'ascription'): return True
+    if isinstance(e, ast.Subscript):
+        slice = e.slice
+        if isinstance(slice, ast.Slice):
+            lower, upper, step = slice.lower, slice.upper, slice.step
+            if lower is None and upper is not None and step is None:
+                e.ascription = upper
+                return True
+    return False
+
 unsupported_expr_forms = (
     ast.Await,
     ast.Yield,

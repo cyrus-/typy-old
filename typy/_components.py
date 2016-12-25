@@ -192,6 +192,7 @@ class ValueMember(ComponentMember):
                     lower, upper, step = slice.lower, slice.upper, slice.step
                     if lower is None and upper is not None and step is None:
                         uty = UTyExpr.parse(upper)
+                        
                         return cls(target_value.id, uty, stmt)
         elif isinstance(target, ast.Name):
             return cls(target.id, None, stmt)
@@ -210,6 +211,7 @@ class ValueMember(ComponentMember):
 
         uty = self.uty
         if uty is None:
+            print("1", tree_)
             ty = ctx.syn(tree_)
         else:
             ty = ctx.ana_uty_expr(uty, TypeKind)

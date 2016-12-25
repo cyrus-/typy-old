@@ -49,6 +49,13 @@ class CanonicalTy(TyExpr):
     def __repr__(self):
         return self.__str__()
 
+    def __eq__(self, other):
+        return (self.fragment == other.fragment) \
+               and (self.idx == other.idx)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 class TyExprVar(TyExpr):
     def __init__(self, ctx, name_ast, uniq_id):
         self.ctx = ctx

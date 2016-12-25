@@ -99,9 +99,6 @@ class Context(object):
             translation_method_name = "trans_" + cls_name
             check_method = getattr(delegate, check_method_name)
             check_method(self, stmt)
-        elif False:
-            # TODO function def
-            pass
         elif _terms.is_unsupported_stmt_form(stmt):
             raise TyError("Unsupported statement form.", stmt)
         else:
@@ -184,6 +181,13 @@ class Context(object):
                     translation_method_name = "trans_Name"
                 else:
                     raise TyError("Invalid name.", tree)
+        elif _terms.is_ascription(tree):
+            uty = UTyExpr.parse(tree.ascription)
+            ty = self.ana_uty_expr(uty, TypeKind)
+            self.ana(tree.value, ty)
+            delegate = None
+            delegate_idx = None
+            translation_method_name = None
         elif _terms.is_targeted_expr_form(tree):
             target = tree._typy_target # side effect of guard call
             form_name = tree.__class__.__name__
@@ -269,6 +273,7 @@ class Context(object):
                 translation_method_name = "trans_BinOp"
                 ty = delegate.syn_BinOp(self, tree)
         else:
+            print(tree)
             raise NotImplementedError()
         tree.ty = ty
         tree.delegate = delegate
@@ -291,6 +296,8 @@ class Context(object):
                         attr="_module",
                         ctx=ast.Load()),
                     tree))
+        elif _terms.is_ascription(tree):
+            translation = self.trans(tree.value)
         else:
             delegate = tree.delegate
             idx = tree.delegate_idx

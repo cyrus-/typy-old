@@ -2,6 +2,8 @@
 
 import inspect
 
+from ._errors import TyError, FragmentError
+
 __all__ = ('Fragment', 'is_fragment')
 
 class Fragment(object):
