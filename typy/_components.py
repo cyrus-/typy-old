@@ -51,8 +51,9 @@ class Component(object):
 
         # parse the members
         def _parse_members():
-            body = tree.body
-            for stmt in body:
+            body = list(tree.body)
+            while len(body) > 0:
+                stmt = body.pop(0)
                 if isinstance(stmt, ast.Assign):
                     type_member = TypeMember.parse_Assign(stmt)
                     if type_member is not None: yield type_member
@@ -69,7 +70,7 @@ class Component(object):
                         raise ComponentFormationError(
                             "Invalid member definition.", stmt)
                 else:
-                    stmt_member = StmtMember.parse_stmt(stmt)
+                    stmt_member = StmtMember.parse_stmts(stmt, body)
                     if stmt_member is not None: yield stmt_member
                     else:
                         raise ComponentFormationError(
@@ -112,7 +113,8 @@ class Component(object):
             translation = member.translate(self.ctx)
             body.extend(translation)
         self._translation = ast.Module(
-            body=body)
+            body=body,
+            lineno=0, col_offset=0) # TODO
         self._translated = True
 
     def _evaluate(self):
@@ -211,7 +213,6 @@ class ValueMember(ComponentMember):
 
         uty = self.uty
         if uty is None:
-            print("1", tree_)
             ty = ctx.syn(tree_)
         else:
             ty = ctx.ana_uty_expr(uty, TypeKind)
@@ -238,9 +239,18 @@ class StmtMember(ComponentMember):
         self.stmt = stmt
 
     @classmethod
-    def parse_stmt(cls, stmt):
-        # TODO more sophisticated statement parser
-        if _terms.is_supported_stmt_form(stmt):
+    def parse_stmts(cls, stmt, body):
+        if _terms.is_match_scrutinizer(stmt):
+            rules = [ ] 
+            while len(body) > 0:
+                next_stmt = body[0]
+                if _terms.is_match_rule(next_stmt):
+                    body.pop(0)
+                    rules.append(_terms.MatchRule.parse_with_stmt(next_stmt))
+                else:
+                    break
+            return cls(_terms.MatchStatementExpression(stmt, rules))
+        elif _terms.is_supported_stmt_form(stmt):
             if not isinstance(stmt, (ast.Return, ast.Delete)):
                 return cls(stmt)
 

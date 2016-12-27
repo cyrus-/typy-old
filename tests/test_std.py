@@ -43,12 +43,16 @@ def test_unit_match():
         with (): x
 
     # typechecking
-    assert c._members[0].ty == typy._ty_exprs.CanonicalTy(unit, ())
+    assert c._members[0].ty == CanonicalTy(unit, ())
 
     # translation
     assert ast_eq(c._translation, """
         x = ()
-        ???""")
+        __typy_scrutinee__ = x
+        if True:
+            x
+        else:
+            raise Exception('typy match failure')""")
 
 # 
 # tpl

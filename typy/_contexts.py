@@ -33,8 +33,6 @@ class Context(object):
     #
     # Bindings
     # 
-    # TODO clean up all this
-
     def push_uty_expr_binding(self, name_ast, k):
         uniq_id = "_ty_" + name_ast.id + "_" + str(self.last_ty_var)
         self.ty_ids[name_ast.id] = TyExprVar(self, name_ast, uniq_id)
@@ -77,7 +75,9 @@ class Context(object):
     # 
 
     def check(self, stmt):
-        if _terms.is_targeted_stmt_form(stmt):
+        if isinstance(stmt, _terms.StatementExpression):
+            return self.syn(stmt)
+        elif _terms.is_targeted_stmt_form(stmt):
             target = stmt._typy_target # side effect of the guard call
             form_name = stmt.__class__.__name__
             target_ty = self.syn(target)
@@ -145,6 +145,19 @@ class Context(object):
             ana_method = getattr(delegate, ana_method_name)
             ana_method(self, tree, delegate_idx)
             translation_method_name = "trans_" + classname
+        elif isinstance(tree, ast.Expr):
+            self.ana(tree.value, ty)
+            delegate = delegate_idx = translation_method_name = None
+        elif isinstance(tree, _terms.MatchStatementExpression):
+            scrutinee = tree.scrutinee
+            scrutinee_ty = self.syn(scrutinee_ty)
+            scrutinee_ty_c = self.canonicalize(scrutinee_ty)
+            delegate = None
+            delegate_idx = None
+            translation_method_name = None
+            for rule in tree.rules:
+                self.ana_pat(rule.pat, scrutinee_ty_c)
+                self.ana_block(rule.branch, ty)
         else:
             subsumed = True
             syn_ty = self.syn(tree)
@@ -181,6 +194,9 @@ class Context(object):
                     translation_method_name = "trans_Name"
                 else:
                     raise TyError("Invalid name.", tree)
+        elif isinstance(tree, ast.Expr):
+            ty = self.syn(tree.value)
+            delegate = delegate_idx = translation_method_name = None
         elif _terms.is_ascription(tree):
             uty = UTyExpr.parse(tree.ascription)
             ty = self.ana_uty_expr(uty, TypeKind)
@@ -272,14 +288,91 @@ class Context(object):
                 delegate_idx = None
                 translation_method_name = "trans_BinOp"
                 ty = delegate.syn_BinOp(self, tree)
+        elif isinstance(tree, _terms.MatchStatementExpression):
+            scrutinee = tree.scrutinee
+            scrutinee_ty = self.syn(scrutinee)
+            scrutinee_ty_c = self.canonicalize(scrutinee_ty)
+            delegate = None
+            delegate_idx = None
+            translation_method_name = None
+            ty = None
+            for rule in tree.rules:
+                pat = rule.pat
+                bindings = self.ana_pat(pat, scrutinee_ty_c)
+                var_bindings = self.push_var_bindings(bindings)
+                pat.var_bindings = var_bindings
+                if ty is None:
+                    ty = self.syn_block(rule.branch)
+                else:
+                    self.ana_block(rule.branch, ty)
+                self.pop_var_bindings()
+            if ty is None:
+                raise TyError("Cannot synthesize a type for a match statement "
+                              "expression without any rules.", tree)
         else:
-            print(tree)
             raise NotImplementedError()
         tree.ty = ty
         tree.delegate = delegate
         tree.delegate_idx = delegate_idx
         tree.translation_method_name = translation_method_name
         return ty
+
+    def ana_block(self, stmts, ty):
+        segmented_stmts = tuple(self._segment(stmts))
+        if len(segmented_stmts) == 0:
+            raise TyError("Empty block", None)
+
+        for stmt in segmented_stmts[:-1]: # all but last
+            self.check(stmt)
+
+        last_stmt = segmented_stmts[-1]
+        self.ana(last_stmt, ty)
+
+    def syn_block(self, stmts):
+        segmented_stmts = tuple(self._segment(stmts))
+        if len(segmented_stmts) == 0:
+            raise TyError("Empty block", None)
+
+        for stmt in segmented_stmts[:-1]: # all but last
+            self.check(stmt)
+
+        last_stmt = segmented_stmts[-1]
+        return self.syn(last_stmt)
+
+    def trans_block(self, stmts):
+        translation = [ ]
+        for stmt in stmts:
+            translation.extend(self.trans(stmt))
+        return translation
+
+    @staticmethod
+    def _segment(stmts):
+        cur_scrutinizer = None
+        cur_rules = None
+        for stmt in stmts:
+            if cur_scrutinizer is not None:
+                if isinstance(stmt, ast.With):
+                    rule = _terms.MatchRule.parse_with_stmt(stmt)
+                    cur_rules.append(rule)
+                    continue
+                else:
+                    yield _terms.MatchStatementExpression(
+                        cur_scrutinizer,
+                        cur_rules)
+                    cur_scrutinizer = None
+                    cur_rules = None
+
+            if _terms.is_match_scrutinizer(stmt):
+                cur_scrutinizer = stmt
+                cur_rules = [ ]
+                continue
+            else:
+                yield stmt
+
+        if cur_scrutinizer is not None:
+            yield _terms.MatchStatementExpression(
+                cur_scrutinizer,
+                cur_rules)
 
     def trans(self, tree):
         if isinstance(tree, ast.Name):
@@ -298,6 +391,59 @@ class Context(object):
                     tree))
         elif _terms.is_ascription(tree):
             translation = self.trans(tree.value)
+        elif isinstance(tree, ast.Expr):
+            translation = [
+                ast.copy_location(
+                    ast.Expr(value=self.trans(tree.value)),
+                tree)]
+        elif isinstance(tree, _terms.MatchStatementExpression):
+            # __typy__scrutinee__ = scrutinee_trans
+            # if condition1:
+            #     binding1 = value1
+            #     binding2 = value2
+            #     binding3 = value3
+            #     ...
+            #     branch translation
+            # elif condition2: ...
+            # ...
+            # else:
+            #     raise Exception('typy match failure')
+            scrutinee = tree.scrutinee
+            scrutinee_trans = self.trans(scrutinee)
+            scrutinee_var = ast.copy_location(
+                ast.Name(id="__typy_scrutinee__", ctx=_astx.load_ctx),
+                scrutinee)
+            scrutinee_var_store = ast.copy_location(
+                ast.Name(id="__typy_scrutinee__", ctx=_astx.store_ctx), 
+                scrutinee)
+            rules = tree.rules
+            rule_stmts = [ ]
+            conditions = [ ]
+            branches = [ ]
+            for rule in rules:
+                rule_stmts.append(rule.stmt)
+                pat = rule.pat
+                condition, binding_translations = self.trans_pat(pat, scrutinee_var)
+                conditions.append(condition)
+                branch = _astx.assignments_from_dict(
+                    dict(
+                        (uniq_id, binding_translations[id], pat)
+                        for id, (uniq_id, _) in pat.var_bindings
+                    )
+                )
+                branch.extend(self.trans_block(rule.branch))
+                print(branch)
+                branches.append(branch)
+
+            translation = [
+                ast.copy_location(
+                    ast.Assign(targets=[scrutinee_var_store], value=scrutinee_trans),
+                    scrutinee)
+            ]
+            translation.extend(_astx.conditionals(
+                conditions, branches, rule_stmts, 
+                [_astx.standard_raise_str('Exception', 
+                                         'typy match failure', scrutinee)]))
         else:
             delegate = tree.delegate
             idx = tree.delegate_idx
@@ -329,9 +475,30 @@ class Context(object):
                 return { }
             else:
                 return { pat: ty }
+        elif _terms.is_intro_form(pat):
+            canonical_ty = self.canonicalize(ty)
+            delegate = pat.delegate = canonical_ty.fragment
+            delegate_idx = pat.delegate_idx = canonical_ty.idx
+            method_name = "ana_pat_" + pat.__class__.__name__
+            method = getattr(delegate, method_name)
+            bindings = method(self, pat, delegate_idx)
+            pat.bindings = bindings
+            return bindings
         else:
             raise NotImplementedError()
-        raise NotImplementedError()
+
+    def trans_pat(self, pat, scrutinee_trans):
+        if isinstance(pat, ast.Name):
+            return (ast.copy_location(
+                ast.NameConstant(value=True), pat), { pat.id: scrutinee_trans })
+        elif _terms.is_intro_form(pat):
+            delegate = pat.delegate
+            delegate_idx = pat.delegate_idx
+            method_name = "trans_pat_" + pat.__class__.__name__ # TODO add stubs
+            method = getattr(delegate, method_name)
+            return method(self, pat, scrutinee_trans)
+        else:
+            raise NotImplementedError()
 
     # 
     # Kinds and type expressions

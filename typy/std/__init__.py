@@ -24,8 +24,17 @@ class unit(Fragment):
     def trans_Tuple(cls, ctx, e, idx):
         return astx.copy_node(e)
 
-    # TODO pattern matching
-    # TODO get rid of this and combine with tpl
+    @classmethod
+    def ana_pat_Tuple(cls, ctx, pat, idx):
+        if len(pat.elts) != 0:
+            raise TyError(
+                "Tuple pattern must be empty to match unit values.", pat)
+        return { }
+
+    @classmethod
+    def trans_pat_Tuple(cls, ctx, pat, scrutinee_trans):
+        return (ast.copy_location(
+            ast.NameConstant(value=True), pat), { })
 
 class record(Fragment):
     @classmethod

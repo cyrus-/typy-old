@@ -67,6 +67,7 @@ def deep_copy_node(node, *args, **kwargs):
 
 empty_tuple_ast = ast.Tuple(elts=[])
 load_ctx = ast.Load()
+store_ctx = ast.Store()
 
 def builtin_call(name, args):
     return ast.Call(
@@ -179,4 +180,42 @@ def is_empty_args(args):
             args.vararg is None and 
             len(args.kwonlyargs) == 0 and 
             args.kwarg is None)
+
+def assignments_from_dict(d,):
+    r = [ ]
+    for id, value, loc_source in d.items():
+        r.append(ast.copy_location(
+            ast.Assign(
+                targets=[ast.Name(id=id, ctx=store_ctx)],
+                value=value)), loc_source)
+    return r
+
+def conditionals(conditions, branches, loc_sources, orelse):
+    n_conditions = len(conditions)
+    if n_conditions == 0:
+        return orelse
+    elif n_conditions == 1:
+        return [ast.copy_location(ast.If(
+            test=conditions[0],
+            body=branches[0],
+            orelse=orelse), loc_sources[0])]
+    else:
+        return [ast.copy_location(ast.If(
+            test=conditions[0],
+            body=branches[0],
+            orelse=conditions(
+                conditions[1:],
+                branches[1:],
+                loc_sources[1:],
+                orelse)), loc_sources[0])]
+
+def standard_raise_str(exn, s, loc_source):
+    return ast.fix_missing_locations(ast.copy_location(ast.Raise(
+        exc=ast.Call(
+            func=ast.Name(id=exn, ctx=load_ctx),
+            args=[
+                ast.Str(s=s)
+            ],
+            keywords=[]),
+        cause=None), loc_source))
 

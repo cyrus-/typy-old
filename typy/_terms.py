@@ -7,6 +7,37 @@ from . import util as _util
 # Statements
 # 
 
+def is_match_scrutinizer(stmt):
+    if isinstance(stmt, ast.Expr):
+        value = stmt.value
+        if isinstance(value, ast.Attribute):
+            attribute_value = value.value
+            if isinstance(attribute_value, ast.List) and value.attr == "match":
+                return True
+    return False
+
+def is_match_rule(stmt):
+    return isinstance(stmt, ast.With)
+
+class StatementExpression(object):
+    pass
+
+class MatchStatementExpression(StatementExpression):
+    def __init__(self, scrutinizer, rules):
+        self.scrutinizer = scrutinizer
+        self.scrutinee = scrutinizer.value.value.elts[0]
+        self.rules = rules
+
+class MatchRule(object):
+    def __init__(self, stmt, pat, branch):
+        self.stmt = stmt
+        self.pat = pat
+        self.branch = branch
+
+    @classmethod
+    def parse_with_stmt(cls, stmt):
+        return cls(stmt, stmt.items[0].context_expr, stmt.body)
+
 _supported_stmt_forms = (
     ast.FunctionDef,
     ast.Return,
