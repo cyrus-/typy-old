@@ -75,7 +75,7 @@ class Context(object):
     # 
 
     def check(self, stmt):
-        if isinstance(stmt, _terms.StatementExpression):
+        if _terms.is_stmt_expression(stmt):
             return self.syn(stmt)
         elif _terms.is_targeted_stmt_form(stmt):
             target = stmt._typy_target # side effect of the guard call
@@ -121,12 +121,12 @@ class Context(object):
                 except:
                     ty = self.canonicalize(ty)
                     delegate = ty.fragment
-                    delegate_idx = None
+                    delegate_idx = ty.idx
 
                     # will get picked up by subsumption below
                     class_name = tree.__class__.__name__
-                    syn_method = getattr(delegate, "syn_" + class_name)
-                    tree.ty = syn_method(self, tree)
+                    ana_method = getattr(delegate, "ana_" + class_name)
+                    tree.ty = ana_method(self, tree, delegate_idx)
                     tree.delegate = delegate
                     tree.delegate_idx = delegate_idx
                     tree.translation_method_name = "trans_" + class_name
@@ -134,11 +134,6 @@ class Context(object):
         subsumed = False
         if _terms.is_intro_form(tree):
             ty = self.canonicalize(ty)
-            if ty is None:
-                raise TyError(
-                    "Cannot analyze an intro form against non-canonical "
-                    "type.",
-                    tree)
             tree.is_intro_form = True
             classname = tree.__class__.__name__
             ana_method_name = "ana_" + classname
@@ -160,6 +155,16 @@ class Context(object):
             for rule in tree.rules:
                 self.ana_pat(rule.pat, scrutinee_ty_c)
                 self.ana_block(rule.branch, ty)
+        elif isinstance(tree, (ast.If, ast.IfExp)):
+            test = tree.test
+            test_ty = self.syn(test)
+            test_ty_c = self.canonicalize(test_ty)
+            delegate = test_ty_c.fragment
+            delegate_idx = test_ty_c.idx
+            class_name = tree.__class__.__name__
+            translation_method_name = "trans_" + class_name
+            ana_method = getattr(delegate, "ana_" + class_name)
+            ana_method(self, tree, delegate_idx, ty)
         else:
             subsumed = True
             syn_ty = self.syn(tree)
@@ -171,6 +176,7 @@ class Context(object):
                     ". Got: " + str(syn_ty) + ".", tree)
 
         if not subsumed:
+            tree.ty = ty
             tree.delegate = delegate
             tree.delegate_idx = delegate_idx
             tree.translation_method_name = translation_method_name
@@ -206,7 +212,7 @@ class Context(object):
             delegate = None
             delegate_idx = None
             translation_method_name = None
-        elif _terms.is_targeted_expr_form(tree):
+        elif _terms.is_targeted_form(tree):
             target = tree._typy_target # side effect of guard call
             form_name = tree.__class__.__name__
             target_ty = self.syn(target)
@@ -276,6 +282,7 @@ class Context(object):
                 raise TyError("Cannot synthesize a type for a match statement "
                               "expression without any rules.", tree)
         else:
+            print(tree)
             raise NotImplementedError()
         tree.ty = ty
         tree.delegate = delegate
@@ -449,7 +456,6 @@ class Context(object):
                     )
                 )
                 branch.extend(self.trans_block(rule.branch))
-                print(branch)
                 branches.append(branch)
 
             translation = [
@@ -513,7 +519,7 @@ class Context(object):
             delegate_idx = pat.delegate_idx
             method_name = "trans_pat_" + pat.__class__.__name__ # TODO add stubs
             method = getattr(delegate, method_name)
-            return method(self, pat, scrutinee_trans)
+            return method(self, pat, delegate_idx, scrutinee_trans)
         else:
             raise NotImplementedError()
 

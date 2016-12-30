@@ -32,7 +32,7 @@ class unit(Fragment):
         return { }
 
     @classmethod
-    def trans_pat_Tuple(cls, ctx, pat, scrutinee_trans):
+    def trans_pat_Tuple(cls, ctx, pat, idx, scrutinee_trans):
         return (ast.copy_location(
             ast.NameConstant(value=True), pat), { })
 
@@ -57,6 +57,126 @@ class unit(Fragment):
                 left = left_tr,
                 ops = e.ops,
                 comparators = comp_trs), e)
+
+class boolean(Fragment):
+    @classmethod
+    def init_idx(cls, ctx, idx_ast):
+        return _check_trivial_idx_ast(idx_ast)
+
+    @classmethod
+    def ana_NameConstant(cls, ctx, e, idx):
+        value = e.value
+        if value is True or value is False:
+            return
+        else:
+            raise TyError("Invalid name constant: " + str(value), e)
+
+    @classmethod
+    def trans_NameConstant(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.NameConstant(value=e.value), e)
+
+    @classmethod
+    def ana_pat_NameConstant(cls, ctx, pat, idx):
+        value = pat.value
+        if value is True or value is False:
+            return {}
+        else:
+            raise TyError("Invalid name constant: " + str(value), pat)
+
+    @classmethod
+    def trans_pat_NameConstant(cls, ctx, pat, idx, scrutinee_trans):
+        if pat.value:
+            condition = scrutinee_trans
+        else:
+            condition = ast.fix_missing_locations(ast.copy_location(
+                ast.UnaryOp(
+                    op = ast.Not(),
+                    operand=scrutinee_trans), pat))
+        return condition, {}
+
+    @classmethod
+    def syn_BoolOp(cls, ctx, e):
+        bool_ty = CanonicalTy(boolean, ())
+        for value in e.values:
+            ctx.ana(value, bool_ty)
+        return bool_ty
+
+    @classmethod
+    def ana_BoolOp(cls, ctx, e, idx):
+        bool_ty = CanonicalTy(boolean, ())
+        for value in e.values:
+            ctx.ana(value, bool_ty)
+
+    @classmethod
+    def trans_BoolOp(cls, ctx, e):
+        values_tr = [ ]
+        for value in e.values:
+            values_tr.append(ctx.trans(value))
+        return ast.copy_location(
+            ast.BoolOp(
+                op = e.op,
+                values = values_tr), e)
+
+    @classmethod
+    def syn_Compare(cls, ctx, e):
+        bool_ty = CanonicalTy(boolean, ())
+        ctx.ana(e.left, bool_ty)
+        for op, comparator in zip(e.ops, e.comparators):
+            if isinstance(op, (ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.In, ast.NotIn)):
+                raise TyError("Invalid comparison operator on unit.", comparator)
+            ctx.ana(comparator, bool_ty)
+        return bool_ty
+
+    @classmethod
+    def trans_Compare(cls, ctx, e):
+        left_tr = ctx.trans(e.left)
+        comp_trs = [ ]
+        for comparator in e.comparators:
+            comp_trs.append(ctx.trans(comparator))
+        return ast.copy_location(
+            ast.Compare(
+                left = left_tr,
+                ops = e.ops,
+                comparators = comp_trs), e)
+
+    @classmethod
+    def syn_If(cls, ctx, e, idx):
+        body_ty = ctx.syn_block(e.body)
+        orelse_ty = ctx.ana_block(e.orelse, body_ty)
+        return body_ty
+    
+    @classmethod
+    def ana_If(cls, ctx, e, idx, ty):
+        ctx.ana_block(e.body, ty)
+        ctx.ana_block(e.orelse, ty)
+
+    @classmethod
+    def trans_If(cls, ctx, e, idx):
+        return [ast.copy_location(
+            ast.If(
+                test=ctx.trans(e.test),
+                body=ctx.trans_block(e.body),
+                orelse=ctx.trans_block(e.orelse)), e)]
+
+    @classmethod
+    def syn_IfExp(cls, ctx, e, idx):
+        body_ty = ctx.syn(e.body)
+        orelse_ty = ctx.ana(e.orelse, body_ty)
+        return body_ty
+
+    @classmethod
+    def ana_IfExp(cls, ctx, e, idx, ty):
+        ctx.ana(e.body, ty)
+        ctx.ana(e.orelse, ty)
+
+    @classmethod
+    def trans_IfExp(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.IfExp(
+                test=ctx.trans(e.test),
+                body=ctx.trans(e.body),
+                orelse=ctx.trans(e.orelse)), e)
 
 class record(Fragment):
     @classmethod
@@ -206,15 +326,6 @@ class finsum(Fragment):
     # TODO intro forms
     # TODO other operations
     # TODO pattern matching
-    pass
-
-class boolean(Fragment):
-    # TODO init_idx
-    # TODO intro forms
-    # TODO if
-    # TODO patterns
-    # TODO boolean operators
-    # TODO anything else?
     pass
 
 class fn(Fragment):

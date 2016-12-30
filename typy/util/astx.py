@@ -203,7 +203,7 @@ def conditionals(conditions, branches, loc_sources, orelse):
         return [ast.copy_location(ast.If(
             test=conditions[0],
             body=branches[0],
-            orelse=conditions(
+            orelse=conditionals(
                 conditions[1:],
                 branches[1:],
                 loc_sources[1:],

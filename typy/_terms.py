@@ -19,6 +19,10 @@ def is_match_scrutinizer(stmt):
 def is_match_rule(stmt):
     return isinstance(stmt, ast.With)
 
+def is_stmt_expression(tree):
+    return (isinstance(tree, StatementExpression) or 
+            isinstance(tree, (ast.If, ast.Raise, ast.Try, ast.Expr, ast.Pass)))
+
 class StatementExpression(object):
     pass
 
@@ -152,15 +156,18 @@ _intro_expr_forms = (
     ast.Num, 
     ast.Str, 
     ast.Bytes,
-    ast.NameConstant, # TODO fold this into Name?
+    ast.NameConstant, 
     ast.List, 
     ast.Tuple)
 
 _intro_forms = tuple(_util.seq_cons(
     ast.FunctionDef, _intro_expr_forms))
 
+def is_Name_constructor(e):
+    return isinstance(e, ast.Name) and e.id[0].isupper()
+
 def is_intro_form(e):
-    return isinstance(e, _intro_forms) 
+    return isinstance(e, _intro_forms) or is_Name_constructor(e)
 
 def is_targeted_expr_form(e):
     if isinstance(e, ast.UnaryOp):
@@ -181,6 +188,9 @@ def is_targeted_expr_form(e):
         return True
     else:
         return False
+
+def is_targeted_form(tree):
+    return is_targeted_expr_form(tree) or is_targeted_stmt_form(tree)
 
 def is_ascription(e):
     if hasattr(e, 'ascription'): return True

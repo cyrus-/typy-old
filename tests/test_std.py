@@ -112,37 +112,38 @@ def test_boolean():
     # typechecking
     assert c._members[0].ty == CanonicalTy(boolean, ())
     assert c._members[1].ty == CanonicalTy(boolean, ())
-    assert c._members[2].ty == CanonicalTy(boolean, ())
     assert c._members[3].ty == CanonicalTy(boolean, ())
     assert c._members[4].ty == CanonicalTy(boolean, ())
     assert c._members[5].ty == CanonicalTy(boolean, ())
     assert c._members[6].ty == CanonicalTy(boolean, ())
     assert c._members[7].ty == CanonicalTy(boolean, ())
     assert c._members[8].ty == CanonicalTy(boolean, ())
-    assert c._members[9].ty == CanonicalTy(unit, ())
+    assert c._members[10].ty == CanonicalTy(boolean, ())
+    assert c._members[11].ty == CanonicalTy(unit, ())
 
     # translation
     assert ast_eq(c._translation, """
-        x = ()
-        y = ()
+        x = True
+        y = False
         __typy_scrutinee__ = x
-        if x:
+        if __typy_scrutinee__:
+            y
+        elif (not __typy_scrutinee__):
             y
         else:
-            if not x:
-                y
-            else:
-                raise Exception('typy match failure')
+            raise Exception('typy match failure')
         b1 = (x == y)
         b2 = (x != y)
         b3 = (x is y)
         b4 = (x is not y)
+        b5 = (x and y and x)
+        b6 = (x or y or x)
         if x:
             y
         else:
             y
-        b7 = y if x else x
-        b8 = () if x else ()""")
+        b7 = (y if x else x)
+        b8 = (() if x else ())""")
 
     # evaluation
     assert c._module.x == True
