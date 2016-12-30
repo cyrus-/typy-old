@@ -7,7 +7,7 @@ from ..util import astx
 from .._components import component
 from .._fragments import Fragment
 from .._ty_exprs import CanonicalTy
-from .._errors import TypeValidationError
+from .._errors import TypeValidationError, TyError
 
 class unit(Fragment):
     @classmethod
@@ -35,6 +35,28 @@ class unit(Fragment):
     def trans_pat_Tuple(cls, ctx, pat, scrutinee_trans):
         return (ast.copy_location(
             ast.NameConstant(value=True), pat), { })
+
+    @classmethod
+    def syn_Compare(cls, ctx, e):
+        unit_ty = CanonicalTy(unit, ())
+        ctx.ana(e.left, unit_ty)
+        for op, comparator in zip(e.ops, e.comparators):
+            if isinstance(op, (ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.In, ast.NotIn)):
+                raise TyError("Invalid comparison operator on unit.", comparator)
+            ctx.ana(comparator, unit_ty)
+        return CanonicalTy(boolean, ())
+    
+    @classmethod
+    def trans_Compare(cls, ctx, e):
+        left_tr = ctx.trans(e.left)
+        comp_trs = [ ]
+        for comparator in e.comparators:
+            comp_trs.append(ctx.trans(comparator))
+        return ast.copy_location(
+            ast.Compare(
+                left = left_tr,
+                ops = e.ops,
+                comparators = comp_trs), e)
 
 class record(Fragment):
     @classmethod
@@ -184,6 +206,15 @@ class finsum(Fragment):
     # TODO intro forms
     # TODO other operations
     # TODO pattern matching
+    pass
+
+class boolean(Fragment):
+    # TODO init_idx
+    # TODO intro forms
+    # TODO if
+    # TODO patterns
+    # TODO boolean operators
+    # TODO anything else?
     pass
 
 class fn(Fragment):

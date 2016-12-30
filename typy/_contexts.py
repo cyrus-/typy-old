@@ -111,8 +111,8 @@ class Context(object):
 
     def ana(self, tree, ty):
         # handle the case where neither left or right synthesize a type
-        if isinstance(tree, ast.BinOp):
-            left, right = tree.left, tree.right
+        if isinstance(tree, (ast.BinOp, ast.BoolOp)):
+            left, right = _astx.get_left_right(tree)
             try:
                 self.syn(left)
             except:
@@ -124,10 +124,12 @@ class Context(object):
                     delegate_idx = None
 
                     # will get picked up by subsumption below
-                    tree.ty = delegate.syn_BinOp(self, tree)
+                    class_name = tree.__class__.__name__
+                    syn_method = getattr(delegate, "syn_" + class_name)
+                    tree.ty = syn_method(self, tree)
                     tree.delegate = delegate
                     tree.delegate_idx = delegate_idx
-                    tree.translation_method_name = "trans_BinOp"
+                    tree.translation_method_name = "trans_" + class_name
 
         subsumed = False
         if _terms.is_intro_form(tree):
@@ -240,54 +242,18 @@ class Context(object):
         elif isinstance(tree, ast.BinOp):
             left = tree.left
             right = tree.right
-            try:
-                left_ty = self.syn(left)
-            except:
-                left_ty = None
-            try:
-                right_ty = self.syn(right)
-            except:
-                right_ty = None
-            if left_ty is None and right_ty is None:
-                raise TyError(
-                    "Neither argument synthesizes a type.",
-                    tree)
-            elif left_ty is not None and right_ty is None:
-                left_ty_c = self.canonicalize(left_ty)
-                delegate = left_ty_c.fragment
-                delegate_idx = None
-                translation_method_name = "trans_BinOp"
-                ty = delegate.syn_BinOp(self, tree)
-            elif left_ty is None and right_ty is not None:
-                right_ty_c = self.canonicalize(right_ty)
-                delegate = right_ty_c.fragment
-                delegate_idx = None
-                translation_method_name = "trans_BinOp"
-                ty = delegate.syn_BinOp(self, tree)
-            else:
-                left_ty_c = self.canonicalize(left_ty)
-                right_ty_c = self.canonicalize(right_ty)
-                left_fragment = left_ty_c.fragment
-                right_fragment = right_ty_c.fragment
-                if left_fragment is right_fragment:
-                    delegate = left_fragment
-                else:
-                    left_precedence = left_fragment.precedence
-                    right_precedence = right_fragment.precedence
-                    if left_fragment in right_precedence:
-                        if right_fragment in left_precedence:
-                            raise TyError(
-                                "Circular precedence sets.", tree)
-                        delegate = right_fragment
-                    elif right_fragment in left_precedence:
-                        delegate = left_fragment
-                    else:
-                        raise TyError(
-                            "Left and right of operator synthesize types where "
-                            "the fragments are mutually non-precedent.", tree)
-                delegate_idx = None
-                translation_method_name = "trans_BinOp"
-                ty = delegate.syn_BinOp(self, tree)
+            delegate, delegate_idx, ty, translation_method_name = \
+                self._do_binary(left, right, tree)
+        elif isinstance(tree, ast.Compare):
+            left = tree.left
+            right = tree.comparators[0]
+            delegate, delegate_idx, ty, translation_method_name = \
+                self._do_binary(left, right, tree)
+        elif isinstance(tree, ast.BoolOp): # TODO put these in ast docs order
+            left = tree.values[0]
+            right = tree.values[1]
+            delegate, delegate_idx, ty, translation_method_name = \
+                self._do_binary(left, right, tree)
         elif isinstance(tree, _terms.MatchStatementExpression):
             scrutinee = tree.scrutinee
             scrutinee_ty = self.syn(scrutinee)
@@ -316,6 +282,57 @@ class Context(object):
         tree.delegate_idx = delegate_idx
         tree.translation_method_name = translation_method_name
         return ty
+
+    def _do_binary(self, left, right, tree):
+        class_name = tree.__class__.__name__
+        try:
+            left_ty = self.syn(left)
+        except:
+            left_ty = None
+        try:
+            right_ty = self.syn(right)
+        except:
+            right_ty = None
+        if left_ty is None and right_ty is None:
+            raise TyError(
+                "Neither argument synthesizes a type.",
+                tree)
+        elif left_ty is not None and right_ty is None:
+            left_ty_c = self.canonicalize(left_ty)
+            delegate = left_ty_c.fragment
+            syn_method = getattr(delegate, "syn_" + class_name)
+            ty = syn_method(self, tree)
+        elif left_ty is None and right_ty is not None:
+            right_ty_c = self.canonicalize(right_ty)
+            delegate = right_ty_c.fragment
+            syn_method = getattr(delegate, "syn_" + class_name)
+            ty = syn_method(self, tree)
+        else:
+            left_ty_c = self.canonicalize(left_ty)
+            right_ty_c = self.canonicalize(right_ty)
+            left_fragment = left_ty_c.fragment
+            right_fragment = right_ty_c.fragment
+            if left_fragment is right_fragment:
+                delegate = left_fragment
+            else:
+                left_precedence = left_fragment.precedence
+                right_precedence = right_fragment.precedence
+                if left_fragment in right_precedence:
+                    if right_fragment in left_precedence:
+                        raise TyError(
+                            "Circular precedence sets.", tree)
+                    delegate = right_fragment
+                elif right_fragment in left_precedence:
+                    delegate = left_fragment
+                else:
+                    raise TyError(
+                        "Left and right of operator synthesize types where "
+                        "the fragments are mutually non-precedent.", tree)
+            syn_method = getattr(delegate, "syn_" + class_name)
+            ty = syn_method(self, tree)
+        delegate_idx = None
+        translation_method_name = "trans_" + class_name
+        return delegate, delegate_idx, ty, translation_method_name
 
     def ana_block(self, stmts, ty):
         segmented_stmts = tuple(self._segment(stmts))
@@ -588,6 +605,7 @@ class Context(object):
             else:
                 raise UsageError("Invalid kind.")
         else:
+            print(ty)
             raise UsageError("Invalid construction.")
 
     def ana_uty_expr(self, uty_expr, k):

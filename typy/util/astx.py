@@ -181,7 +181,7 @@ def is_empty_args(args):
             len(args.kwonlyargs) == 0 and 
             args.kwarg is None)
 
-def assignments_from_dict(d,):
+def assignments_from_dict(d):
     r = [ ]
     for id, value, loc_source in d.items():
         r.append(ast.copy_location(
@@ -218,4 +218,12 @@ def standard_raise_str(exn, s, loc_source):
             ],
             keywords=[]),
         cause=None), loc_source))
+
+def get_left_right(e):
+    if isinstance(e, ast.BoolOp):
+        return e.values[0], e.values[1]
+    elif isinstance(e, ast.BinOp):
+        return e.left, e.right
+    elif isinstance(e, ast.Compare):
+        return e.left, e.comparators[0]
 
