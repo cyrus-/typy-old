@@ -101,6 +101,9 @@ class Component(object):
         ctx = self.ctx = Context(self.static_env)
         ctx.default_fragments.append(component_singleton)
         for member in self._members:
+            try:
+                print("checking " + member.id)
+            except: pass
             member.check(ctx)
         self._checked = True
 

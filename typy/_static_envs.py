@@ -57,7 +57,7 @@ class StaticEnv(object):
         return eval(code, self.globals, self.closure)
 
     def eval_module_ast(self, module_ast):
-        # print(ast.dump(module_ast, include_attributes=True))
+        print(ast.dump(module_ast))
         code = compile(module_ast, "<eval_module_ast>", "exec")
         _module = types.ModuleType("TestModule", "Module test") # TODO properly name them
         _module_dict = _module.__dict__

@@ -10,7 +10,7 @@ from typy.util.testing import ast_eq
 
 import typy
 from typy._ty_exprs import CanonicalTy
-from typy.std import component, boolean, unit, record, string, py, fn, finsum, tpl
+from typy.std import component, boolean, unit, num, ieee, record, string, py, fn, finsum, tpl
 
 # 
 # unit
@@ -77,12 +77,12 @@ def test_unit_compare():
     # typechecking
     ty_unit = CanonicalTy(unit, ())
     ty_boolean = CanonicalTy(boolean, ())
-    assert c._members[0].ty == ty_unit
-    assert c._members[1].ty == ty_unit
-    assert c._members[2].ty == ty_boolean
-    assert c._members[3].ty == ty_boolean
-    assert c._members[4].ty == ty_boolean
-    assert c._members[5].ty == ty_boolean
+    assert c._val_exports['x'].ty == ty_unit
+    assert c._val_exports['y'].ty == ty_unit
+    assert c._val_exports['b1'].ty == ty_boolean
+    assert c._val_exports['b2'].ty == ty_boolean
+    assert c._val_exports['b3'].ty == ty_boolean
+    assert c._val_exports['b4'].ty == ty_boolean
 
 # 
 # boolean
@@ -110,16 +110,16 @@ def test_boolean():
         b8 [: unit] = () if x else ()
 
     # typechecking
-    assert c._members[0].ty == CanonicalTy(boolean, ())
-    assert c._members[1].ty == CanonicalTy(boolean, ())
-    assert c._members[3].ty == CanonicalTy(boolean, ())
-    assert c._members[4].ty == CanonicalTy(boolean, ())
-    assert c._members[5].ty == CanonicalTy(boolean, ())
-    assert c._members[6].ty == CanonicalTy(boolean, ())
-    assert c._members[7].ty == CanonicalTy(boolean, ())
-    assert c._members[8].ty == CanonicalTy(boolean, ())
-    assert c._members[10].ty == CanonicalTy(boolean, ())
-    assert c._members[11].ty == CanonicalTy(unit, ())
+    assert c._val_exports['x'].ty == CanonicalTy(boolean, ())
+    assert c._val_exports['y'].ty == CanonicalTy(boolean, ())
+    assert c._val_exports['b1'].ty == CanonicalTy(boolean, ())
+    assert c._val_exports['b2'].ty == CanonicalTy(boolean, ())
+    assert c._val_exports['b3'].ty == CanonicalTy(boolean, ())
+    assert c._val_exports['b4'].ty == CanonicalTy(boolean, ())
+    assert c._val_exports['b5'].ty == CanonicalTy(boolean, ())
+    assert c._val_exports['b6'].ty == CanonicalTy(boolean, ())
+    assert c._val_exports['b7'].ty == CanonicalTy(boolean, ())
+    assert c._val_exports['b8'].ty == CanonicalTy(unit, ())
 
     # translation
     assert ast_eq(c._translation, """
@@ -161,6 +161,104 @@ def test_boolean():
 # num
 # 
 
+def test_num():
+    @component
+    def c():
+        x [: num] = 42
+        y [: num] = -42
+        [x].match
+        with 42: y
+        with -42: y
+        with -z: z
+        with +z: z
+        b1 = x + y
+        b2 = x - y
+        b3 = x * y
+        b4 = x / y
+        b5 = x % y
+        b6 = x ** y
+        b7 = x << 2
+        b8 = x >> 2
+        b9 = x | 2
+        b10 = x ^ 2
+        b11 = x & 2
+        b12 = x // 2
+        b13 = ~x
+        b14 = +x
+        b15 = -x
+        b16 = x == y
+        b17 = x != y
+        b18 = x < y <= y
+        b19 = x > y >= y
+        b20 = x is y
+        b21 = x is not y
+
+    # typechecking
+    num_ty = CanonicalTy(num, ())
+    ieee_ty = CanonicalTy(ieee, ())
+    boolean_ty = CanonicalTy(boolean, ())
+    assert c._val_exports['x'].ty == num_ty
+    assert c._val_exports['y'].ty == num_ty
+    assert c._val_exports['b1'].ty == num_ty
+    assert c._val_exports['b2'].ty == num_ty
+    assert c._val_exports['b3'].ty == num_ty
+    assert c._val_exports['b4'].ty == ieee_ty
+    assert c._val_exports['b5'].ty == num_ty
+    assert c._val_exports['b6'].ty == num_ty
+    assert c._val_exports['b7'].ty == num_ty
+    assert c._val_exports['b8'].ty == num_ty
+    assert c._val_exports['b9'].ty == num_ty
+    assert c._val_exports['b10'].ty == num_ty
+    assert c._val_exports['b11'].ty == num_ty
+    assert c._val_exports['b12'].ty == num_ty
+    assert c._val_exports['b13'].ty == num_ty
+    assert c._val_exports['b14'].ty == num_ty
+    assert c._val_exports['b15'].ty == num_ty
+    assert c._val_exports['b16'].ty == boolean_ty
+    assert c._val_exports['b17'].ty == boolean_ty
+    assert c._val_exports['b18'].ty == boolean_ty
+    assert c._val_exports['b19'].ty == boolean_ty
+    assert c._val_exports['b20'].ty == boolean_ty
+    assert c._val_exports['b21'].ty == boolean_ty
+
+    # translation
+    assert ast_eq(c._translation, """
+        x = 42
+        y = (- 42)
+        __typy_scrutinee__ = x
+        if (__typy_scrutinee__ == 42):
+            y
+        elif ((__typy_scrutinee__ < 0) and ((- __typy_scrutinee__) == 42)):
+            y
+        elif ((__typy_scrutinee__ < 0) and True):
+            _z_0 = (- __typy_scrutinee__)
+            _z_0
+        elif ((__typy_scrutinee__ > 0) and True):
+            _z_1 = __typy_scrutinee__
+            _z_1
+        else:
+            raise Exception('typy match failure')
+        b1 = (x + y)
+        b2 = (x - y)
+        b3 = (x * y)
+        b4 = (x / y)
+        b5 = (x % y)
+        b6 = (x ** y)
+        b7 = (x << 2)
+        b8 = (x >> 2)
+        b9 = (x | 2)
+        b10 = (x ^ 2)
+        b11 = (x & 2)
+        b12 = (x // 2)
+        b13 = (~ x)
+        b14 = (+ x)
+        b15 = (- x)
+        b16 = (x == y)
+        b17 = (x != y)
+        b18 = (x < y <= y)
+        b19 = (x > y >= y)
+        b20 = (x is y)
+        b21 = (x is not y)""")
 
 # 
 # ieee

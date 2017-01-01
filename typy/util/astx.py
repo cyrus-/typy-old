@@ -183,11 +183,11 @@ def is_empty_args(args):
 
 def assignments_from_dict(d):
     r = [ ]
-    for id, value, loc_source in d.items():
-        r.append(ast.copy_location(
+    for id, (value, loc_source) in d.items():
+        r.append(ast.fix_missing_locations(ast.copy_location(
             ast.Assign(
                 targets=[ast.Name(id=id, ctx=store_ctx)],
-                value=value)), loc_source)
+                value=value), loc_source)))
     return r
 
 def conditionals(conditions, branches, loc_sources, orelse):

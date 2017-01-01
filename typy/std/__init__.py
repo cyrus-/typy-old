@@ -9,6 +9,11 @@ from .._fragments import Fragment
 from .._ty_exprs import CanonicalTy
 from .._errors import TypeValidationError, TyError
 
+try:
+    integer_types = (int, long)
+except NameError:
+    integer_types = (int,)
+
 class unit(Fragment):
     @classmethod
     def init_idx(cls, ctx, idx_ast):
@@ -38,7 +43,6 @@ class unit(Fragment):
 
     @classmethod
     def syn_Compare(cls, ctx, e):
-        unit_ty = CanonicalTy(unit, ())
         ctx.ana(e.left, unit_ty)
         for op, comparator in zip(e.ops, e.comparators):
             if isinstance(op, (ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.In, ast.NotIn)):
@@ -57,6 +61,8 @@ class unit(Fragment):
                 left = left_tr,
                 ops = e.ops,
                 comparators = comp_trs), e)
+
+unit_ty = CanonicalTy(unit, ())
 
 class boolean(Fragment):
     @classmethod
@@ -97,16 +103,14 @@ class boolean(Fragment):
 
     @classmethod
     def syn_BoolOp(cls, ctx, e):
-        bool_ty = CanonicalTy(boolean, ())
         for value in e.values:
-            ctx.ana(value, bool_ty)
-        return bool_ty
+            ctx.ana(value, boolean_ty)
+        return boolean_ty
 
     @classmethod
     def ana_BoolOp(cls, ctx, e, idx):
-        bool_ty = CanonicalTy(boolean, ())
         for value in e.values:
-            ctx.ana(value, bool_ty)
+            ctx.ana(value, boolean_ty)
 
     @classmethod
     def trans_BoolOp(cls, ctx, e):
@@ -120,13 +124,12 @@ class boolean(Fragment):
 
     @classmethod
     def syn_Compare(cls, ctx, e):
-        bool_ty = CanonicalTy(boolean, ())
-        ctx.ana(e.left, bool_ty)
+        ctx.ana(e.left, boolean_ty)
         for op, comparator in zip(e.ops, e.comparators):
             if isinstance(op, (ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.In, ast.NotIn)):
                 raise TyError("Invalid comparison operator on unit.", comparator)
-            ctx.ana(comparator, bool_ty)
-        return bool_ty
+            ctx.ana(comparator, boolean_ty)
+        return boolean_ty
 
     @classmethod
     def trans_Compare(cls, ctx, e):
@@ -177,6 +180,8 @@ class boolean(Fragment):
                 test=ctx.trans(e.test),
                 body=ctx.trans(e.body),
                 orelse=ctx.trans(e.orelse)), e)
+
+boolean_ty = CanonicalTy(boolean, ())
 
 class record(Fragment):
     @classmethod
@@ -266,7 +271,7 @@ class tpl(Fragment):
 
 class string(Fragment):
     @classmethod
-    def init_idx(self, ctx, idx_ast):
+    def init_idx(cls, ctx, idx_ast):
         return _check_trivial_idx_ast(idx_ast)
 
     @classmethod
@@ -300,12 +305,164 @@ class string(Fragment):
 
     # TODO pattern matching
 
+string_ty = CanonicalTy(string, ())
+
 class num(Fragment):
-    # TODO init_idx
-    # TODO intro forms
-    # TODO other operations
-    # TODO pattern matching
-    pass
+    @classmethod
+    def init_idx(cls, ctx, idx_ast):
+        return _check_trivial_idx_ast(idx_ast)
+
+    @classmethod
+    def ana_Num(cls, ctx, e, idx):
+        n = e.n
+        if isinstance(n, integer_types):
+            return
+        else:
+            raise TyError("Invalid literal for num type.", e)
+
+    @classmethod
+    def ana_UnaryOp(cls, ctx, e, idx):
+        if isinstance(e.op, ast.Not):
+            raise TyError("Invalid unary operator 'not' for num type.", e)
+        ctx.ana(e.operand, CanonicalTy(num, ()))
+
+    @classmethod
+    def trans_Num(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Num(n=e.n), e)
+
+    @classmethod
+    def ana_pat_Num(cls, ctx, pat, idx):
+        n = pat.n
+        if isinstance(n, integer_types):
+            return {}
+        else:
+            raise TyError("Invalid pattern literal for num type.", pat)
+
+    @classmethod
+    def trans_pat_Num(cls, ctx, pat, idx, scrutinee_trans):
+        condition = ast.fix_missing_locations(ast.copy_location(
+            ast.Compare(
+                left = scrutinee_trans,
+                ops=[ast.Eq()],
+                comparators=[ast.Num(n=pat.n)]), pat))
+        return condition, {}
+
+    @classmethod
+    def ana_pat_UnaryOp(cls, ctx, pat, idx):
+        op = pat.op
+        if isinstance(op, (ast.UAdd, ast.USub)):
+            return ctx.ana_pat(pat.operand, num_ty)
+        else:
+            raise TyError("Invalid pattern for num type.", pat)
+
+    @classmethod
+    def trans_pat_UnaryOp(cls, ctx, pat, idx, scrutinee_trans):
+        if isinstance(pat.op, ast.USub):
+            cond_op = ast.Lt()
+            new_scrutinee_trans = ast.fix_missing_locations(ast.copy_location(
+                ast.UnaryOp(
+                    op=ast.USub(),
+                    operand=scrutinee_trans), pat))
+        else:
+            cond_op = ast.Gt()
+            new_scrutinee_trans = scrutinee_trans
+
+        this_condition = ast.fix_missing_locations(ast.copy_location(
+            ast.Compare(
+                left=scrutinee_trans,
+                ops=[cond_op],
+                comparators=[ast.Num(n=0)]), pat))
+        operand_condns, bindings = ctx.trans_pat(pat.operand, 
+                                                 new_scrutinee_trans)
+        condition = ast.fix_missing_locations(ast.copy_location(
+            ast.BoolOp(
+                op=ast.And(),
+                values=[this_condition, operand_condns]), pat))
+        return condition, bindings
+
+    @classmethod
+    def syn_BinOp(cls, ctx, e):
+        op = e.op
+        if isinstance(op, ast.MatMult):
+            raise TyError("Invalid operator on numbers.", e)
+        else:
+            left = e.left
+            try:
+                ctx.ana(left, num_ty)
+                left_ty = num_ty
+            except TyError:
+                ctx.ana(left, ieee_ty)
+                left_ty = ieee_ty
+            right = e.right
+            try:
+                ctx.ana(right, num_ty)
+                right_ty = num_ty
+            except TyError:
+                ctx.ana(right, ieee_ty)
+                right_ty = num_ty
+            if isinstance(e.op, ast.Div):
+                return ieee_ty
+            else:
+                if left_ty is ieee_ty or right_ty is ieee_ty:
+                    return ieee_ty
+                else:
+                    return num_ty
+
+    @classmethod
+    def ana_BinOp(cls, ctx, e):
+        if isinstance(e.op, ast.MatMult):
+            raise TyError("Invalid operator on numbers.", e)
+        elif isinstance(e.op, ast.Div):
+            raise TyError("Cannot use division at num type.", e)
+        else:
+            ctx.ana(e.left, num_ty)
+            ctx.ana(e.right, num_ty)
+
+    @classmethod
+    def trans_BinOp(cls, ctx, e):
+        return ast.copy_location(
+            ast.BinOp(
+                left=ctx.trans(e.left),
+                op=e.op,
+                right=ctx.trans(e.right)), e)
+
+    @classmethod
+    def syn_UnaryOp(cls, ctx, e, idx):
+        if isinstance(e.op, ast.Not):
+            raise TyError("Invalid unary operator 'not' for num type.", e)
+        return CanonicalTy(num, ())
+
+    @classmethod
+    def trans_UnaryOp(cls, ctx, e, idx=None):
+        return ast.copy_location(
+            ast.UnaryOp(
+                op=e.op,
+                operand=ctx.trans(e.operand)), e)
+
+    @classmethod
+    def syn_Compare(cls, ctx, e):
+        left = e.left
+        ctx.ana(left, num_ty)
+        for op, comparator in zip(e.ops, e.comparators):
+            if isinstance(op, (ast.In, ast.NotIn)):
+                raise TyError(
+                    "Invalid comparison operator for num.", 
+                    comparator)
+            ctx.ana(comparator, num_ty)
+        return boolean_ty
+
+    @classmethod
+    def trans_Compare(cls, ctx, e):
+        return ast.copy_location(
+            ast.Compare(
+                left=ctx.trans(e.left),
+                ops=e.ops,
+                comparators=[
+                    ctx.trans(comparator)
+                    for comparator in e.comparators]), e)
+
+num_ty = CanonicalTy(num, ())
 
 class ieee(Fragment):
     # TODO init_idx
@@ -313,6 +470,7 @@ class ieee(Fragment):
     # TODO other operations
     # TODO pattern matching
     pass
+ieee_ty = CanonicalTy(ieee, ())
 
 class cplx(Fragment):
     # TODO init_idx

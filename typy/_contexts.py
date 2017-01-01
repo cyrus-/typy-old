@@ -282,8 +282,7 @@ class Context(object):
                 raise TyError("Cannot synthesize a type for a match statement "
                               "expression without any rules.", tree)
         else:
-            print(tree)
-            raise NotImplementedError()
+            raise TyError("Invalid operation: " + tree.__class__.__name__, tree)
         tree.ty = ty
         tree.delegate = delegate
         tree.delegate_idx = delegate_idx
@@ -451,8 +450,8 @@ class Context(object):
                 conditions.append(condition)
                 branch = _astx.assignments_from_dict(
                     dict(
-                        (uniq_id, binding_translations[id], pat)
-                        for id, (uniq_id, _) in pat.var_bindings
+                        (uniq_id, (binding_translations[id], pat))
+                        for id, (uniq_id, _) in pat.var_bindings.items()
                     )
                 )
                 branch.extend(self.trans_block(rule.branch))
@@ -498,7 +497,7 @@ class Context(object):
                 return { }
             else:
                 return { pat: ty }
-        elif _terms.is_intro_form(pat):
+        elif _terms.is_intro_form(pat) or isinstance(pat, ast.UnaryOp):
             canonical_ty = self.canonicalize(ty)
             delegate = pat.delegate = canonical_ty.fragment
             delegate_idx = pat.delegate_idx = canonical_ty.idx
@@ -508,13 +507,16 @@ class Context(object):
             pat.bindings = bindings
             return bindings
         else:
-            raise NotImplementedError()
+            raise TyError(
+                "Invalid pattern form: " + pat.__class__.__name__, 
+                pat)
 
     def trans_pat(self, pat, scrutinee_trans):
         if isinstance(pat, ast.Name):
             return (ast.copy_location(
-                ast.NameConstant(value=True), pat), { pat.id: scrutinee_trans })
-        elif _terms.is_intro_form(pat):
+                ast.NameConstant(value=True), pat), 
+                    { pat.id: scrutinee_trans })
+        elif _terms.is_intro_form(pat) or isinstance(pat, ast.UnaryOp):
             delegate = pat.delegate
             delegate_idx = pat.delegate_idx
             method_name = "trans_pat_" + pat.__class__.__name__ # TODO add stubs
