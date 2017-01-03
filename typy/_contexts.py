@@ -30,9 +30,14 @@ class Context(object):
         self.last_ty_var = 0
         self.last_exp_var = 0
 
+        # map from id to uniq_id
+        self.imports = { 'builtins': '__builtins__' }
+        self.last_import_var = 0
+
     #
     # Bindings
     # 
+
     def push_uty_expr_binding(self, name_ast, k):
         uniq_id = "_ty_" + name_ast.id + "_" + str(self.last_ty_var)
         self.ty_ids[name_ast.id] = TyExprVar(self, name_ast, uniq_id)
@@ -49,8 +54,11 @@ class Context(object):
         self.exp_vars.pop()
 
     def add_binding(self, name_ast, ty):
-        uniq_id = "_" + name_ast.id + "_" + str(self.last_exp_var)
-        self.exp_ids[name_ast.id] = uniq_id
+        return self.add_id_binding(name_ast.id, ty)
+
+    def add_id_binding(self, id, ty):
+        uniq_id = "_" + id + "_" + str(self.last_exp_var)
+        self.exp_ids[id] = uniq_id
         self.exp_vars[uniq_id] = ty
         self.last_exp_var += 1
         return (uniq_id, ty)
@@ -69,6 +77,16 @@ class Context(object):
     def lookup_exp_var_by_id(self, id):
         uniq_id = self.exp_ids[id]
         return uniq_id, self.exp_vars[uniq_id]
+
+    def add_import(self, name):
+        imports = self.imports
+        if name in imports:
+            return imports[name]
+        else:
+            uniq_id = "_typy_import_" + str(self.last_import_var)
+            self.last_import_var += 1
+            imports[name] = uniq_id
+            return uniq_id
 
     # 
     # Statements and expressions
@@ -398,7 +416,16 @@ class Context(object):
                 cur_rules)
 
     def trans(self, tree):
-        if isinstance(tree, ast.Name):
+        if hasattr(tree, 'delegate') and tree.delegate is not None:
+            delegate = tree.delegate
+            idx = tree.delegate_idx
+            translation_method_name = tree.translation_method_name
+            translation_method = getattr(delegate, translation_method_name)
+            if idx is not None:
+                translation = translation_method(self, tree, idx)
+            else:
+                translation = translation_method(self, tree)
+        elif isinstance(tree, ast.Name):
             if hasattr(tree, "uniq_id"):
                 uniq_id = tree.uniq_id
                 translation = ast.copy_location(
@@ -467,14 +494,7 @@ class Context(object):
                 [_astx.standard_raise_str('Exception', 
                                          'typy match failure', scrutinee)]))
         else:
-            delegate = tree.delegate
-            idx = tree.delegate_idx
-            translation_method_name = tree.translation_method_name
-            translation_method = getattr(delegate, translation_method_name)
-            if idx is not None:
-                translation = translation_method(self, tree, idx)
-            else:
-                translation = translation_method(self, tree)
+            raise NotImplementedError()
         tree.translation = translation
         return translation
 
@@ -491,13 +511,7 @@ class Context(object):
     # 
 
     def ana_pat(self, pat, ty):
-        if isinstance(pat, ast.Name):
-            id = pat.id
-            if id == "_":
-                return { }
-            else:
-                return { pat: ty }
-        elif _terms.is_intro_form(pat) or isinstance(pat, ast.UnaryOp):
+        if _terms.is_intro_form(pat) or isinstance(pat, ast.UnaryOp):
             canonical_ty = self.canonicalize(ty)
             delegate = pat.delegate = canonical_ty.fragment
             delegate_idx = pat.delegate_idx = canonical_ty.idx
@@ -506,22 +520,28 @@ class Context(object):
             bindings = method(self, pat, delegate_idx)
             pat.bindings = bindings
             return bindings
+        elif isinstance(pat, ast.Name):
+            id = pat.id
+            if id == "_":
+                return { }
+            else:
+                return { pat: ty }
         else:
             raise TyError(
                 "Invalid pattern form: " + pat.__class__.__name__, 
                 pat)
 
     def trans_pat(self, pat, scrutinee_trans):
-        if isinstance(pat, ast.Name):
-            return (ast.copy_location(
-                ast.NameConstant(value=True), pat), 
-                    { pat.id: scrutinee_trans })
-        elif _terms.is_intro_form(pat) or isinstance(pat, ast.UnaryOp):
+        if _terms.is_intro_form(pat) or isinstance(pat, ast.UnaryOp):
             delegate = pat.delegate
             delegate_idx = pat.delegate_idx
             method_name = "trans_pat_" + pat.__class__.__name__ # TODO add stubs
             method = getattr(delegate, method_name)
             return method(self, pat, delegate_idx, scrutinee_trans)
+        elif isinstance(pat, ast.Name):
+            return (ast.copy_location(
+                ast.NameConstant(value=True), pat), 
+                    { pat.id: scrutinee_trans })
         else:
             raise NotImplementedError()
 

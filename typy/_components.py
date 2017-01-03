@@ -115,6 +115,12 @@ class Component(object):
         for member in self._members:
             translation = member.translate(self.ctx)
             body.extend(translation)
+        imports = self.ctx.imports
+        for name in sorted(imports.keys()):
+            asname = imports[name]
+            body.insert(0, 
+                ast.Import(names=[ast.alias(name=name, asname=asname)],
+                           lineno=0, col_offset=0))
         self._translation = ast.Module(
             body=body,
             lineno=0, col_offset=0) # TODO

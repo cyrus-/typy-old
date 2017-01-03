@@ -227,3 +227,13 @@ def get_left_right(e):
     elif isinstance(e, ast.Compare):
         return e.left, e.comparators[0]
 
+def builtin_call(id, args):
+    return ast.Call(
+        func=ast.Attribute(
+            value=ast.Name(id="__builtins__", ctx=load_ctx),
+            attr=id,
+            ctx=load_ctx
+        ),
+        args=args,
+        keywords=[])
+

@@ -443,13 +443,19 @@ class num(Fragment):
     @classmethod
     def syn_Compare(cls, ctx, e):
         left = e.left
-        ctx.ana(left, num_ty)
+        try:
+            ctx.ana(left, num_ty)
+        except TyError:
+            ctx.ana(left, ieee_ty)
         for op, comparator in zip(e.ops, e.comparators):
             if isinstance(op, (ast.In, ast.NotIn)):
                 raise TyError(
                     "Invalid comparison operator for num.", 
                     comparator)
-            ctx.ana(comparator, num_ty)
+            try:
+                ctx.ana(comparator, num_ty)
+            except TyError:
+                ctx.ana(comparator, ieee_ty)
         return boolean_ty
 
     @classmethod
@@ -465,11 +471,202 @@ class num(Fragment):
 num_ty = CanonicalTy(num, ())
 
 class ieee(Fragment):
-    # TODO init_idx
-    # TODO intro forms
-    # TODO other operations
-    # TODO pattern matching
-    pass
+    @classmethod
+    def init_idx(cls, ctx, idx_ast):
+        return _check_trivial_idx_ast(idx_ast)
+
+    @classmethod
+    def ana_Num(cls, ctx, e, idx):
+        return
+
+    @classmethod
+    def trans_Num(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Num(n=e.n), e)
+
+    @classmethod
+    def ana_Name(cls, ctx, e, idx):
+        id = e.id
+        if id == "NaN" or id == "Inf" or id == "Infinity":
+            return
+        else:
+            raise TyError("Invalid name constant for ieee type.", e)
+
+    @classmethod
+    def trans_Name(cls, ctx, e, idx):
+        return ast.fix_missing_locations(ast.copy_location(
+            astx.builtin_call(
+               'float', [ast.Str(s=e.id)]), e))
+                               
+    @classmethod
+    def ana_UnaryOp(cls, ctx, e, idx):
+        if isinstance(e.op, (ast.Not, ast.Invert)):
+            raise TyError("Invalid unary operator for ieee type.", e)
+        ctx.ana(e.operand, CanonicalTy(ieee, ()))
+
+    @classmethod
+    def ana_pat_Num(cls, ctx, pat, idx):
+        return {}
+
+    @classmethod
+    def trans_pat_Num(cls, ctx, pat, idx, scrutinee_trans):
+        condition = ast.fix_missing_locations(ast.copy_location(
+            ast.Compare(
+                left = scrutinee_trans,
+                ops=[ast.Eq()],
+                comparators=[ast.Num(n=pat.n)]), pat))
+        return condition, {}
+
+    @classmethod
+    def ana_pat_Name(cls, ctx, pat, idx):
+        id = pat.id
+        if id == "NaN" or id == "Inf" or id == "Infinity":
+            return {}
+        else:
+            raise TyError("Invalid name constant for ieee type: " + id, pat)
+
+    @classmethod
+    def trans_pat_Name(cls, ctx, pat, idx, scrutinee_trans):
+        id = pat.id
+        if id == "Inf" or id == "Infinity":
+            condition = ast.fix_missing_locations(ast.copy_location(
+                ast.Compare(
+                    left=scrutinee_trans,
+                    ops=[ast.Eq()],
+                    comparators=[
+                        astx.builtin_call('float', [ast.Str(s=pat.id)])]),
+                pat))
+        else: # NaN
+            math = ctx.add_import("math")
+            condition = ast.fix_missing_locations(ast.copy_location(
+                ast.Call(
+                    func=ast.Attribute(
+                        value=ast.Name(id=math, ctx=astx.load_ctx),
+                        attr="isnan",
+                        ctx=astx.load_ctx),
+                    args=[scrutinee_trans],
+                    keywords=[]), pat))
+        return condition, {}
+
+    @classmethod
+    def ana_pat_UnaryOp(cls, ctx, pat, idx):
+        if isinstance(pat.op, (ast.UAdd, ast.USub)):
+            return ctx.ana_pat(pat.operand, ieee_ty)
+        else:
+            raise TyError("Invalid pattern for ieee type.", pat)
+
+    @classmethod
+    def trans_pat_UnaryOp(cls, ctx, pat, idx, scrutinee_trans):
+        if isinstance(pat.op, ast.USub):
+            cond_op = ast.Lt()
+            new_scrutinee_trans = ast.fix_missing_locations(ast.copy_location(
+                ast.UnaryOp(
+                    op=ast.USub(),
+                    operand=scrutinee_trans), pat))
+        else:
+            cond_op = ast.Gt()
+            new_scrutinee_trans = scrutinee_trans
+
+        this_condition = ast.fix_missing_locations(ast.copy_location(
+            ast.Compare(
+                left=scrutinee_trans,
+                ops=[cond_op],
+                comparators=[ast.Num(n=0.0)]), pat))
+        operand_condns, bindings = ctx.trans_pat(pat.operand, 
+                                                 new_scrutinee_trans)
+        condition = ast.fix_missing_locations(ast.copy_location(
+            ast.BoolOp(
+                op=ast.And(),
+                values=[this_condition, operand_condns]), pat))
+        return condition, bindings
+
+    precedence = set([num])
+
+    @classmethod
+    def syn_BinOp(cls, ctx, e):
+        op = e.op
+        if isinstance(op, (ast.MatMult, ast.BitOr, ast.BitXor, 
+                           ast.BitAnd, ast.LShift, ast.RShift)):
+            raise TyError("Invalid operator on ieee.", e)
+        else:
+            left = e.left
+            try:
+                ctx.ana(left, ieee_ty)
+            except TyError:
+                ctx.ana(left, num_ty)
+            right = e.right
+            try:
+                ctx.ana(right, ieee_ty)
+            except TyError:
+                ctx.ana(right, num_ty)
+            return ieee_ty
+
+    @classmethod
+    def ana_BinOp(cls, ctx, e):
+        if isinstance(op, (ast.MatMult, ast.BitOr, ast.BitXor, 
+                           ast.BitAnd, ast.LShift, ast.RShift)):
+            raise TyError("Invalid operator on ieee.", e)
+        else:
+            left = e.left
+            try:
+                ctx.ana(left, ieee_ty)
+            except TyError:
+                ctx.ana(left, num_ty)
+            right = e.right
+            try:
+                ctx.ana(right, ieee_ty)
+            except TyError:
+                ctx.ana(right, num_ty)
+
+    @classmethod
+    def trans_BinOp(cls, ctx, e):
+        return ast.copy_location(
+            ast.BinOp(
+                left=ctx.trans(e.left),
+                op=e.op,
+                right=ctx.trans(e.right)), e)
+
+    @classmethod
+    def syn_UnaryOp(cls, ctx, e, idx):
+        if isinstance(e.op, (ast.Not, ast.Invert)):
+            raise TyError("Invalid unary operator for ieee type.", e)
+        return ieee_ty
+
+    @classmethod
+    def trans_UnaryOp(cls, ctx, e, idx=None):
+        return ast.copy_location(
+            ast.UnaryOp(
+                op=e.op,
+                operand=ctx.trans(e.operand)), e)
+
+    @classmethod
+    def syn_Compare(cls, ctx, e):
+        left = e.left
+        try:
+            ctx.ana(left, ieee_ty)
+        except TyError:
+            ctx.ana(left, num_ty)
+        for op, comparator in zip(e.ops, e.comparators):
+            if isinstance(op, (ast.In, ast.NotIn)):
+                raise TyError(
+                    "Invalid comparison operator for num.", 
+                    comparator)
+            try:
+                ctx.ana(comparator, ieee_ty)
+            except TyError:
+                ctx.ana(comparator, num_ty)
+        return boolean_ty
+
+    @classmethod
+    def trans_Compare(cls, ctx, e):
+        return ast.copy_location(
+            ast.Compare(
+                left=ctx.trans(e.left),
+                ops=e.ops,
+                comparators=[
+                    ctx.trans(comparator)
+                    for comparator in e.comparators]), e)
+    
 ieee_ty = CanonicalTy(ieee, ())
 
 class cplx(Fragment):

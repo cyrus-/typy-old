@@ -167,7 +167,8 @@ def is_Name_constructor(e):
     return isinstance(e, ast.Name) and e.id[0].isupper()
 
 def is_Unary_literal(e):
-    return isinstance(e, ast.UnaryOp) and isinstance(e.operand, ast.Num)
+    return isinstance(e, ast.UnaryOp) and (isinstance(e.operand, ast.Num)
+                                           or is_Name_constructor(e.operand))
 
 def is_intro_form(e):
     return isinstance(e, _intro_forms) or is_Name_constructor(e) or is_Unary_literal(e)

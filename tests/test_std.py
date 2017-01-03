@@ -6,7 +6,7 @@ To run:
 import pytest
 import ast
 
-from typy.util.testing import ast_eq
+from typy.util.testing import ast_eq, trans_str, trans_truth
 
 import typy
 from typy._ty_exprs import CanonicalTy
@@ -28,6 +28,7 @@ def test_unit_intro():
 
     # translation
     assert ast_eq(c._translation, """
+        import builtins as __builtins__
         x = ()
         y = ()""")
 
@@ -43,6 +44,7 @@ def test_unit_match():
         with (): x
 
     assert ast_eq(c._translation, """
+        import builtins as __builtins__
         x = ()
         __typy_scrutinee__ = x
         if True:
@@ -123,6 +125,7 @@ def test_boolean():
 
     # translation
     assert ast_eq(c._translation, """
+        import builtins as __builtins__
         x = True
         y = False
         __typy_scrutinee__ = x
@@ -192,6 +195,7 @@ def test_num():
         b19 = x > y >= y
         b20 = x is y
         b21 = x is not y
+        # TODO methods?
 
     # typechecking
     num_ty = CanonicalTy(num, ())
@@ -223,6 +227,7 @@ def test_num():
 
     # translation
     assert ast_eq(c._translation, """
+        import builtins as __builtins__
         x = 42
         y = (- 42)
         __typy_scrutinee__ = x
@@ -264,6 +269,129 @@ def test_num():
 # ieee
 # 
 
+def test_ieee():
+    @component
+    def c():
+        x1 [: ieee] = 42
+        x2 [: ieee] = 42.5
+        y1 [: ieee] = -42
+        y2 [: ieee] = -42.5
+        nan [: ieee] = NaN
+        inf [: ieee] = Inf
+        ninf [: ieee] = -Inf
+        n [: num] = 2
+        [x1].match
+        with 42: y1
+        with 42.5: y1
+        with -42: y2
+        with -42.5: y2
+        with NaN: inf
+        with Inf: inf
+        with -Inf: inf
+        with -z: z
+        with +z: z
+        b1 = x1 + y1
+        b1n = x1 + n
+        b2 = x1 - y1
+        b2n = n - y1
+        b3 = x1 * y1
+        b4 = x1 / y1
+        b5 = x1 % y1
+        b6 = x1 ** y1
+        b12 = x1 // 2
+        b14 = +x1
+        b15 = -x1
+        b16 = x1 == y1
+        b17 = x1 != y1
+        b18 = x1 < y1 <= y2
+        b19 = x1 > y1 >= y2
+        b20 = x1 is y1
+        b21 = x1 is not y1
+        # TODO conversion to num
+        # TODO methods?
+
+    # typechecking
+    num_ty = CanonicalTy(num, ())
+    ieee_ty = CanonicalTy(ieee, ())
+    boolean_ty = CanonicalTy(boolean, ())
+    assert c._val_exports['x1'].ty == ieee_ty
+    assert c._val_exports['x2'].ty == ieee_ty
+    assert c._val_exports['y1'].ty == ieee_ty
+    assert c._val_exports['y2'].ty == ieee_ty
+    assert c._val_exports['nan'].ty == ieee_ty
+    assert c._val_exports['inf'].ty == ieee_ty
+    assert c._val_exports['ninf'].ty == ieee_ty
+    assert c._val_exports['n'].ty == num_ty
+    assert c._val_exports['b1'].ty == ieee_ty
+    assert c._val_exports['b1n'].ty == ieee_ty
+    assert c._val_exports['b2'].ty == ieee_ty
+    assert c._val_exports['b2n'].ty == ieee_ty
+    assert c._val_exports['b3'].ty == ieee_ty
+    assert c._val_exports['b4'].ty == ieee_ty
+    assert c._val_exports['b5'].ty == ieee_ty
+    assert c._val_exports['b6'].ty == ieee_ty
+    assert c._val_exports['b12'].ty == ieee_ty
+    assert c._val_exports['b14'].ty == ieee_ty
+    assert c._val_exports['b15'].ty == ieee_ty
+    assert c._val_exports['b16'].ty == boolean_ty
+    assert c._val_exports['b17'].ty == boolean_ty
+    assert c._val_exports['b18'].ty == boolean_ty
+    assert c._val_exports['b19'].ty == boolean_ty
+    assert c._val_exports['b20'].ty == boolean_ty
+    assert c._val_exports['b21'].ty == boolean_ty
+
+    # translation
+    assert trans_str(c._translation) == trans_truth("""
+        import math as _typy_import_0
+        import builtins as __builtins__
+        x1 = 42
+        x2 = 42.5
+        y1 = (- 42)
+        y2 = (- 42.5)
+        nan = __builtins__.float('NaN')
+        inf = __builtins__.float('Inf')
+        ninf = (- __builtins__.float('Inf'))
+        n = 2
+        __typy_scrutinee__ = x1
+        if (__typy_scrutinee__ == 42):
+            y1
+        elif (__typy_scrutinee__ == 42.5):
+            y1
+        elif ((__typy_scrutinee__ < 0.0) and ((- __typy_scrutinee__) == 42)):
+            y2
+        elif ((__typy_scrutinee__ < 0.0) and ((- __typy_scrutinee__) == 42.5)):
+            y2
+        elif _typy_import_0.isnan(__typy_scrutinee__):
+            inf
+        elif (__typy_scrutinee__ == __builtins__.float('Inf')):
+            inf
+        elif ((__typy_scrutinee__ < 0.0) and ((- __typy_scrutinee__) == __builtins__.float('Inf'))):
+            inf
+        elif ((__typy_scrutinee__ < 0.0) and True):
+            _z_0 = (- __typy_scrutinee__)
+            _z_0
+        elif ((__typy_scrutinee__ > 0.0) and True):
+            _z_1 = __typy_scrutinee__
+            _z_1
+        else:
+            raise Exception('typy match failure')
+        b1 = (x1 + y1)
+        b1n = (x1 + n)
+        b2 = (x1 - y1)
+        b2n = (n - y1)
+        b3 = (x1 * y1)
+        b4 = (x1 / y1)
+        b5 = (x1 % y1)
+        b6 = (x1 ** y1)
+        b12 = (x1 // 2)
+        b14 = (+ x1)
+        b15 = (- x1)
+        b16 = (x1 == y1)
+        b17 = (x1 != y1)
+        b18 = (x1 < y1 <= y2)
+        b19 = (x1 > y1 >= y2)
+        b20 = (x1 is y1)
+        b21 = (x1 is not y1)""")
 
 # 
 # string
