@@ -307,8 +307,7 @@ def test_ieee():
         b19 = x1 > y1 >= y2
         b20 = x1 is y1
         b21 = x1 is not y1
-        # TODO conversion to num
-        # TODO methods?
+        # TODO: methods
 
     # typechecking
     num_ty = CanonicalTy(num, ())
@@ -397,44 +396,44 @@ def test_ieee():
 # string
 # 
 
-def test_string_intro():
+def test_string():
     @component
     def c():
-        x [: string] = "test"
-
-    # typechecking
-    assert c._members[0].ty == CanonicalTy(string, ())
-
-    # translation
-    # typechecking
-    assert c._members[0].ty == CanonicalTy(unit, ())
-
-    # translation
-    assert ast_eq(c._translation, """
-        x = 'test'""")
-
-    # evaluation
-    assert c._module.x == "test"
-
-def test_string_match():
-    @component
-    def c():
-        x [: string] = "test"
-        [x].match
-        with "test": x
-        with "": x
-        with _: x
-
-    assert ast_eq(c._translation, """
-        x = 'test'
-        __typy_scrutinee__ = x
-        if x == 'test':
-            x
-        else:
-            if x == '':
-                x
-            else:
-                raise Exception('typy match failure')""")
+        x1 [: string] = "test"
+        [x1].match
+        with "": x1
+        with "a" + y: y
+        with y + "a": y
+        with "a" + y + "b": y
+        x2 = x1 + "a"
+        x3 = "a" + x1
+        x4 = x1[0]
+        x5 = x1[0:3]
+        x6 = x1[0:3:2]
+        x7 = x1 == x2
+        x8 = x1 != x2
+        x9 = x1 < x2 <= x3
+        x10 = x1 > x2 >= x3
+        x11 = x1 is x2
+        x12 = x1 is not x2
+        # TODO methods
+        # TODO to_string logic for other primitives
+    
+    string_ty = CanonicalTy(string, ())
+    boolean_ty = CanonicalTy(boolean, ())
+    v = c._val_exports
+    assert v['x1'].ty == string_ty
+    assert v['x2'].ty == string_ty
+    assert v['x3'].ty == string_ty
+    assert v['x4'].ty == string_ty
+    assert v['x5'].ty == string_ty
+    assert v['x6'].ty == string_ty
+    assert v['x7'].ty == boolean_ty
+    assert v['x8'].ty == boolean_ty
+    assert v['x9'].ty == boolean_ty
+    assert v['x10'].ty == boolean_ty
+    assert v['x11'].ty == boolean_ty
+    assert v['x12'].ty == boolean_ty
 
 # 
 # tpl
