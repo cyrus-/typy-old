@@ -283,6 +283,81 @@ class string(Fragment):
         return astx.copy_node(e)
 
     @classmethod
+    def ana_pat_Str(cls, ctx, pat, idx):
+        return {}
+
+    @classmethod
+    def trans_pat_Str(cls, ctx, pat, idx, scrutinee_trans):
+        condition = ast.fix_missing_locations(ast.copy_location(
+            ast.Compare(
+                left=scrutinee_trans,
+                ops=[ast.Eq()],
+                comparators=[ast.Str(s=pat.s)]), 
+            pat))
+        return condition, {}
+
+    @classmethod
+    def ana_pat_BinOp(cls, ctx, pat, idx):
+        op = pat.op
+        if isinstance(op, ast.Add):
+            left, right = pat.left, pat.right
+            if isinstance(left, ast.Str):
+                if left.s == "":
+                    raise TyError(
+                        "Literal pattern in + pattern must be non-empty.", 
+                        left)
+                return ctx.ana_pat(right, string_ty)
+            elif isinstance(right, ast.Str):
+                if right.s == "":
+                    raise TyError(
+                        "Literal pattern in + pattern must be non-empty.",
+                        right)
+                return ctx.ana_pat(left, string_ty)
+            else:
+                raise TyError("One side of + pattern must be a literal.", pat)
+        else:
+            raise TyError("Invalid pattern operator on strings.", pat)
+
+    @classmethod
+    def trans_pat_BinOp(cls, ctx, pat, idx, scrutinee_trans):
+        left, right = pat.left, pat.right
+        if isinstance(left, ast.Str):
+            left_condition = ast.fix_missing_locations(ast.copy_location(
+                astx.method_call(
+                    scrutinee_trans,
+                    "startswith",
+                    [left]),
+                pat))
+            remainder = ast.fix_missing_locations(ast.copy_location(
+                ast.Subscript(
+                    value=scrutinee_trans,
+                    slice=ast.Slice(ast.Num(n=len(left.s)), None, None),
+                    ctx=astx.load_ctx),
+                pat)) # scrutinee_trans[len(left):]
+            right_condition, binding_translations = ctx.trans_pat(right, remainder)
+            condition = ast.copy_location(
+                astx.make_binary_And(left_condition, right_condition),
+                pat)
+        else:
+            right_condition = ast.fix_missing_locations(ast.copy_location(
+                astx.method_call(
+                    scrutinee_trans,
+                    "endswith",
+                    [right]), 
+                pat))
+            remainder = ast.fix_missing_locations(ast.copy_location(
+                ast.Subscript(
+                    value=scrutinee_trans,
+                    slice=ast.Slice(None, ast.Num(n=-len(right.s)), None),
+                    ctx=astx.load_ctx), 
+                pat))
+            left_condition, binding_translations = ctx.trans_pat(left, remainder)
+            condition = ast.copy_location(
+                astx.make_binary_And(left_condition, right_condition),
+                pat)
+        return condition, binding_translations
+
+    @classmethod
     def syn_BinOp(cls, ctx, e):
         left, op, right = e.left, e.op, e.right
         string_ty = CanonicalTy(cls, ())
@@ -292,7 +367,6 @@ class string(Fragment):
             return string_ty
         else:
             raise TyError("Invalid string operator.", e)
-        # TODO decide which other operations are exposed
 
     @classmethod
     def trans_BinOp(cls, ctx, e):
@@ -303,7 +377,67 @@ class string(Fragment):
                 right=ctx.trans(e.right)),
         e)
 
-    # TODO pattern matching
+    @classmethod
+    def syn_Subscript(cls, ctx, e, idx):
+        slice = e.slice
+        if isinstance(slice, ast.Index):
+            ctx.ana(slice.value, num_ty)
+            return string_ty
+        elif isinstance(slice, ast.Slice):
+            lower, upper, step = slice.lower, slice.upper, slice.step
+            if lower is not None:
+                ctx.ana(lower, num_ty)
+            if upper is not None:
+                ctx.ana(upper, num_ty)
+            if step is not None:
+                ctx.ana(step, num_ty)
+            return string_ty
+        else:
+            raise TyError("Invalid string slice.", e)
+
+    @classmethod
+    def trans_Subscript(cls, ctx, e, idx):
+        slice = e.slice
+        if isinstance(slice, ast.Index):
+            slice_tr = ast.copy_location(
+                ast.Index(value=ctx.trans(slice.value)),
+                slice)
+        else:
+            lower, upper, step = slice.lower, slice.upper, slice.step
+            lower_tr = ctx.trans(lower) if lower is not None else None
+            upper_tr = ctx.trans(upper) if upper is not None else None
+            step_tr = ctx.trans(step) if step is not None else None
+            slice_tr = ast.copy_location(
+                ast.Slice(lower_tr, upper_tr, step_tr),
+                slice)
+        return ast.fix_missing_locations(ast.copy_location(
+            ast.Subscript(
+                value=ctx.trans(e.value),
+                slice=slice_tr,
+                ctx=e.ctx), 
+            e))
+
+    @classmethod
+    def syn_Compare(cls, ctx, e):
+        left, ops, comparators = e.left, e.ops, e.comparators
+        ctx.ana(left, string_ty)
+        for op, comparator in zip(ops, comparators):
+            if isinstance(op, (ast.In, ast.NotIn)):
+                raise TyError("Invalid comparison operator for strings.",
+                              comparator)
+            ctx.ana(comparator, string_ty)
+        return boolean_ty
+
+    @classmethod
+    def trans_Compare(cls, ctx, e):
+        return ast.fix_missing_locations(ast.copy_location(
+            ast.Compare(
+                left=ctx.trans(e.left),
+                ops=e.ops,
+                comparators=[
+                    ctx.trans(comparator) 
+                    for comparator in e.comparators]),
+            e))
 
 string_ty = CanonicalTy(string, ())
 

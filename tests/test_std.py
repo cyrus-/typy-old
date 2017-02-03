@@ -404,7 +404,7 @@ def test_string():
         with "": x1
         with "a" + y: y
         with y + "a": y
-        with "a" + y + "b": y
+        with "t" + y + "t": y
         x2 = x1 + "a"
         x3 = "a" + x1
         x4 = x1[0]
@@ -416,6 +416,7 @@ def test_string():
         x10 = x1 > x2 >= x3
         x11 = x1 is x2
         x12 = x1 is not x2
+        # TODO char patterns? separate type?
         # TODO methods
         # TODO to_string logic for other primitives
     

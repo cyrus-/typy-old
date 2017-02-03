@@ -511,7 +511,8 @@ class Context(object):
     # 
 
     def ana_pat(self, pat, ty):
-        if _terms.is_intro_form(pat) or isinstance(pat, ast.UnaryOp):
+        if _terms.is_intro_form(pat) \
+                or isinstance(pat, (ast.UnaryOp, ast.BinOp)):
             canonical_ty = self.canonicalize(ty)
             delegate = pat.delegate = canonical_ty.fragment
             delegate_idx = pat.delegate_idx = canonical_ty.idx
@@ -532,7 +533,8 @@ class Context(object):
                 pat)
 
     def trans_pat(self, pat, scrutinee_trans):
-        if _terms.is_intro_form(pat) or isinstance(pat, ast.UnaryOp):
+        if _terms.is_intro_form(pat) \
+                or isinstance(pat, (ast.UnaryOp, ast.BinOp)):
             delegate = pat.delegate
             delegate_idx = pat.delegate_idx
             method_name = "trans_pat_" + pat.__class__.__name__ # TODO add stubs
