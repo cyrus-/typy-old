@@ -183,92 +183,6 @@ class boolean(Fragment):
 
 boolean_ty = CanonicalTy(boolean, ())
 
-class record(Fragment):
-    @classmethod
-    def init_idx(cls, ctx, idx_ast):
-        if isinstance(idx_ast, ast.Slice):
-            # Python special cases single slices
-            # we don't want that
-            idx_ast = ast.ExtSlice(dims=[idx_ast])
-        
-        if isinstance(idx_ast, ast.ExtSlice):
-            idx_value = dict() # returned below
-            for dim in idx_ast.dims:
-                if (isinstance(dim, ast.Slice) and 
-                        dim.step is None and
-                        dim.upper is not None and 
-                        isinstance(dim.lower, ast.Name)):
-                    lbl = dim.lower.id
-                    if lbl in idx_value:
-                        raise typy.TypeValidationError(
-                            "Duplicate label.", dim)
-                    ty = ctx.as_type(dim.upper)
-                    idx_value[lbl] = ty
-                else:
-                    raise typy.TypeValidationError(
-                        "Invalid field specification.", dim)
-            return idx_value
-        else:
-            raise typy.TypeValidationError(
-                "Invalid record specification.", idx_ast)
-    
-    # TODO idx_eq
-
-    @classmethod
-    def ana_Dict(cls, ctx, e, idx):
-        for lbl, value in zip(e.keys, e.values):
-            if isinstance(lbl, ast.Name):
-                id = lbl.id
-                if id in idx: ctx.ana(value, idx[id])
-                else:
-                    raise TyError("Invalid label: " + id, lbl)
-            else:
-                raise TyError("Label is not an identifier.", lbl)
-        
-        if len(idx) != len(e.keys):
-            raise TyError("Labels do not match those in type.", e)
-
-    @classmethod
-    def trans_Dict(cls, ctx, e, idx):
-        ast_dict = dict((k.id, v)
-                        for k, v in zip(e.keys, e.values))
-        return ast.copy_location(ast.Tuple(
-            elts=list(
-                ctx.trans(ast_dict[lbl])
-                for lbl in sorted(idx.keys())
-            ), ctx=ast.Load()), 
-            e)
-
-    @classmethod
-    def syn_Attribute(cls, ctx, e, idx):
-        try:
-            return idx[e.attr]
-        except KeyError:
-            raise TyError("Invalid field label: " + e.attr, e)
-
-    @classmethod
-    def trans_Attribute(cls, ctx, e, idx):
-        pos = _util._seq_pos_of(e.attr, sorted(idx.keys()))
-        return ast.fix_missing_locations(ast.copy_location(
-            ast.Subscript(
-                value=ctx.trans(e.value),
-                slice=ast.Index(ast.Num(n=pos)),
-                ctx=e.ctx),
-            e))
-
-    # TODO pattern matching
-
-class tpl(Fragment):
-    # TODO init_idx
-    # TODO ana_Tuple
-    # TODO ana_Dict
-    # TODO syn_Attribute
-    # TODO trans_Attribute
-    # TODO syn_Subscript
-    # TODO trans_Subscript
-    # TODO pattern matching
-    pass
-
 class string(Fragment):
     @classmethod
     def init_idx(cls, ctx, idx_ast):
@@ -807,6 +721,195 @@ class cplx(Fragment):
     # TODO init_idx
     # TODO intro_forms
     # TODO other operations
+    # TODO pattern matching
+    pass
+
+class record(Fragment):
+    @classmethod
+    def init_idx(cls, ctx, idx_ast):
+        if isinstance(idx_ast, ast.Slice):
+            # Python special cases single slices
+            # we don't want that
+            idx_ast = ast.ExtSlice(dims=[idx_ast])
+        
+        if isinstance(idx_ast, ast.ExtSlice):
+            idx_value = dict() # returned below
+            for dim in idx_ast.dims:
+                if (isinstance(dim, ast.Slice) and 
+                        dim.step is None and
+                        dim.upper is not None and 
+                        isinstance(dim.lower, ast.Name)):
+                    lbl = dim.lower.id
+                    if lbl in idx_value:
+                        raise typy.TypeValidationError(
+                            "Duplicate label.", dim)
+                    ty = ctx.as_type(dim.upper)
+                    idx_value[lbl] = ty
+                else:
+                    raise typy.TypeValidationError(
+                        "Invalid field specification.", dim)
+            return idx_value
+        else:
+            raise typy.TypeValidationError(
+                "Invalid record specification.", idx_ast)
+
+    @classmethod
+    def ana_Dict(cls, ctx, e, idx):
+        for lbl, value in zip(e.keys, e.values):
+            if isinstance(lbl, ast.Name):
+                id = lbl.id
+                if id in idx: ctx.ana(value, idx[id])
+                else:
+                    raise TyError("Invalid label: " + id, lbl)
+            else:
+                raise TyError("Label is not an identifier.", lbl)
+        
+        if len(idx) != len(e.keys):
+            raise TyError("Labels do not match those in type.", e)
+
+    @classmethod
+    def trans_Dict(cls, ctx, e, idx):
+        ast_dict = dict((k.id, v)
+                        for k, v in zip(e.keys, e.values))
+        return ast.copy_location(ast.Tuple(
+            elts=list(
+                ctx.trans(ast_dict[lbl])
+                for lbl in sorted(idx.keys())
+            ), ctx=ast.Load()), 
+            e)
+
+    @classmethod
+    def _update_name_bindings_disjoint(cls, bindings, new_bindings):
+        for name_ast, ty in new_bindings.items():
+            for name_ast_orig, _ in bindings.items():
+                if name_ast.id == name_ast_orig.id:
+                    raise TyError("Duplicated binding.", name_ast)
+            bindings[name_ast] = ty
+
+    @classmethod
+    def ana_pat_Dict(cls, ctx, pat, idx):
+        keys, values = pat.keys, pat.values
+        n_keys = len(pat.keys)
+        n_fields = len(idx)
+        if n_keys < n_fields:
+            raise TyError("Missing fields.", pat)
+        elif n_keys > n_fields:
+            raise TyError("Too many fields.", pat)
+        else:
+            bindings = { }
+            for key, value in zip(keys, values):
+                if isinstance(key, ast.Name):
+                    key_id = key.id
+                    try:
+                        ty = idx[key_id]
+                    except KeyError:
+                        raise TyError("Invalid field name: " + key_id, key)
+                    else:
+                        new_bindings = ctx.ana_pat(value, ty)
+                        print("new_bindings=", new_bindings)
+                        cls._update_name_bindings_disjoint(bindings, new_bindings)
+                else:
+                    raise TyError("Invalid record field.", key)
+            return bindings
+
+    @classmethod
+    def trans_pat_Dict(cls, ctx, pat, idx, scrutinee_trans):
+        keys, values = pat.keys, pat.values
+        sorted_idx = sorted(idx.keys())
+        conditions = []
+        binding_translations = { }
+        for key, value in zip(keys, values):
+            key_id = key.id
+            key_scrutinee = ast.fix_missing_locations(ast.copy_location(
+                ast.Subscript(
+                    value=scrutinee_trans,
+                    slice=ast.Index(
+                        value=ast.Num(n=_util._seq_pos_of(key_id, sorted_idx))),
+                    ctx=astx.load_ctx),
+                key))
+            condition, key_binding_translations = ctx.trans_pat(value, key_scrutinee) 
+            conditions.append(condition)
+            print(key_binding_translations)
+            binding_translations.update(key_binding_translations)
+        condition = ast.fix_missing_locations(ast.copy_location(
+            ast.BoolOp(
+                op=ast.And(),
+                values=conditions),
+            pat))
+        print("BTRS", binding_translations)
+        return condition, binding_translations
+
+    @classmethod
+    def ana_pat_Set(cls, ctx, pat, idx):
+        elts = pat.elts
+        n_elts = len(elts)
+        n_fields = len(idx)
+        if n_elts < n_fields:
+            raise TyError("Missing fields.", pat)
+        elif n_elts > n_fields:
+            raise TyError("Too many fields.", pat)
+        else:
+            bindings = { }
+            for elt in elts:
+                if isinstance(elt, ast.Name):
+                    id = elt.id
+                    try:
+                        ty = idx[id]
+                    except KeyError:
+                        raise TyError("Invalid field name: " + id, elt)
+                    else:
+                        new_bindings = ctx.ana_pat(elt, ty)
+                        cls._update_name_bindings_disjoint(bindings, new_bindings)
+                else:
+                    raise TyError("Invalid record field.", elt)
+            return bindings
+
+    @classmethod
+    def trans_pat_Set(cls, ctx, pat, idx, scrutinee_trans):
+        elts = pat.elts
+        sorted_idx = sorted(idx.keys())
+        binding_translations = { }
+        for elt in elts:
+            key_id = elt.id
+            key_scrutinee = ast.fix_missing_locations(ast.copy_location(
+                ast.Subscript(
+                    value=scrutinee_trans,
+                    slice=ast.Index(
+                        value=ast.Num(n=_util._seq_pos_of(key_id, sorted_idx))),
+                    ctx=astx.load_ctx),
+                elt))
+            _, key_binding_translations = ctx.trans_pat(elt, key_scrutinee) 
+            binding_translations.update(key_binding_translations)
+        condition = ast.copy_location(
+            ast.NameConstant(True),
+            pat)
+        return condition, binding_translations
+
+    @classmethod
+    def syn_Attribute(cls, ctx, e, idx):
+        try:
+            return idx[e.attr]
+        except KeyError:
+            raise TyError("Invalid field label: " + e.attr, e)
+
+    @classmethod
+    def trans_Attribute(cls, ctx, e, idx):
+        pos = _util._seq_pos_of(e.attr, sorted(idx.keys()))
+        return ast.fix_missing_locations(ast.copy_location(
+            ast.Subscript(
+                value=ctx.trans(e.value),
+                slice=ast.Index(ast.Num(n=pos)),
+                ctx=e.ctx),
+            e))
+
+class tpl(Fragment):
+    # TODO init_idx
+    # TODO ana_Tuple
+    # TODO ana_Dict
+    # TODO syn_Attribute
+    # TODO trans_Attribute
+    # TODO syn_Subscript
+    # TODO trans_Subscript
     # TODO pattern matching
     pass
 

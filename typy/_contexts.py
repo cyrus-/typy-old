@@ -289,7 +289,9 @@ class Context(object):
             for rule in tree.rules:
                 pat = rule.pat
                 bindings = self.ana_pat(pat, scrutinee_ty_c)
+                print(bindings)
                 var_bindings = self.push_var_bindings(bindings)
+                print("var_bindings=", var_bindings)
                 pat.var_bindings = var_bindings
                 if ty is None:
                     ty = self.syn_block(rule.branch)
@@ -475,12 +477,15 @@ class Context(object):
                 pat = rule.pat
                 condition, binding_translations = self.trans_pat(pat, scrutinee_var)
                 conditions.append(condition)
+                print("A", binding_translations)
+                print("A2", pat.var_bindings)
                 branch = _astx.assignments_from_dict(
                     dict(
                         (uniq_id, (binding_translations[id], pat))
                         for id, (uniq_id, _) in pat.var_bindings.items()
                     )
                 )
+                print("B", [ast.dump(line) for line in branch])
                 branch.extend(self.trans_block(rule.branch))
                 branches.append(branch)
 

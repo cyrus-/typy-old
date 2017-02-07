@@ -50,12 +50,12 @@ class TestGPCEExamples:
         assert c._members[1].uty.id == "Account"
 
         # checking
-        assert isinstance(c._members[0].ty, typy._ty_exprs.CanonicalTy)
-        assert c._members[0].ty.fragment == record
+        assert isinstance(c._members[1].ty, typy._ty_exprs.CanonicalTy)
+        assert c._members[1].ty.fragment == record
         assert isinstance(c._members[0].ty.idx, dict)
-        assert c._members[0].ty.idx["name"].fragment == string
-        assert c._members[0].ty.idx["account_num"].fragment == string
-        assert c._members[0].ty.idx["memo"].fragment == py
+        assert c._members[1].ty.idx["name"].fragment == string
+        assert c._members[1].ty.idx["account_num"].fragment == string
+        assert c._members[1].ty.idx["memo"].fragment == py
         
         assert isinstance(c._members[1].ty, typy._ty_exprs.CanonicalTy)
         assert c._members[1].ty.fragment == record

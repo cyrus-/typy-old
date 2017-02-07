@@ -416,9 +416,12 @@ def test_string():
         x10 = x1 > x2 >= x3
         x11 = x1 is x2
         x12 = x1 is not x2
-        # TODO char patterns? separate type?
+        # TODO * operator for repetition?
+        # TODO in/not in?
         # TODO methods
         # TODO to_string logic for other primitives
+        # TODO string formating?
+        # TODO char patterns? separate type?
     
     string_ty = CanonicalTy(string, ())
     boolean_ty = CanonicalTy(boolean, ())
@@ -435,6 +438,56 @@ def test_string():
     assert v['x10'].ty == boolean_ty
     assert v['x11'].ty == boolean_ty
     assert v['x12'].ty == boolean_ty
+
+    assert ast_eq(c._translation, """
+        import builtins as __builtins__
+        x = True
+        y = False
+        __typy_scrutinee__ = x
+        if __typy_scrutinee__:
+            y
+        elif (not __typy_scrutinee__):
+            y
+        else:
+            raise Exception('typy match failure')
+        b1 = (x == y)
+        b2 = (x != y)
+        b3 = (x is y)
+        b4 = (x is not y)
+        b5 = (x and y and x)
+        b6 = (x or y or x)
+        if x:
+            y
+        else:
+            y
+        b7 = (y if x else x)
+        b8 = (() if x else ())""")
+
+# 
+# record
+# 
+
+def test_record():
+    @component
+    def c():
+        t [type] = record[
+            a : string,
+            b : num]
+        x [: t] = {
+            a: "test",
+            b: 2 }
+        y [: t] = {
+            b: 2,
+            a: "test" }
+        [x].match
+        with {a: x, b: y}: x
+        with {a, b}: a
+        xa [: string] = x.a
+        xb [: num] = x.b
+        t2 [type] = record[
+            b : num,
+            a : string]
+        y2 [: t2] = x
 
 # 
 # tpl

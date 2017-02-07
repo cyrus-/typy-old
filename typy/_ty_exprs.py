@@ -50,8 +50,11 @@ class CanonicalTy(TyExpr):
         return self.__str__()
 
     def __eq__(self, other):
-        return (self.fragment == other.fragment) \
-               and (self.idx == other.idx)
+        if isinstance(other, CanonicalTy):
+            return (self.fragment == other.fragment) \
+                   and (self.idx == other.idx)
+        else:
+            return False # need contextual equivalence here
 
     def __ne__(self, other):
         return not self.__eq__(other)
