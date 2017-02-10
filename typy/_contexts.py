@@ -151,6 +151,7 @@ class Context(object):
 
         subsumed = False
         if _terms.is_intro_form(tree):
+            print("is_intro_form")
             ty = self.canonicalize(ty)
             tree.is_intro_form = True
             classname = tree.__class__.__name__
@@ -184,6 +185,7 @@ class Context(object):
             ana_method = getattr(delegate, "ana_" + class_name)
             ana_method(self, tree, delegate_idx, ty)
         else:
+            print("subsumed")
             subsumed = True
             syn_ty = self.syn(tree)
             if self.ty_expr_eq(ty, syn_ty, TypeKind):

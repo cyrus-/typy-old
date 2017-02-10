@@ -10,7 +10,7 @@ from typy.util.testing import ast_eq, trans_str, trans_truth
 
 import typy
 from typy._ty_exprs import CanonicalTy
-from typy.std import component, boolean, unit, num, ieee, record, string, py, fn, finsum, tpl
+from typy.std import component, boolean, unit, num, ieee, record, string, py, fn, tagged, tpl
 
 # 
 # unit
@@ -476,7 +476,7 @@ def test_tpl():
         t1 [type] = tpl[string]
         t2 [type] = tpl[a : string]
         t3 [type] = tpl[a : string, num]
-        t4 [type] = tpl[string, b : num] # TODO: support numeric labels
+        t4 [type] = tpl[string, b : num]
         t [type] = tpl[
             a : string,
             b : num]
@@ -499,4 +499,22 @@ def test_tpl():
         y1 [: t5] = ("test", 2)
         y_0 [: string] = y1[0]
         y_1 [: num] = y1[1]
+
+# 
+# tagged
+# 
+
+def test_tagged():
+    @component
+    def c():
+        t0 [type] = tagged[A]
+        t1 [type] = tagged[A(num)]
+        t2 [type] = tagged[A(num), B(string)]
+        t3 [type] = tagged[A(num, string), B(string, num)]
+        x1 [: t3] = A(3, "test")
+        x2 [: t3] = B("test", 3)
+        [x2].match
+        with A(x, y): x
+        with B(x, y): y
+        void [type] = tagged[()]
 

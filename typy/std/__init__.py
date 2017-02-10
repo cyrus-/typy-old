@@ -1169,12 +1169,172 @@ class tpl(Fragment):
                 ctx=e.ctx),
             e))
 
-class finsum(Fragment):
-    # TODO init_idx
-    # TODO intro forms
-    # TODO other operations
-    # TODO pattern matching
-    pass
+class tagged(Fragment):
+    @classmethod
+    def init_idx(cls, ctx, idx_ast):
+        if isinstance(idx_ast, ast.Index):
+            value = idx_ast.value
+            if not isinstance(value, ast.Tuple):
+                value = ast.Tuple(elts=[value], ctx=astx.load_ctx)
+            idx = { } 
+            for elt in value.elts:
+                if isinstance(elt, ast.Name):
+                    tag = elt.id
+                    tag_ast = elt
+                    ty_asts = []
+                elif (isinstance(elt, ast.Call)  
+                      and isinstance(elt.func, ast.Name)
+                      and len(elt.keywords) == 0):
+                    tag = elt.func.id
+                    tag_ast = elt.func
+                    ty_asts = elt.args
+                else:
+                    raise typy.TypeValidationError(
+                        "Invalid case specification.", elt)
+                if not tag[0].isupper():
+                    raise typy.TypeValidationError(
+                        "Tag must start with an uppercase letter.", tag_ast)
+                if tag in idx:
+                    raise typy.TypeValidationError(
+                        "Duplicate tag: " + tag, tag_ast)
+                types = tuple(
+                    ctx.as_type(ty_ast) 
+                    for ty_ast in ty_asts)
+                idx[tag] = types
+            return idx
+        else:
+            raise typy.TypeValidationError(
+                "Invalid case specification.", elt)
+
+    @classmethod
+    def ana_Name(cls, ctx, e, idx):
+        tag = e.id
+        try: types = idx[tag]
+        except: raise TyError("Invalid tag: " + tag, e)
+        if len(types) != 0:
+            raise TyError(
+                "Missing arguments to constructor.", e)
+
+    @classmethod
+    def trans_Name(cls, ctx, e, idx):
+        return ast.fix_missing_locations(ast.copy_location(
+            ast.Tuple(
+                elts=[ast.Str(s=e.id)],
+                ctx=astx.load_ctx),
+            e))
+
+    @classmethod
+    def ana_Call(cls, ctx, e, idx):
+        func, args, keywords = e.func, e.args, e.keywords
+        if len(keywords) != 0:
+            raise TyError("Keyword arguments are not supported.", e)
+        if isinstance(func, ast.Name):
+            tag = func.id
+            try: types = idx[tag]
+            except: raise TyError("Invalid tag: " + tag, func)
+            n_types = len(types)
+            n_args = len(args)
+            if n_args > n_types:
+                raise TyError("Too many arguments.", e)
+            elif n_args < n_types:
+                raise TyError("Too few arguments.", e) 
+            else:
+                for arg, ty in zip(args, types):
+                    ctx.ana(arg, ty)
+        else:
+            raise TyError("Invalid tag.", func)
+
+    @classmethod
+    def trans_Call(cls, ctx, e, idx=None):
+        elts = [ast.copy_location(ast.Str(s=e.func.id), e)]
+        args = e.args
+        elts.extend([
+            ctx.trans(arg)
+            for arg in args])
+        return ast.copy_location(
+            ast.Tuple(
+                elts=elts,
+                ctx=astx.load_ctx), 
+            e)
+
+    @classmethod
+    def ana_pat_Name(cls, ctx, pat, idx):
+        tag = pat.id
+        try: types = idx[tag]
+        except: raise TyError("Invalid tag.", pat)
+        if len(types) != 0:
+            raise TyError("Missing arguments to constructor.", pat)
+        return { }
+
+    @classmethod
+    def trans_pat_Name(cls, ctx, pat, idx, scrutinee_trans):
+        condition = ast.fix_missing_locations(ast.copy_location(
+            ast.Compare(
+                left=ast.Subscript(
+                    value=scrutinee_trans,
+                    slice=ast.Index(value=ast.Num(n=0)),
+                    ctx=astx.load_ctx),
+                ops=[ast.Eq()],
+                comparators=[ast.Str(s=pat.id)]),
+            pat))
+        return condition, { }
+
+    @classmethod
+    def ana_pat_Call(cls, ctx, pat, idx):
+        func, args, keywords = pat.func, pat.args, pat.keywords
+        if len(keywords) != 0:
+            raise TyError("Keyword arguments are not supported.", pat)
+        if isinstance(func, ast.Name):
+            tag = func.id
+            try: types = idx[tag]
+            except: raise TyError("Invalid tag: " + tag, pat)
+            n_types = len(types)
+            n_args = len(args)
+            if n_args > n_types:
+                raise TyError("Too many arguments.", pat)
+            elif n_args < n_types:
+                raise TyError("Too few arguments.", pat)
+            else:
+                bindings = { }
+                for arg, ty in zip(args, types):
+                    arg_bindings = ctx.ana_pat(arg, ty)
+                    _update_name_bindings_disjoint(bindings, arg_bindings)
+                return bindings
+        else:
+            raise TyError("Invalid tag.", func)
+
+    @classmethod
+    def trans_pat_Call(cls, ctx, pat, idx, scrutinee_trans):
+        tag = pat.func.id
+        tag_condition = ast.fix_missing_locations(ast.copy_location(
+            ast.Compare(
+                left=ast.Subscript(
+                    value=scrutinee_trans,
+                    slice=ast.Index(value=ast.Num(n=0)),
+                    ctx=astx.load_ctx),
+                ops=[ast.Eq()],
+                comparators=[ast.Str(s=tag)]), 
+            pat))
+        conditions = [tag_condition]
+        binding_translations = { }
+        for i, arg in enumerate(pat.args):
+            arg_scrutinee = ast.copy_location(
+                ast.Subscript(
+                    value=scrutinee_trans,
+                    slice=ast.fix_missing_locations(ast.copy_location(
+                        ast.Index(value=ast.Num(n=1 + i)), 
+                        pat)),
+                    ctx=astx.load_ctx), 
+                pat)
+            arg_condition, arg_binding_translations = ctx.trans_pat(arg, arg_scrutinee)
+            conditions.append(arg_condition)
+            binding_translations.update(arg_binding_translations)
+        condition = ast.copy_location(
+            ast.BoolOp(
+                op=ast.copy_location(ast.And(), pat), 
+                values=conditions), 
+            pat)
+        return condition, binding_translations
 
 class fn(Fragment):
     @classmethod
