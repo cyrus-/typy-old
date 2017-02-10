@@ -640,7 +640,6 @@ class Context(object):
             else:
                 raise UsageError("Invalid kind.")
         else:
-            print(ty)
             raise UsageError("Invalid construction.")
 
     def ana_uty_expr(self, uty_expr, k):

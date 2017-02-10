@@ -439,30 +439,6 @@ def test_string():
     assert v['x11'].ty == boolean_ty
     assert v['x12'].ty == boolean_ty
 
-    assert ast_eq(c._translation, """
-        import builtins as __builtins__
-        x = True
-        y = False
-        __typy_scrutinee__ = x
-        if __typy_scrutinee__:
-            y
-        elif (not __typy_scrutinee__):
-            y
-        else:
-            raise Exception('typy match failure')
-        b1 = (x == y)
-        b2 = (x != y)
-        b3 = (x is y)
-        b4 = (x is not y)
-        b5 = (x and y and x)
-        b6 = (x or y or x)
-        if x:
-            y
-        else:
-            y
-        b7 = (y if x else x)
-        b8 = (() if x else ())""")
-
 # 
 # record
 # 
@@ -481,6 +457,7 @@ def test_record():
             a: "test" }
         [x].match
         with {a: x, b: y}: x
+        with {b: y, a: x}: x
         with {a, b}: a
         xa [: string] = x.a
         xb [: num] = x.b
@@ -492,4 +469,34 @@ def test_record():
 # 
 # tpl
 # 
+
+def test_tpl():
+    @component
+    def c():
+        t1 [type] = tpl[string]
+        t2 [type] = tpl[a : string]
+        t3 [type] = tpl[a : string, num]
+        t4 [type] = tpl[string, b : num] # TODO: support numeric labels
+        t [type] = tpl[
+            a : string,
+            b : num]
+        x1 [: t] = {
+            a: "test",
+            b: 2 }
+        x2 [: t] = {
+            b: 2,
+            a: "test" }
+        x3 [: t] = ("test", 2)
+        [x1].match
+        with {a: x, b: y}: x
+        with {b: y, a: x}: x
+        with {a, b}: a
+        with {b, a}: a
+        with (x, y): x
+        xa [: string] = x1.a
+        xb [: num] = x1.b
+        t5 [type] = tpl[string, num]
+        y1 [: t5] = ("test", 2)
+        y_0 [: string] = y1[0]
+        y_1 [: num] = y1[1]
 
