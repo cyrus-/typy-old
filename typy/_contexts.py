@@ -12,7 +12,15 @@ from ._fragments import is_fragment, Fragment
 from . import _components
 from . import _terms
 
-__all__ = ("Context",)
+__all__ = ("BlockTransMechanism", "Context")
+
+class BlockTransMechanism:
+    """An enumeration of translation mechanisms for blocks."""
+    Statement = 1
+    Return = 2
+    class Assign(object):
+        def __init__(self, target):
+            self.target = target
 
 class Context(object):
     def __init__(self, static_env):
@@ -151,7 +159,6 @@ class Context(object):
 
         subsumed = False
         if _terms.is_intro_form(tree):
-            print("is_intro_form")
             ty = self.canonicalize(ty)
             tree.is_intro_form = True
             classname = tree.__class__.__name__
@@ -166,14 +173,19 @@ class Context(object):
             delegate = delegate_idx = translation_method_name = None
         elif isinstance(tree, _terms.MatchStatementExpression):
             scrutinee = tree.scrutinee
-            scrutinee_ty = self.syn(scrutinee_ty)
+            scrutinee_ty = self.syn(scrutinee)
             scrutinee_ty_c = self.canonicalize(scrutinee_ty)
             delegate = None
             delegate_idx = None
             translation_method_name = None
             for rule in tree.rules:
-                self.ana_pat(rule.pat, scrutinee_ty_c)
-                self.ana_block(rule.branch, ty)
+                pat = rule.pat
+                bindings = self.ana_pat(rule.pat, scrutinee_ty_c)
+                var_bindings = self.push_var_bindings(bindings)
+                pat.var_bindings = var_bindings
+                block = rule.block = _terms.Block(rule.branch)
+                self.ana_block(block, ty)
+                self.pop_var_bindings()
         elif isinstance(tree, (ast.If, ast.IfExp)):
             test = tree.test
             test_ty = self.syn(test)
@@ -185,15 +197,14 @@ class Context(object):
             ana_method = getattr(delegate, "ana_" + class_name)
             ana_method(self, tree, delegate_idx, ty)
         else:
-            print("subsumed")
             subsumed = True
             syn_ty = self.syn(tree)
             if self.ty_expr_eq(ty, syn_ty, TypeKind):
                 return
             else:
                 raise TyError(
-                    "Type inconsistency. Expected: " + str(ty) + 
-                    ". Got: " + str(syn_ty) + ".", tree)
+                    "Type inconsistency. Expected: " + str(self.canonicalize(ty)) + 
+                    ". Got: " + str(self.canonicalize(syn_ty)) + ".", tree)
 
         if not subsumed:
             tree.ty = ty
@@ -255,16 +266,28 @@ class Context(object):
                     "definition.",
                     tree)
             asc = decorator_list[0]
-            fragment = self.static_env.eval_expr_ast(asc)
-            if not issubclass(fragment, Fragment):
-                raise TyError("First decorator is not a fragment.", asc)
-            self.default_fragments.append(fragment)
-            ty = fragment.syn_FunctionDef(self, tree)
-            self.default_fragments.pop()
-            self.ana_ty_expr(ty, TypeKind)
-            delegate = fragment
-            delegate_idx = None
-            translation_method_name = None # TODO
+            try:
+                ty = self.as_type(asc)
+            except:
+                try:
+                    fragment = self.static_env.eval_expr_ast(asc)
+                except:
+                    raise TyError(
+                        "Decorator is neither a type nor a fragment.", 
+                        asc)
+                else:
+                    if not issubclass(fragment, Fragment):
+                        raise TyError("First decorator is not a fragment.", asc)
+                    self.default_fragments.append(fragment)
+                    ty = fragment.syn_FunctionDef(self, tree)
+                    self.default_fragments.pop()
+                    self.ana_ty_expr(ty, TypeKind)
+                    delegate = fragment
+                    delegate_idx = None
+                    translation_method_name = None # TODO
+            else:
+                self.ana(tree, ty) 
+                return ty
         elif isinstance(tree, ast.BinOp):
             left = tree.left
             right = tree.right
@@ -291,14 +314,15 @@ class Context(object):
             for rule in tree.rules:
                 pat = rule.pat
                 bindings = self.ana_pat(pat, scrutinee_ty_c)
-                print(bindings)
+                # print(bindings)
                 var_bindings = self.push_var_bindings(bindings)
-                print("var_bindings=", var_bindings)
+                # print("var_bindings=", var_bindings)
                 pat.var_bindings = var_bindings
+                block = rule.block = _terms.Block(rule.branch)
                 if ty is None:
-                    ty = self.syn_block(rule.branch)
+                    ty = self.syn_block(block)
                 else:
-                    self.ana_block(rule.branch, ty)
+                    self.ana_block(block, ty)
                 self.pop_var_bindings()
             if ty is None:
                 raise TyError("Cannot synthesize a type for a match statement "
@@ -362,8 +386,9 @@ class Context(object):
         translation_method_name = "trans_" + class_name
         return delegate, delegate_idx, ty, translation_method_name
 
-    def ana_block(self, stmts, ty):
-        segmented_stmts = tuple(self._segment(stmts))
+    def ana_block(self, block, ty):
+        block.segmented_stmts = segmented_stmts = \
+            tuple(self._segment(block.stmts))
         if len(segmented_stmts) == 0:
             raise TyError("Empty block", None)
 
@@ -373,8 +398,9 @@ class Context(object):
         last_stmt = segmented_stmts[-1]
         self.ana(last_stmt, ty)
 
-    def syn_block(self, stmts):
-        segmented_stmts = tuple(self._segment(stmts))
+    def syn_block(self, block):
+        block.segmented_stmts = segmented_stmts = \
+            tuple(self._segment(block.stmts))
         if len(segmented_stmts) == 0:
             raise TyError("Empty block", None)
 
@@ -384,10 +410,18 @@ class Context(object):
         last_stmt = segmented_stmts[-1]
         return self.syn(last_stmt)
 
-    def trans_block(self, stmts):
+    def trans_block(self, block, mechanism):
         translation = [ ]
-        for stmt in stmts:
-            translation.extend(self.trans(stmt))
+        segmented_stmts = block.segmented_stmts
+        if mechanism == BlockTransMechanism.Statement:
+            for stmt in segmented_stmts:
+                translation.extend(self.trans(stmt))
+        else:
+            all_but_last = segmented_stmts[:-1]
+            last = segmented_stmts[-1]
+            for stmt in all_but_last:
+                translation.extend(self.trans(stmt))
+            translation.extend(self.trans(last, mechanism))
         return translation
 
     @staticmethod
@@ -419,16 +453,22 @@ class Context(object):
                 cur_scrutinizer,
                 cur_rules)
 
-    def trans(self, tree):
+    def trans(self, tree, mechanism=BlockTransMechanism.Statement):
         if hasattr(tree, 'delegate') and tree.delegate is not None:
             delegate = tree.delegate
             idx = tree.delegate_idx
             translation_method_name = tree.translation_method_name
             translation_method = getattr(delegate, translation_method_name)
             if idx is not None:
-                translation = translation_method(self, tree, idx)
+                if _terms.is_stmt_expression(tree):
+                    translation = translation_method(self, tree, idx, mechanism)
+                else:
+                    translation = translation_method(self, tree, idx)
             else:
-                translation = translation_method(self, tree)
+                if _terms.is_stmt_expression(tree):
+                    translation = translation_method(self, tree, mechanism)
+                else:
+                    translation = translation_method(self, tree)
         elif isinstance(tree, ast.Name):
             if hasattr(tree, "uniq_id"):
                 uniq_id = tree.uniq_id
@@ -446,10 +486,17 @@ class Context(object):
         elif _terms.is_ascription(tree):
             translation = self.trans(tree.value)
         elif isinstance(tree, ast.Expr):
-            translation = [
-                ast.copy_location(
-                    ast.Expr(value=self.trans(tree.value)),
-                tree)]
+            value_tr = self.trans(tree.value)
+            if mechanism == BlockTransMechanism.Statement:
+                translation = [
+                    ast.copy_location(
+                        ast.Expr(value=value_tr),
+                        tree)]
+            elif mechanism == BlockTransMechanism.Return:
+                translation = [
+                    ast.copy_location(
+                        ast.Return(value=value_tr),
+                        tree)]
         elif isinstance(tree, _terms.MatchStatementExpression):
             # __typy__scrutinee__ = scrutinee_trans
             # if condition1:
@@ -479,16 +526,13 @@ class Context(object):
                 pat = rule.pat
                 condition, binding_translations = self.trans_pat(pat, scrutinee_var)
                 conditions.append(condition)
-                print("A", binding_translations)
-                print("A2", pat.var_bindings)
                 branch = _astx.assignments_from_dict(
                     dict(
                         (uniq_id, (binding_translations[id], pat))
                         for id, (uniq_id, _) in pat.var_bindings.items()
                     )
                 )
-                print("B", [ast.dump(line) for line in branch])
-                branch.extend(self.trans_block(rule.branch))
+                branch.extend(self.trans_block(rule.block, mechanism))
                 branches.append(branch)
 
             translation = [
@@ -657,7 +701,8 @@ class Context(object):
                 static_val = self.static_env[id]
                 if is_fragment(static_val):
                     ty = CanonicalTy.new(self, static_val, 
-                                         _astx.empty_tuple_ast)
+                                         ast.Index(
+                                             value=_astx.empty_tuple_ast))
                     self.ana_ty_expr(ty, k)
                     return ty
                 else:
@@ -702,7 +747,9 @@ class Context(object):
                         "Invalid projection.", path_ast)
                 else:
                     if is_fragment(fragment):
-                        ty = CanonicalTy.new(self, fragment, _astx.empty_tuple_ast)
+                        ty = CanonicalTy.new(self, fragment, 
+                                             ast.Index(
+                                                 value=_astx.empty_tuple_ast))
                         self.ana_ty_expr(ty, k)
                         return ty
                     else:

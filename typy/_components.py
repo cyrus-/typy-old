@@ -228,6 +228,7 @@ class ValueMember(ComponentMember):
             ctx.ana(tree_, ty)
 
         ctx.add_id_var_binding(self.id, self.id, ty)
+        print("pre-can ty=", ty)
         self.ty = ctx.canonicalize(ty)
 
     def translate(self, ctx):

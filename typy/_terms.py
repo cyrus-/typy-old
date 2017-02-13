@@ -76,6 +76,15 @@ _unsupported_stmt_forms = (
 def is_unsupported_stmt_form(stmt):
     return isinstance(stmt, _unsupported_stmt_forms)
 
+def get_pat_and_ann(target):
+    if isinstance(target, ast.Subscript):
+        slice = target.slice
+        if isinstance(slice, ast.Slice):
+            lower, upper, step = slice.lower, slice.upper, slice.step
+            if lower is None and upper is not None and step is None:
+                return (target.value, upper)
+    return target, None
+
 def is_targeted_stmt_form(stmt):
     if isinstance(stmt, ast.Delete):
         targets = stmt.targets
@@ -93,12 +102,12 @@ def is_targeted_stmt_form(stmt):
             raise TyError(
                 "typy does not support multiple targets.", targets[1])
         target = targets[0]
-        if isinstance(target, ast.Attribute):
-            stmt._typy_target = target.value
+        pat, ann = get_pat_and_ann(target)
+        if isinstance(pat, ast.Attribute):
+            stmt._typy_target = pat.value
             return True
-        elif isinstance(target, ast.Subscript):
-            # TODO exclude ascriptions
-            stmt._typy_target = target.value
+        elif isinstance(pat, ast.Subscript):
+            stmt._typy_target = pat.value
             return True
         else:
             return False
@@ -129,19 +138,7 @@ def is_default_stmt_form(stmt):
             ast.Continue)):
         return True
     elif isinstance(stmt, ast.Assign):
-        targets = stmt.targets
-        if len(targets) != 1:
-            # TODO support multiple targets
-            raise TyError(
-                "typy does not support multiple targets.", targets[1])
-        target = targets[0]
-        if isinstance(target, ast.Attribute):
-            return False
-        elif isinstance(target, ast.Subscript):
-            # TODO include ascriptions
-            return False
-        else:
-            return True
+        return not is_targeted_stmt_form(stmt)
     else:
         return False
 
@@ -265,4 +262,8 @@ def parse_fn_body(body):
         else:
             raise TyError("Unknown statement form: " + 
                           stmt.__class__.__name__, stmt)
+
+class Block(object):
+    def __init__(self, stmts):
+        self.stmts = stmts
 

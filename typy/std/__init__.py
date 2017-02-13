@@ -5,9 +5,11 @@ from collections import OrderedDict
 from .. import util as _util 
 from ..util import astx
 from .._components import component
+from .._contexts import BlockTransMechanism
 from .._fragments import Fragment
-from .._ty_exprs import CanonicalTy
+from .._ty_exprs import CanonicalTy, TypeKind
 from .._errors import TypeValidationError, TyError
+from .. import _terms
 
 try:
     integer_types = (int, long)
@@ -145,22 +147,26 @@ class boolean(Fragment):
 
     @classmethod
     def syn_If(cls, ctx, e, idx):
-        body_ty = ctx.syn_block(e.body)
-        orelse_ty = ctx.ana_block(e.orelse, body_ty)
+        body_block = e.body_block = _terms.Block(e.body)
+        body_ty = ctx.syn_block(body_block)
+        orelse_block = e.orelse_block = _terms.Block(e.orelse)
+        orelse_ty = ctx.ana_block(orelse_block, body_ty)
         return body_ty
     
     @classmethod
     def ana_If(cls, ctx, e, idx, ty):
-        ctx.ana_block(e.body, ty)
-        ctx.ana_block(e.orelse, ty)
+        body_block = e.body_block = _terms.Block(e.body)
+        orelse_block = e.orelse_block = _terms.Block(e.orelse)
+        ctx.ana_block(body_block, ty)
+        ctx.ana_block(orelse_block, ty)
 
     @classmethod
-    def trans_If(cls, ctx, e, idx):
+    def trans_If(cls, ctx, e, idx, mechanism):
         return [ast.copy_location(
             ast.If(
                 test=ctx.trans(e.test),
-                body=ctx.trans_block(e.body),
-                orelse=ctx.trans_block(e.orelse)), e)]
+                body=ctx.trans_block(e.body_block, mechanism),
+                orelse=ctx.trans_block(e.orelse_block, mechanism)), e)]
 
     @classmethod
     def syn_IfExp(cls, ctx, e, idx):
@@ -748,16 +754,16 @@ class record(Fragment):
                         isinstance(dim.lower, ast.Name)):
                     lbl = dim.lower.id
                     if lbl in idx_value:
-                        raise typy.TypeValidationError(
+                        raise TypeValidationError(
                             "Duplicate label.", dim)
                     ty = ctx.as_type(dim.upper)
                     idx_value[lbl] = ty
                 else:
-                    raise typy.TypeValidationError(
+                    raise TypeValidationError(
                         "Invalid field specification.", dim)
             return idx_value
         else:
-            raise typy.TypeValidationError(
+            raise TypeValidationError(
                 "Invalid record specification.", idx_ast)
 
     @classmethod
@@ -805,7 +811,6 @@ class record(Fragment):
                         raise TyError("Invalid field name: " + key_id, key)
                     else:
                         new_bindings = ctx.ana_pat(value, ty)
-                        print("new_bindings=", new_bindings)
                         _update_name_bindings_disjoint(bindings, new_bindings)
                 else:
                     raise TyError("Invalid record field.", key)
@@ -828,14 +833,12 @@ class record(Fragment):
                 key))
             condition, key_binding_translations = ctx.trans_pat(value, key_scrutinee) 
             conditions.append(condition)
-            print(key_binding_translations)
             binding_translations.update(key_binding_translations)
         condition = ast.fix_missing_locations(ast.copy_location(
             ast.BoolOp(
                 op=ast.And(),
                 values=conditions),
             pat))
-        print("BTRS", binding_translations)
         return condition, binding_translations
 
     @classmethod
@@ -929,16 +932,16 @@ class tpl(Fragment):
                     lbl = dim.lower.id
                     ty_ast = dim.upper
                 else:
-                    raise typy.TypeValidationError(
+                    raise TypeValidationError(
                         "Invalid tpl specification.", idx_ast)
                 if lbl in idx_value:
-                    raise typy.TypeValidationError(
+                    raise TypeValidationError(
                         "Duplicate label.", dim)
                 ty = ctx.as_type(ty_ast)
                 idx_value[lbl] = ty
             return idx_value
         else:
-            raise typy.TypeValidationError(
+            raise TypeValidationError(
                 "Invalid tpl specification.", idx_ast)
 
     @classmethod
@@ -1006,7 +1009,6 @@ class tpl(Fragment):
         if len(elts) != len(idx):
             raise TyError("Incorrect number of elements.", pat)
 
-        print("ana_pat_Tuple", bindings)
         return bindings
 
     @classmethod
@@ -1029,7 +1031,6 @@ class tpl(Fragment):
                 op=ast.And(),
                 values=conditions),
             pat))
-        print("trans_pat_Tuple", binding_translations)
         return condition, binding_translations
 
     @classmethod
@@ -1189,13 +1190,13 @@ class tagged(Fragment):
                     tag_ast = elt.func
                     ty_asts = elt.args
                 else:
-                    raise typy.TypeValidationError(
+                    raise TypeValidationError(
                         "Invalid case specification.", elt)
                 if not tag[0].isupper():
-                    raise typy.TypeValidationError(
+                    raise TypeValidationError(
                         "Tag must start with an uppercase letter.", tag_ast)
                 if tag in idx:
-                    raise typy.TypeValidationError(
+                    raise TypeValidationError(
                         "Duplicate tag: " + tag, tag_ast)
                 types = tuple(
                     ctx.as_type(ty_ast) 
@@ -1203,7 +1204,7 @@ class tagged(Fragment):
                 idx[tag] = types
             return idx
         else:
-            raise typy.TypeValidationError(
+            raise TypeValidationError(
                 "Invalid case specification.", elt)
 
     @classmethod
@@ -1339,8 +1340,61 @@ class tagged(Fragment):
 class fn(Fragment):
     @classmethod
     def init_idx(cls, ctx, idx_ast):
-        # TODO init_idx
-        raise NotImplementedError()
+        if isinstance(idx_ast, ast.Index):
+            value = idx_ast.value
+            if isinstance(value, ast.Compare):
+                left, ops, comparators = value.left, value.ops, value.comparators
+                if len(ops) == len(comparators) == 1:
+                    if isinstance(ops[0], ast.Gt):
+                        if isinstance(left, ast.Tuple):
+                            if len(left.elts) == 0:
+                                arg_type_asts = []
+                            else:
+                                raise TypeValidationError(
+                                    "Invalid type index format.", idx_ast)
+                        else:
+                            arg_type_asts = [left]
+                        return_ty_ast = comparators[0]
+                    else:
+                        raise TypeValidationError(
+                            "Invalid type index format.", idx_ast)
+                else:
+                    raise TypeValidationError(
+                        "Invalid type index format.", idx_ast)
+            elif isinstance(value, ast.Tuple):
+                elts = value.elts
+                if len(elts) < 2:
+                    raise TypeValidationError(
+                        "Invalid type index format.", idx_ast)
+                arg_type_asts = elts[0:-1]
+                final_elt = elts[-1]
+                if isinstance(final_elt, ast.Compare):
+                    left, ops, comparators = \
+                        final_elt.left, final_elt.ops, final_elt.comparators
+                    if len(ops) == len(comparators) == 1:
+                        if isinstance(ops[0], ast.Gt):
+                            arg_type_asts.append(left)
+                            return_ty_ast = comparators[0]
+                        else:
+                            raise TypeValidationError(
+                                "Invalid type index format.", idx_ast)
+                    else:
+                        raise TypeValidationError(
+                            "Invalid type index format.", idx_ast)
+                else:
+                    raise TypeValidationError(
+                        "Invalid type index format.", idx_ast)
+            else:
+                raise TypeValidationError(
+                    "Invalid type index format.", idx_ast)
+            arg_types = tuple(
+                ctx.as_type(arg_ty)
+                for arg_ty in arg_type_asts)
+            return_ty = ctx.as_type(return_ty_ast)
+            return (arg_types, return_ty)
+        else:
+            raise typy.TypeValidationError(
+                "Invalid type index format.", idx_ast)
 
     @classmethod
     def syn_FunctionDef(cls, ctx, stmt):
@@ -1381,8 +1435,13 @@ class fn(Fragment):
                                 col_offset=arg.col_offset)
                 yield (name, arg_ty)
         arg_sig = stmt.arg_sig = OrderedDict(_process_args())
+        arg_types = tuple(arg_sig.values())
 
-        # TODO process return type annotation
+        # process return type annotation
+        returns = stmt.returns
+        if returns is not None:
+            rty = ctx.as_type(returns)
+        else: rty = None
         
         # push bindings
         stmt.uniq_arg_sig = ctx.push_var_bindings(dict(arg_sig))
@@ -1391,7 +1450,7 @@ class fn(Fragment):
 
         # process docstring
         body = stmt.body
-        if (len(body) > 0 
+        if (len(body) > 1
                 and isinstance(body[0], ast.Expr)
                 and isinstance(body[0].value, ast.Str)):
             proper_body = stmt.proper_body = body[1:]
@@ -1408,25 +1467,102 @@ class fn(Fragment):
                 stmt)
 
         # check statements in proper_body
-        for stmt in proper_body:
-            ctx.check(stmt)
-
-        # synthesize return type from last statement
-        last_stmt = proper_body[-1]
-        if isinstance(last_stmt, ast.Expr):
-            rty = last_stmt.value.ty
+        proper_body_block = stmt.proper_body_block = _terms.Block(proper_body)
+        if rty is None:
+            rty = ctx.syn_block(proper_body_block)
         else:
-            raise TyError(
-                "Last statement must be an expression.", 
-                last_stmt)
-        
-        # bindings
-        ctx.pop_var_bindings()
+            ctx.ana_block(proper_body_block, rty)
 
         # return canonical type
-        return CanonicalTy(fn, (arg_sig, rty))
+        return CanonicalTy(fn, (arg_types, rty))
 
-    # TODO ana_FunctionDef
+    @classmethod
+    def ana_FunctionDef(cls, ctx, stmt, idx):
+        # process decorators
+        decorator_list = stmt.decorator_list
+        if len(decorator_list) > 1:
+            raise TyError(
+                "fn does not support additional decorators.",
+                decorator_list[1])
+
+        # process args
+        arguments = stmt.args
+        if arguments.vararg is not None:
+            raise TyError(
+                "fn does not support varargs", arguments)
+        if len(arguments.kwonlyargs) > 0:
+            raise TyError(
+                "fn does not support kw only args", arguments)
+        if arguments.kwarg is not None:
+            raise TyError(
+                "fn does not support kw arg", arguments)
+        if len(arguments.defaults) > 0:
+            raise TyError(
+                "fn does not support defaults", arguments)
+        args = arguments.args
+        arg_types = idx[0]
+        n_args = len(args)
+        n_arg_types = len(arg_types)
+        if n_args < n_arg_types:
+            raise TyError(
+                "Too few arguments", stmt)
+        elif n_args > n_arg_types:
+            raise TyError(
+                "Too many arguments", stmt)
+        def _process_args():
+            for arg, arg_ty in zip(args, arg_types):
+                arg_id = arg.arg
+                arg_ann = arg.annotation 
+                if arg_ann is not None:
+                    given_arg_ty = ctx.as_type(arg_ann)
+                    if not ctx.ty_expr_eq(arg_ty, given_arg_ty, TypeKind): # TODO write test for this
+                        raise TyError(
+                            "Given type annotation is inconsistent "
+                            "with ascription.", arg_ann)
+                name = ast.Name(id=arg_id,
+                                lineno=arg.lineno,
+                                col_offset=arg.col_offset)
+                yield (name, arg_ty)
+        arg_sig = stmt.arg_sig = OrderedDict(_process_args())
+
+        returns = stmt.returns
+        rty = idx[1]
+        if returns is not None: # TODO write test for this
+            ann_rty = ctx.as_type(returns)
+            if not ctx.ty_expr_eq(rty, ann_rty, TypeKind):
+                raise TyError(
+                    "Given return type annotation is inconsistent "
+                    "with ascription.", returns)
+
+        # push bindings
+        stmt.uniq_arg_sig = ctx.push_var_bindings(dict(arg_sig))
+
+        # TODO recursive functions (+ write tests)
+
+        # process docstring
+        body = stmt.body
+        if (len(body) > 1 
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Str)):
+            proper_body = stmt.proper_body = body[1:]
+            docstring = stmt.docstring = body[0].value.s
+        else:
+            proper_body = stmt.proper_body = body
+            docstring = stmt.docstring = None
+
+        # make sure there is at least one remaining statement
+        if len(proper_body) == 0:
+            raise TyError(
+                "Must be at least one statement, "
+                "other than the docstring, in the body.",
+                stmt)
+
+        # check statements in proper_body
+        proper_body_block = stmt.proper_body_block = _terms.Block(proper_body)
+        ctx.ana_block(proper_body_block, rty)
+
+        # bindings
+        ctx.pop_var_bindings()
 
     @classmethod
     def trans_FunctionDef(cls, ctx, stmt, id):
@@ -1447,16 +1583,8 @@ class fn(Fragment):
             defaults=[])
 
         # translate body
-        body_tr = [
-            ctx.trans(stmt)
-            for stmt in stmt.proper_body
-        ]
-
-        # translate return
-        last_stmt = body_tr[-1]
-        body_tr[-1] = ast.copy_location(
-            ast.Return(value=last_stmt.value), 
-            last_stmt)
+        body_tr = ctx.trans_block(stmt.proper_body_block, 
+                                  BlockTransMechanism.Return)
 
         return [ast.copy_location(
             ast.FunctionDef(
@@ -1467,7 +1595,69 @@ class fn(Fragment):
                 returns=None), 
             stmt)]
 
-    # TODO lambdas
+    @classmethod
+    def ana_Lambda(cls, ctx, e, idx):
+        # process args
+        arguments = e.args
+        if arguments.vararg is not None:
+            raise TyError(
+                "fn does not support varargs", arguments)
+        if len(arguments.kwonlyargs) > 0:
+            raise TyError(
+                "fn does not support kw only args", arguments)
+        if arguments.kwarg is not None:
+            raise TyError(
+                "fn does not support kw arg", arguments)
+        if len(arguments.defaults) > 0:
+            raise TyError(
+                "fn does not support defaults", arguments)
+        args = arguments.args
+        arg_types = idx[0]
+        n_args = len(args)
+        n_arg_types = len(arg_types)
+        if n_args < n_arg_types:
+            raise TyError(
+                "Too few arguments", e)
+        elif n_args > n_arg_types:
+            raise TyError(
+                "Too many arguments", e)
+        def _process_args():
+            for arg, arg_ty in zip(args, arg_types):
+                arg_id = arg.arg
+                name = ast.Name(id=arg_id,
+                                lineno=arg.lineno,
+                                col_offset=arg.col_offset)
+                yield (name, arg_ty)
+        arg_sig = e.arg_sig = OrderedDict(_process_args())
+        e.uniq_arg_sig = ctx.push_var_bindings(dict(arg_sig))
+
+        rty = idx[1]
+        ctx.ana(e.body, rty)
+        
+        ctx.pop_var_bindings()
+
+    @classmethod
+    def trans_Lambda(cls, ctx, e, idx):
+        args=e.args
+        aa = args.args
+        return ast.copy_location(
+            ast.Lambda(
+                args=ast.arguments(
+                    args=[
+                        ast.arg(
+                            arg=a.arg,
+                            annotation=None,
+                            lineno=a.lineno,
+                            col_offset=a.col_offset)
+                        for a in aa
+                    ],
+                    vararg=args.vararg,
+                    kwonlyargs=args.kwonlyargs,
+                    kw_defaults=args.kw_defaults,
+                    kwarg=args.kwarg,
+                    defaults=args.defaults),
+                body=ctx.trans(e.body)),
+            e)
 
     @classmethod
     def syn_Call(cls, ctx, e, idx):
@@ -1476,14 +1666,14 @@ class fn(Fragment):
 
         # check args
         args = e.args
-        arg_sig, rty = idx
+        arg_types, rty = idx
         n_args = len(args)
-        n_args_reqd = len(arg_sig)
+        n_args_reqd = len(arg_types)
         if n_args < n_args_reqd:
             raise TyError("Too few arguments provided.", e)
         elif n_args > n_args_reqd:
             raise TyError("Too many arguments provided.", e)
-        for arg, arg_ty in zip(args, arg_sig.values()):
+        for arg, arg_ty in zip(args, arg_types):
             ctx.ana(arg, arg_ty)
         
         # return type
@@ -1508,7 +1698,7 @@ class fn(Fragment):
             raise TyError(
                 "Too many assignment targets.", targets[1])
         target = targets[0]
-        pat, ann = cls._get_pat_and_ann(target)
+        pat, ann = _terms.get_pat_and_ann(target)
         if ann is not None:
             ty = ctx.as_type(ann)
             ctx.ana(stmt.value, ty)
@@ -1517,34 +1707,23 @@ class fn(Fragment):
         bindings = stmt.bindings = ctx.ana_pat(pat, ty)
         stmt.uniq_bindings = ctx.add_bindings(bindings)
     
-    @staticmethod
-    def _get_pat_and_ann(target):
-        if isinstance(target, ast.Subscript):
-            subscript_target = target.target
-            slice = target.slice
-            if isinstance(slice, ast.Slice):
-                start, stop, step = slice.start, slice.stop, slice.step
-                if start is None and stop is not None and step is None:
-                    return (subscript_target, slice)
-        return target, None
-
     @classmethod
     def trans_Assign(cls, ctx, stmt):
         assert len(stmt.bindings) == 1
         target_name = tuple(stmt.bindings.keys())[0]
         target_tr = ast.copy_location(
             ast.Name(id=stmt.uniq_bindings[target_name.id][0],
-                     ctx=target_name.ctx),
+                     ctx=astx.store_ctx),
             target_name)
         value = stmt.value
         value_tr = ast.copy_location(
             ctx.trans(value),
             value)
-        return ast.copy_location(
+        return [ast.copy_location(
             ast.Assign(
                 targets=[target_tr],
                 value=value_tr),
-            stmt)
+            stmt)]
 
     @classmethod
     def check_Expr(self, ctx, stmt):
@@ -1577,7 +1756,9 @@ class py(Fragment):
     pass
 
 def _check_trivial_idx_ast(idx_ast):
-    if isinstance(idx_ast, ast.Tuple) and len(idx_ast.elts) == 0:
+    if (isinstance(idx_ast, ast.Index) and 
+            isinstance(idx_ast.value, ast.Tuple) and 
+            len(idx_ast.value.elts) == 0):
         return ()
     else:
         raise TypeValidationError(

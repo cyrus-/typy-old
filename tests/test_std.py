@@ -518,3 +518,84 @@ def test_tagged():
         with B(x, y): y
         void [type] = tagged[()]
 
+# 
+# fn
+# 
+
+def test_fn():
+    @component
+    def c():
+        t0 [type] = fn[() > num]
+        t1 [type] = fn[string > string]
+        t2 [type] = fn[string, num > num]
+        @t0
+        def f1(): 3
+        @t0
+        def f1b() -> num: 3
+        @t1
+        def f2(x): x
+        @t1
+        def f2b(x : string) -> string: x
+        @t2
+        def f3(x, y): y
+        @t2
+        def f3b(x : string, y : num) -> num: y
+        x1 [: t0] = lambda: 3 
+        x2 [: t1] = lambda x: x
+        x3 [: t2] = lambda x, y: y
+        @fn
+        def f11(x : string): x
+        f11 [: t1]
+        @fn
+        def f12(x : string) -> string: ""
+        f12 [: t1]
+        f1()
+        f2("string")
+        f3("string", 0)
+        @fn
+        def f4(x : string):
+            y [: string] = "ABC"
+            y
+        f4 [: fn[string > string]]
+        @fn
+        def f5(x : string) -> string:
+            y [: string] = "ABC"
+            "DEF"
+        f5 [: fn[string > string]]
+        @fn
+        def f6(x : num) -> string:
+            [x].match
+            with 0: 
+                "ABC"
+            with x:
+                "DEF"
+        f6 [: fn[num > string]]
+        @fn
+        def f7(x : num):
+            [x].match
+            with 0:
+                x
+            with x:
+                x
+        f7 [: fn[num > num]]
+        # TODO nested function definitions
+        # @fn
+        # def f8(x : num):
+        #     @fn
+        #     def f(y : num):
+        #         x + y
+        #     f
+        # @fn
+        # def f9(x : num):
+        #     @fn
+        #     def f(y : num):
+        #         x + y
+        # @fn
+        # def f10(x : num) -> fn[num > num]:
+        #     @fn
+        #     def f(y):
+        #         42
+        # TODO recursive functions
+
+    # assert ast_eq(c._translation, "")
+    
