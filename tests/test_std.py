@@ -578,6 +578,22 @@ def test_fn():
             with x:
                 x
         f7 [: fn[num > num]]
+        rfty [type] = fn[() > unit]
+        @rfty
+        def rf0():
+            rf0()
+        @fn
+        def rf1() -> unit:
+            rf1()
+        rf1 [: fn[() > unit]]
+        @fn
+        def rf2(x : num) -> num:
+            rf2(3)
+        rf2 [: fn[num > num]]
+        @fn
+        def rf3(x : num) -> num:
+            rf3(3)
+        rf3 [: fn[num > num]]
         # TODO nested function definitions
         # @fn
         # def f8(x : num):
@@ -595,7 +611,6 @@ def test_fn():
         #     @fn
         #     def f(y):
         #         42
-        # TODO recursive functions
 
     # assert ast_eq(c._translation, "")
     

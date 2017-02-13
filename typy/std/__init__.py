@@ -1444,9 +1444,13 @@ class fn(Fragment):
         else: rty = None
         
         # push bindings
+        if rty is not None:
+            self_name = ast.copy_location(
+                ast.Name(id=stmt.name),
+                stmt)
+            self_ty = CanonicalTy(cls, (arg_types, rty))
+            ctx.push_var_bindings({self_name : self_ty})  
         stmt.uniq_arg_sig = ctx.push_var_bindings(dict(arg_sig))
-
-        # TODO recursive functions
 
         # process docstring
         body = stmt.body
@@ -1515,7 +1519,7 @@ class fn(Fragment):
                 arg_ann = arg.annotation 
                 if arg_ann is not None:
                     given_arg_ty = ctx.as_type(arg_ann)
-                    if not ctx.ty_expr_eq(arg_ty, given_arg_ty, TypeKind): # TODO write test for this
+                    if not ctx.ty_expr_eq(arg_ty, given_arg_ty, TypeKind):
                         raise TyError(
                             "Given type annotation is inconsistent "
                             "with ascription.", arg_ann)
@@ -1527,7 +1531,7 @@ class fn(Fragment):
 
         returns = stmt.returns
         rty = idx[1]
-        if returns is not None: # TODO write test for this
+        if returns is not None: 
             ann_rty = ctx.as_type(returns)
             if not ctx.ty_expr_eq(rty, ann_rty, TypeKind):
                 raise TyError(
@@ -1535,9 +1539,12 @@ class fn(Fragment):
                     "with ascription.", returns)
 
         # push bindings
+        self_name = ast.copy_location(
+            ast.Name(id=stmt.name),
+            stmt)
+        self_ty = CanonicalTy(cls, (arg_types, rty))
+        ctx.push_var_bindings({self_name : self_ty})  
         stmt.uniq_arg_sig = ctx.push_var_bindings(dict(arg_sig))
-
-        # TODO recursive functions (+ write tests)
 
         # process docstring
         body = stmt.body
