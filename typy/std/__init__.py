@@ -1449,7 +1449,8 @@ class fn(Fragment):
         returns = stmt.returns
         if returns is not None:
             rty = ctx.as_type(returns)
-        else: rty = None
+        else: 
+            rty = None
         
         # push bindings
         if rty is not None:
@@ -1752,7 +1753,6 @@ class fn(Fragment):
     @classmethod
     def integrate_trans_FunctionDef(cls, ctx, stmt, translation, mechanism):
         uniq_id = stmt.uniq_id
-        print("uniq_id=", uniq_id)
         if mechanism == BlockTransMechanism.Return:
             translation.append(ast.copy_location(
                 ast.Return(

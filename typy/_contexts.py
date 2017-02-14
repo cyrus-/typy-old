@@ -264,7 +264,7 @@ class Context(object):
             decorator_list = tree.decorator_list
             if len(decorator_list) == 0:
                 raise TyError(
-                    "Cannot synthesize a type for an undecorated" 
+                    "Cannot synthesize a type for an undecorated " 
                     "definition.",
                     tree)
             asc = decorator_list[0]
