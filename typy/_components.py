@@ -8,7 +8,7 @@ from .util import astx as _astx
 from ._errors import ComponentFormationError, InternalError
 from ._fragments import Fragment
 from ._static_envs import StaticEnv
-from ._contexts import Context
+from ._contexts import Context, BlockTransMechanism
 from ._ty_exprs import UTyExpr, UName, TypeKind, SingletonKind
 from . import _terms
 
@@ -228,7 +228,6 @@ class ValueMember(ComponentMember):
             ctx.ana(tree_, ty)
 
         ctx.add_id_var_binding(self.id, self.id, ty)
-        print("pre-can ty=", ty)
         self.ty = ctx.canonicalize(ty)
 
     def translate(self, ctx):
@@ -241,7 +240,7 @@ class ValueMember(ComponentMember):
             translation = self.translation = (assignment,)
             return translation
         elif isinstance(tree, ast.FunctionDef):
-            return ctx.trans_FunctionDef(tree, self.id)
+            return ctx.trans(tree)
 
 class StmtMember(ComponentMember):
     """Statement members (not exported)."""
@@ -292,10 +291,31 @@ class component_singleton(Fragment):
             e))
 
     @classmethod
-    def check_Pass(cls, ctx, stmt):
-        return
+    def integrate_static_FunctionDef(cls, ctx, stmt):
+        stmt.uniq_id = stmt.name
 
     @classmethod
-    def trans_Pass(cls, ctx, stmt):
-        return [_astx.copy_node(stmt)]
+    def integrate_trans_FunctionDef(cls, ctx, stmt, translation, mechanism):
+        pass
+
+    # @classmethod
+    # def check_Pass(cls, ctx, stmt):
+    #     return
+
+    # @classmethod
+    # def trans_checked_Pass(cls, ctx, stmt):
+    #     return [_astx.copy_node(stmt)]
+
+    # @classmethod
+    # def check_Expr(cls, ctx, stmt):
+    #     ctx.syn(stmt.value)
+
+    # @classmethod
+    # def trans_checked_Expr(cls, ctx, stmt, mechanism):
+    #     if mechanism == BlockTransMechanism.Statement:
+    #         return [ast.copy_location(
+    #             ast.Expr(value=ctx.trans(stmt.value)),
+    #             stmt)]
+    #     else:
+    #         raise TyError("Invalid mechanism.", stmt)
 

@@ -595,22 +595,22 @@ def test_fn():
             rf3(3)
         rf3 [: fn[num > num]]
         # TODO nested function definitions
-        # @fn
-        # def f8(x : num):
-        #     @fn
-        #     def f(y : num):
-        #         x + y
-        #     f
-        # @fn
-        # def f9(x : num):
-        #     @fn
-        #     def f(y : num):
-        #         x + y
-        # @fn
-        # def f10(x : num) -> fn[num > num]:
-        #     @fn
-        #     def f(y):
-        #         42
+        @fn
+        def f8(x : num):
+            @fn
+            def fi1(y : num):
+                x + y
+            fi1
+        @fn
+        def f9(x : num):
+            @fn
+            def fi2(y : num):
+                x + y
+        @fn
+        def f10(x : num) -> fn[num > num]:
+            @fn
+            def f(y):
+                42
 
-    # assert ast_eq(c._translation, "")
+    assert ast_eq(c._translation, "")
     

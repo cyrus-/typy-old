@@ -21,7 +21,7 @@ def is_match_rule(stmt):
 
 def is_stmt_expression(tree):
     return (isinstance(tree, StatementExpression) or 
-            isinstance(tree, (ast.If, ast.Raise, ast.Try, ast.Expr, ast.Pass)))
+            isinstance(tree, (ast.If, ast.Raise, ast.Try, ast.Expr, ast.Pass, ast.FunctionDef)))
 
 class StatementExpression(object):
     pass
@@ -135,7 +135,9 @@ def is_default_stmt_form(stmt):
             ast.Expr,
             ast.Pass,
             ast.Break,
-            ast.Continue)):
+            ast.Continue,
+            ast.FunctionDef,
+            MatchStatementExpression)):
         return True
     elif isinstance(stmt, ast.Assign):
         return not is_targeted_stmt_form(stmt)

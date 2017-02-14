@@ -107,22 +107,22 @@ class Context(object):
             target = stmt._typy_target # side effect of the guard call
             form_name = stmt.__class__.__name__
             target_ty = self.syn(target)
-            c_target_ty = self.canonicalize(c_target_ty)
-            delegate = c_target_ty.fragment
-            delegate_idx = c_target_ty.idx
+            c_target_ty = self.canonicalize(target_ty)
+            delegate = stmt.delegate = c_target_ty.fragment
+            delegate_idx = stmt.delegate_idx = c_target_ty.idx
             check_method_name = "check_" + form_name
-            translation_method_name = "trans_" + form_name
+            stmt.translation_method_name = "trans_" + form_name
             check_method = getattr(delegate, check_method_name)
             check_method(self, stmt, delegate_idx)
         elif _terms.is_default_stmt_form(stmt):
             try:
-                delegate = self.default_fragments[-1]
+                delegate = stmt.delegate = self.default_fragments[-1]
             except IndexError:
                 raise TyError("No default fragment.", stmt)
-            delegate_idx = None
+            delegate_idx = stmt.delegate_idx = None
             cls_name = stmt.__class__.__name__
             check_method_name = "check_" + cls_name
-            translation_method_name = "trans_" + cls_name
+            stmt.translation_method_name = "trans_checked_" + cls_name
             check_method = getattr(delegate, check_method_name)
             check_method(self, stmt)
         elif _terms.is_unsupported_stmt_form(stmt):
@@ -130,10 +130,6 @@ class Context(object):
         else:
             raise TyError("Unknown statement form: " + 
                           stmt.__class__.__name__, stmt)
-
-        stmt.delegate = delegate
-        stmt.delegate_idx = delegate_idx
-        stmt.translation_method_name = translation_method_name
 
     def ana(self, tree, ty):
         # handle the case where neither left or right synthesize a type
@@ -211,6 +207,12 @@ class Context(object):
             tree.delegate = delegate
             tree.delegate_idx = delegate_idx
             tree.translation_method_name = translation_method_name
+            if isinstance(tree, ast.FunctionDef):
+                try:
+                    default_fragment = self.default_fragments[-1]
+                except IndexError: raise TyError("No default fragment.", stmt)
+                tree._default_fragment = default_fragment
+                default_fragment.integrate_static_FunctionDef(self, tree)
 
     def syn(self, tree):
         if hasattr(tree, "ty"): return tree.ty
@@ -283,8 +285,8 @@ class Context(object):
                     self.default_fragments.pop()
                     self.ana_ty_expr(ty, TypeKind)
                     delegate = fragment
-                    delegate_idx = None
-                    translation_method_name = None # TODO
+                    delegate_idx = ()
+                    translation_method_name = "trans_FunctionDef"
             else:
                 self.ana(tree, ty) 
                 return ty
@@ -333,6 +335,12 @@ class Context(object):
         tree.delegate = delegate
         tree.delegate_idx = delegate_idx
         tree.translation_method_name = translation_method_name
+        if isinstance(tree, ast.FunctionDef):
+            try:
+                default_fragment = self.default_fragments[-1]
+            except IndexError: raise TyError("No default fragment.", stmt)
+            tree._default_fragment = default_fragment
+            default_fragment.integrate_static_FunctionDef(self, tree)
         return ty
 
     def _do_binary(self, left, right, tree):
@@ -458,6 +466,8 @@ class Context(object):
             delegate = tree.delegate
             idx = tree.delegate_idx
             translation_method_name = tree.translation_method_name
+            if translation_method_name is None:
+                raise TyError("BAD BAD BAD", tree)
             translation_method = getattr(delegate, translation_method_name)
             if idx is not None:
                 if _terms.is_stmt_expression(tree):
@@ -545,17 +555,22 @@ class Context(object):
                 [_astx.standard_raise_str('Exception', 
                                          'typy match failure', scrutinee)]))
         else:
+            print(tree.__class__.__name__)
             raise NotImplementedError()
+
+        if isinstance(tree, ast.FunctionDef):
+            default_fragment = tree._default_fragment
+            default_fragment.integrate_trans_FunctionDef(self, tree, translation, mechanism)
         tree.translation = translation
         return translation
 
-    def trans_FunctionDef(self, stmt, id):
-        if isinstance(stmt, ast.FunctionDef):
-            delegate = stmt.delegate
-            translation = stmt.translation = delegate.trans_FunctionDef(self, stmt, id)
-            return translation
-        else:
-            raise NotImplementedError()
+    # def trans_FunctionDef(self, stmt, id):
+    #     if isinstance(stmt, ast.FunctionDef):
+    #         delegate = stmt.delegate
+    #         translation = stmt.translation = delegate.trans_FunctionDef(self, stmt, id)
+    #         return translation
+    #     else:
+    #         raise NotImplementedError()
 
     # 
     # Patterns

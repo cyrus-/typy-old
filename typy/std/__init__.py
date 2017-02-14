@@ -146,6 +146,14 @@ class boolean(Fragment):
                 comparators = comp_trs), e)
 
     @classmethod
+    def check_If(cls, ctx, stmt, idx):
+        cls.syn_If(ctx, stmt, idx)
+
+    @classmethod
+    def trans_checked_If(cls, ctx, stmt, mechanism):
+        return cls.trans_If(cls, ctx, stmt, mechanism)
+
+    @classmethod
     def syn_If(cls, ctx, e, idx):
         body_block = e.body_block = _terms.Block(e.body)
         body_ty = ctx.syn_block(body_block)
@@ -1572,7 +1580,9 @@ class fn(Fragment):
         ctx.pop_var_bindings()
 
     @classmethod
-    def trans_FunctionDef(cls, ctx, stmt, id):
+    def trans_FunctionDef(cls, ctx, stmt, idx, mechanism):
+        uniq_id = stmt.uniq_id
+
         # translate arguments
         arguments_tr = ast.arguments(
             args= [
@@ -1595,7 +1605,7 @@ class fn(Fragment):
 
         return [ast.copy_location(
             ast.FunctionDef(
-                name=id,
+                name=uniq_id,
                 args=arguments_tr,
                 body=body_tr,
                 decorator_list=[],
@@ -1715,8 +1725,7 @@ class fn(Fragment):
         stmt.uniq_bindings = ctx.add_bindings(bindings)
     
     @classmethod
-    def trans_Assign(cls, ctx, stmt):
-        assert len(stmt.bindings) == 1
+    def trans_checked_Assign(cls, ctx, stmt):
         target_name = tuple(stmt.bindings.keys())[0]
         target_tr = ast.copy_location(
             ast.Name(id=stmt.uniq_bindings[target_name.id][0],
@@ -1733,15 +1742,26 @@ class fn(Fragment):
             stmt)]
 
     @classmethod
-    def check_Expr(self, ctx, stmt):
-        ctx.syn(stmt.value)
+    def integrate_static_FunctionDef(cls, ctx, stmt):
+        name_ast = ast.copy_location(
+            ast.Name(id=stmt.name, ctx=astx.load_ctx),
+            stmt)
+        stmt.uniq_bindings = uniq_bindings = ctx.add_bindings({ name_ast: stmt.ty })
+        stmt.uniq_id = uniq_bindings[stmt.name][0]
 
     @classmethod
-    def trans_Expr(self, ctx, stmt):
-        return ast.copy_location(
-            ast.Expr(
-                value=ctx.trans(stmt.value)),
-            stmt)
+    def integrate_trans_FunctionDef(cls, ctx, stmt, translation, mechanism):
+        uniq_id = stmt.uniq_id
+        print("uniq_id=", uniq_id)
+        if mechanism == BlockTransMechanism.Return:
+            translation.append(ast.copy_location(
+                ast.Return(
+                    value=ast.copy_location(
+                        ast.Name(
+                            id=uniq_id,
+                            ctx=astx.load_ctx),
+                        stmt)),
+                stmt))
 
 class py(Fragment):
     @classmethod
