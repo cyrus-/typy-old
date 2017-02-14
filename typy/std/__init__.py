@@ -1178,7 +1178,7 @@ class tpl(Fragment):
                 ctx=e.ctx),
             e))
 
-class tagged(Fragment):
+class variant(Fragment):
     @classmethod
     def init_idx(cls, ctx, idx_ast):
         if isinstance(idx_ast, ast.Index):

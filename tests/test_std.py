@@ -10,7 +10,7 @@ from typy.util.testing import ast_eq, trans_str, trans_truth
 
 import typy
 from typy._ty_exprs import CanonicalTy
-from typy.std import component, boolean, unit, num, ieee, record, string, py, fn, tagged, tpl
+from typy.std import component, boolean, unit, num, ieee, record, string, py, fn, variant, tpl
 
 # 
 # unit
@@ -501,22 +501,22 @@ def test_tpl():
         y_1 [: num] = y1[1]
 
 # 
-# tagged
+# variant
 # 
 
-def test_tagged():
+def test_variant():
     @component
     def c():
-        t0 [type] = tagged[A]
-        t1 [type] = tagged[A(num)]
-        t2 [type] = tagged[A(num), B(string)]
-        t3 [type] = tagged[A(num, string), B(string, num)]
+        t0 [type] = variant[A]
+        t1 [type] = variant[A(num)]
+        t2 [type] = variant[A(num), B(string)]
+        t3 [type] = variant[A(num, string), B(string, num)]
         x1 [: t3] = A(3, "test")
         x2 [: t3] = B("test", 3)
         [x2].match
         with A(x, y): x
         with B(x, y): y
-        void [type] = tagged[()]
+        void [type] = variant[()]
 
 # 
 # fn
