@@ -157,7 +157,8 @@ _intro_expr_forms = (
     ast.Bytes,
     ast.NameConstant, 
     ast.List, 
-    ast.Tuple)
+    ast.Tuple,
+    ast.Ellipsis)
 
 _intro_forms = tuple(_util.seq_cons(
     ast.FunctionDef, _intro_expr_forms))

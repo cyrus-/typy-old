@@ -1885,6 +1885,26 @@ class py(Fragment):
                 ctx=e.ctx),
             e)
 
+    @classmethod
+    def ana_Ellipsis(cls, ctx, e, idx):
+        return
+
+    @classmethod
+    def trans_Ellipsis(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Ellipsis(),
+            e)
+    
+    @classmethod
+    def ana_Bytes(cls, ctx, e, idx):
+        return
+
+    @classmethod
+    def trans_Bytes(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Bytes(s=e.s),
+            e)
+
     # TODO function definitions
     # TODO lambdas
 
@@ -1950,7 +1970,7 @@ class py(Fragment):
             e)
 
     @classmethod
-    def syn_UnaryOp(cls, ctx, e):
+    def syn_UnaryOp(cls, ctx, e, idx):
         ctx.ana(e.operand, py_type)
         return py_type
 
@@ -2018,8 +2038,10 @@ class py(Fragment):
                         ast.Starred(
                             value=ctx.trans(arg.value),
                             ctx=arg.ctx),
-                        arg) if isinstance(arg, ast.Starred) 
-                    else ctx.trans(arg)],
+                        arg) 
+                    if isinstance(arg, ast.Starred) 
+                    else ctx.trans(arg)
+                for arg in e.args],
                 keywords=[
                     ast.keyword(
                         arg=kw.arg,
@@ -2043,6 +2065,7 @@ class py(Fragment):
     @classmethod
     def syn_Subscript(cls, ctx, e, idx):
         cls._ana_slice(ctx, e.slice)
+        return py_type
 
     @classmethod
     def _ana_slice(cls, ctx, slice):
@@ -2058,7 +2081,7 @@ class py(Fragment):
                 ctx.ana(step, py_type)
         else: # ExtSlice
             for dim in slice.dims:
-                _ana_slice(dim)
+                cls._ana_slice(ctx, dim)
 
     @classmethod
     def trans_Subscript(cls, ctx, e, idx):
@@ -2088,7 +2111,7 @@ class py(Fragment):
             return ast.copy_location(
                 ast.ExtSlice(
                     dims=[
-                        _trans_slice(ctx, dim)
+                        cls._trans_slice(ctx, dim)
                         for dim in slice.dims]),
                 slice)
 

@@ -649,6 +649,7 @@ def test_py():
         list_intro [: py] = [ "abc", { }, 1.23 ]
         unit_intro [: py] = ()
         tuple_intro [: py] = ( "abc", 3.14 )
+        bytes_intro [: py] = b'test'
 
         # TODO function definitions
         # TODO lambdas
@@ -667,9 +668,9 @@ def test_py():
         #                          for x in list_intro if x == true_intro
         #                          for y in set_itnro if y == false_intro)
 
-        # other operations
-        x [: py] = 34
-        y [: py] = 49
+        # expression-level operations
+        x [: py] = 0
+        y [: py] = 1
         z [: py] = "abc"
         bool_op1 = x and y and z
         bool_op2 = x or y or z
@@ -688,35 +689,34 @@ def test_py():
         bitand = x & y
         floordiv = x // y
         matmult = x @ y if False [: boolean] else 0 # to avoid run-time exception
-        # invert = ~x
-        # op_not = not x
-        # uadd = +x
-        # usub = -x
-        # compares = x == y != z < x <= y > z >= x is y is not z in x not in y
-        # ifexp = (1 [: num]) if x else (2 [: num])
-        # ifexp [: num]
-        # ifexp2 [: py] = 123 if x else 456
-        # call = x(y, z, a=x, b=y, *z, **x)
-        # # TODO FormattedValue ???
-        # # TODO JoinedStr ???
-        # # TODO Bytes ???
-        # # TODO Ellipsis ???
-        # # TODO Constant ???
-        # attr = x.attr
-        # subscript1 = x[y]
-        # subscript2 = x[y:z]
-        # subscript3 = x[x:y:z]
-        # subscript4 = x[y, z]
-        # subscript5 = x[y, y:z, x:y:z]
+        invert = ~x
+        op_not = not x
+        uadd = +x
+        usub = -x
+        compares = x == y != z < x <= y > z >= x is y is not z in x not in y
+        ifexp = (1 [: num]) if x else (2 [: num])
+        ifexp [: num]
+        ifexp2 [: py] = 123 if x else 456
+        call = x(y, z, a=x, b=y, *z, **x) if False [: boolean] else 0
+        attr = x.bit_length()
+        subscript1 = x[y] if False [: boolean] else x
+        subscript3 = x[x:y:z] if False [: boolean] else 0
+        subscript4 = x[y, z] if False [: boolean] else 0
+        subscript5 = x[y, y:z, x:y:z] if False [: boolean] else 0
+        subscript6 = x[...] if False [: boolean] else 0
 
-        # # TODO pattern matching
-        # # TODO class definitions
-        # # TODO top-level stuff
-        # # TODO conversions from other types
-        # # TODO for, break, continue
-        # # TODO while, break, continue
-        # # TODO if
-        # # TODO assert
-        # # TODO global + assignment logic
-        # # TODO pass
+        # TODO pattern matching
+        # TODO class definitions
+        # TODO top-level stuff
+        # TODO conversions from other types
+        # TODO for, break, continue
+        # TODO while, break, continue
+        # TODO if
+        # TODO assert
+        # TODO global + assignment logic
+        # TODO pass
+        # TODO lifting
+        # TODO JoinedStr and FormattedValue stuff
+        # TODO make names and calls defer if ill-typed to standard mechanism
+
 

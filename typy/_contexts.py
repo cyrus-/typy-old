@@ -196,6 +196,7 @@ class Context(object):
         else:
             subsumed = True
             syn_ty = self.syn(tree)
+            print("syn_ty", syn_ty, ty)
             if self.ty_expr_eq(ty, syn_ty, TypeKind):
                 return
             else:
