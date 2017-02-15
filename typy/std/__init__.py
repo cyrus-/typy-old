@@ -115,7 +115,7 @@ class boolean(Fragment):
             ctx.ana(value, boolean_ty)
 
     @classmethod
-    def trans_BoolOp(cls, ctx, e):
+    def trans_BoolOp(cls, ctx, e, idx=None):
         values_tr = [ ]
         for value in e.values:
             values_tr.append(ctx.trans(value))
@@ -179,7 +179,7 @@ class boolean(Fragment):
     @classmethod
     def syn_IfExp(cls, ctx, e, idx):
         body_ty = ctx.syn(e.body)
-        orelse_ty = ctx.ana(e.orelse, body_ty)
+        ctx.ana(e.orelse, body_ty)
         return body_ty
 
     @classmethod
@@ -1767,20 +1767,337 @@ class py(Fragment):
     @classmethod
     def init_idx(cls, ctx, idx_ast):
         return _check_trivial_idx_ast(idx_ast)
-    
+
     @classmethod
-    def ana_Dict(cls, ctx, e, idx):
+    def ana_Num(cls, ctx, e, idx):
         return
 
     @classmethod
-    def trans_Dict(cls, ctx, e, idx):
-        # TODO: deep copy
-        return astx.copy_node(e)
+    def trans_Num(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Num(n=e.n),
+            e)
 
-    # TODO intro forms
-    # TODO other operations
+    @classmethod
+    def ana_UnaryOp(cls, ctx, e, idx):
+        ctx.ana(e.operand, py_type)
+
+    @classmethod
+    def trans_UnaryOp(cls, ctx, e, idx=None):
+        return ast.copy_location(
+            ast.UnaryOp(
+                op=e.op,
+                operand=ctx.trans(e.operand)),
+            e)
+   
+    @classmethod
+    def ana_Str(cls, ctx, e, idx):
+        return
+
+    @classmethod
+    def trans_Str(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Str(s=e.s),
+            e)
+
+    @classmethod
+    def ana_NameConstant(cls, ctx, e, idx):
+        return
+
+    @classmethod
+    def trans_NameConstant(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.NameConstant(value=e.value),
+            e)
+
+    @classmethod
+    def ana_Name(cls, ctx, e, idx):
+        if e.id == 'NotImplemented' or e.id == 'Ellipsis':
+            return
+        else:
+            raise TyError("Invalid constant of type py.", e) # TODO defer to lifting
+
+    @classmethod
+    def trans_Name(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Name(
+                id=e.id,
+                ctx=e.ctx),
+            e)
+
+    @classmethod
+    def ana_Dict(cls, ctx, e, idx):
+        for key, val in zip(e.keys, e.values):
+            ctx.ana(key, py_type)
+            ctx.ana(val, py_type)
+
+    @classmethod
+    def trans_Dict(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Dict(
+                keys=[ctx.trans(key)
+                      for key in e.keys],
+                values=[ctx.trans(val)
+                        for val in e.values]),
+            e)
+
+    @classmethod
+    def ana_Set(cls, ctx, e, idx):
+        for elt in e.elts:
+            ctx.ana(elt, py_type)
+
+    @classmethod
+    def trans_Set(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Set(
+                elts=[
+                    ctx.trans(elt)
+                    for elt in e.elts]),
+            e)
+
+    @classmethod
+    def ana_List(cls, ctx, e, idx):
+        for elt in e.elts:
+            ctx.ana(elt, py_type)
+
+    @classmethod
+    def trans_List(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.List(
+                elts=[
+                    ctx.trans(elt)
+                    for elt in e.elts],
+                ctx=e.ctx),
+            e)
+
+    @classmethod
+    def ana_Tuple(cls, ctx, e, idx):
+        for elt in e.elts:
+            ctx.ana(elt, py_type)
+
+    @classmethod
+    def trans_Tuple(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Tuple(
+                elts=[
+                    ctx.trans(elt)
+                    for elt in e.elts],
+                ctx=e.ctx),
+            e)
+
+    # TODO function definitions
+    # TODO lambdas
+
+    # TODO comprehensions
+
+    @classmethod
+    def ana_DictComp(cls, ctx, e, idx):
+        raise NotImplementedError()
+
+    @classmethod
+    def trans_DictComp(cls, ctx, e, idx):
+        raise NotImplementedError()
+
+    @classmethod
+    def ana_SetComp(cls, ctx, e, idx):
+        raise NotImplementedError()
+
+    @classmethod
+    def trans_SetComp(cls, ctx, e, idx):
+        raise NotImplementedError()
+
+    @classmethod
+    def ana_ListComp(cls, ctx, e, idx):
+        raise NotImplementedError()
+
+    @classmethod
+    def trans_ListComp(cls, ctx, e, idx):
+        raise NotImplementedError()
+
+    @classmethod
+    def syn_BoolOp(cls, ctx, e):
+        for value in e.values:
+            ctx.ana(value, py_type)
+        return py_type
+
+    @classmethod
+    def ana_BoolOp(cls, ctx, e, idx):
+        for value in e.values:
+            ctx.ana(value, py_type)
+
+    @classmethod
+    def trans_BoolOp(cls, ctx, e, idx=None):
+        return ast.copy_location(
+            ast.BoolOp(
+                op=e.op,
+                values=[ctx.trans(value)
+                        for value in e.values]),
+            e)
+
+    @classmethod
+    def syn_BinOp(cls, ctx, e):
+        ctx.ana(e.left, py_type)
+        ctx.ana(e.right, py_type)
+        return py_type
+
+    @classmethod
+    def trans_BinOp(cls, ctx, e):
+        return ast.copy_location(
+            ast.BinOp(
+                left=ctx.trans(e.left),
+                op=e.op,
+                right=ctx.trans(e.right)),
+            e)
+
+    @classmethod
+    def syn_UnaryOp(cls, ctx, e):
+        ctx.ana(e.operand, py_type)
+        return py_type
+
+    @classmethod
+    def syn_Compare(cls, ctx, e):
+        ctx.ana(e.left, py_type)
+        for comparator in e.comparators:
+            ctx.ana(comparator, py_type)
+        return py_type
+
+    @classmethod
+    def trans_Compare(cls, ctx, e):
+        return ast.copy_location(
+            ast.Compare(
+                left=ctx.trans(e.left),
+                ops=e.ops,
+                comparators=[
+                    ctx.trans(comparator)
+                    for comparator in e.comparators]),
+            e)
+
+    @classmethod
+    def syn_IfExp(cls, ctx, e, idx):
+        body_ty = ctx.syn(e.body)
+        ctx.ana(e.orelse, body_ty)
+        return body_ty
+
+    @classmethod
+    def ana_IfExp(cls, ctx, e, idx, ty):
+        ctx.ana(e.body, ty)
+        ctx.ana(e.orelse, ty)
+
+    @classmethod
+    def trans_IfExp(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.IfExp(
+                test=ctx.trans(e.test),
+                body=ctx.trans(e.body),
+                orelse=ctx.trans(e.orelse)),
+            e)
+
+    @classmethod
+    def syn_Call(cls, ctx, e, idx):
+        for arg in e.args:
+            if isinstance(arg, ast.Starred):
+                ctx.ana(arg.value, py_type)
+            else:
+                ctx.ana(arg, py_type)
+        used_kws = set()
+        for keyword in e.keywords:
+            kw_arg, kw_value = keyword.arg, keyword.value
+            if kw_arg in used_kws:
+                raise TyError("Duplicate keyword arguments.", kw_value)
+            used_kws.add(kw_arg)
+            ctx.ana(kw_value, py_type)
+        return py_type
+        
+    @classmethod
+    def trans_Call(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Call(
+                func=ctx.trans(e.func),
+                args=[
+                    ast.copy_location(
+                        ast.Starred(
+                            value=ctx.trans(arg.value),
+                            ctx=arg.ctx),
+                        arg) if isinstance(arg, ast.Starred) 
+                    else ctx.trans(arg)],
+                keywords=[
+                    ast.keyword(
+                        arg=kw.arg,
+                        value=ctx.trans(kw.value))
+                    for kw in e.keywords]),
+            e)
+
+    @classmethod
+    def syn_Attribute(cls, ctx, e, idx):
+        return py_type
+
+    @classmethod
+    def trans_Attribute(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Attribute(
+                value=ctx.trans(e.value),
+                attr=e.attr,
+                ctx=e.ctx),
+            e)
+
+    @classmethod
+    def syn_Subscript(cls, ctx, e, idx):
+        cls._ana_slice(ctx, e.slice)
+
+    @classmethod
+    def _ana_slice(cls, ctx, slice):
+        if isinstance(slice, ast.Index):
+            ctx.ana(slice.value, py_type)
+        elif isinstance(slice, ast.Slice):
+            lower, upper, step = slice.lower, slice.upper, slice.step
+            if lower is not None:
+                ctx.ana(lower, py_type)
+            if upper is not None:
+                ctx.ana(upper, py_type)
+            if step is not None:
+                ctx.ana(step, py_type)
+        else: # ExtSlice
+            for dim in slice.dims:
+                _ana_slice(dim)
+
+    @classmethod
+    def trans_Subscript(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.Subscript(
+                value=ctx.trans(e.value),
+                slice=cls._trans_slice(ctx, e.slice),
+                ctx=e.ctx),
+            e)
+
+    @classmethod
+    def _trans_slice(cls, ctx, slice):
+        if isinstance(slice, ast.Index):
+            return ast.copy_location(
+                ast.Index(
+                    value=ctx.trans(slice.value)),
+                slice)
+        elif isinstance(slice, ast.Slice):
+            lower, upper, step = slice.lower, slice.upper, slice.step
+            return ast.copy_location(
+                ast.Slice(
+                    lower=None if lower is None else ctx.trans(lower),
+                    upper=None if upper is None else ctx.trans(upper),
+                    step=None if step is None else ctx.trans(step)),
+                slice)
+        else: # ExtSlice
+            return ast.copy_location(
+                ast.ExtSlice(
+                    dims=[
+                        _trans_slice(ctx, dim)
+                        for dim in slice.dims]),
+                slice)
+
     # TODO pattern matching
-    pass
+    # TODO class definitions
+    # TODO top-level stuff
+    # TODO conversions from other types
+
+py_type = CanonicalTy(py, ())
 
 def _check_trivial_idx_ast(idx_ast):
     if (isinstance(idx_ast, ast.Index) and 
@@ -1790,6 +2107,9 @@ def _check_trivial_idx_ast(idx_ast):
     else:
         raise TypeValidationError(
             "unit type can only have trivial index.", idx_ast)
+
+# TODO map
+# TODO vec
 
 # Maybe not in the standard library?
 # TODO proto

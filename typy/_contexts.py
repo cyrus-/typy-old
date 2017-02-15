@@ -141,14 +141,15 @@ class Context(object):
                 try:
                     self.syn(right)
                 except:
-                    ty = self.canonicalize(ty)
-                    delegate = ty.fragment
-                    delegate_idx = ty.idx
+                    ty_c = self.canonicalize(ty)
+                    delegate = ty_c.fragment
+                    delegate_idx = ty_c.idx
 
                     # will get picked up by subsumption below
                     class_name = tree.__class__.__name__
                     ana_method = getattr(delegate, "ana_" + class_name)
-                    tree.ty = ana_method(self, tree, delegate_idx)
+                    ana_method(self, tree, delegate_idx)
+                    tree.ty = ty
                     tree.delegate = delegate
                     tree.delegate_idx = delegate_idx
                     tree.translation_method_name = "trans_" + class_name
@@ -701,6 +702,7 @@ class Context(object):
             else:
                 raise UsageError("Invalid kind.")
         else:
+            print(ty)
             raise UsageError("Invalid construction.")
 
     def ana_uty_expr(self, uty_expr, k):

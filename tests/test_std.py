@@ -626,3 +626,97 @@ def test_fn():
 
     # assert ast_eq(c._translation, "")
     
+# 
+# py
+# 
+
+def test_py():
+    @component
+    def c():
+        # literals
+        int_intro [: py] = 4
+        int_intro2 [: py] = -4
+        float_intro [: py] = 3.14
+        float_intro2 [: py] = -3.14
+        string_intro [: py] = "abc"
+        true_intro [: py] = True
+        false_intro [: py] = False
+        none_intro [: py] = None
+        not_implemented_intro [: py] = NotImplemented
+        ellipsis_intro [: py] = Ellipsis
+        dict_intro [: py] = { None : "abc", 3.14 : None }
+        set_intro [: py] = { "abc", 3.14, None } # TODO empty set when testing lifting
+        list_intro [: py] = [ "abc", { }, 1.23 ]
+        unit_intro [: py] = ()
+        tuple_intro [: py] = ( "abc", 3.14 )
+
+        # TODO function definitions
+        # TODO lambdas
+
+        # comprehensions
+        # dict_comprehension [: py] = {x: x 
+        #                              for x in list_intro if x == true_intro 
+        #                              for y in set_intro if y == false_intro}
+        # set_comprehension [: py] = {x 
+        #                             for x in list_intro if x == true_intro 
+        #                             for y in set_intro if y == false_intro}
+        # list_comprehension [: py] = [x
+        #                              for x in list_intro if x == true_intro
+        #                              for y in set_itnro if y == false_intro]
+        # generator_test [: py] = (x
+        #                          for x in list_intro if x == true_intro
+        #                          for y in set_itnro if y == false_intro)
+
+        # other operations
+        x [: py] = 34
+        y [: py] = 49
+        z [: py] = "abc"
+        bool_op1 = x and y and z
+        bool_op2 = x or y or z
+        bool_op3 [: py] = True and False and True
+        bool_op4 [: py] = True or False or True
+        add = x + y
+        sub = x - y
+        mult = x * y
+        div = x / y
+        mod = x % y
+        pow = x ** y
+        lshift = x << y
+        rshift = x >> y
+        bitor = x | y
+        bitxor = x ^ y
+        bitand = x & y
+        floordiv = x // y
+        matmult = x @ y if False [: boolean] else 0 # to avoid run-time exception
+        # invert = ~x
+        # op_not = not x
+        # uadd = +x
+        # usub = -x
+        # compares = x == y != z < x <= y > z >= x is y is not z in x not in y
+        # ifexp = (1 [: num]) if x else (2 [: num])
+        # ifexp [: num]
+        # ifexp2 [: py] = 123 if x else 456
+        # call = x(y, z, a=x, b=y, *z, **x)
+        # # TODO FormattedValue ???
+        # # TODO JoinedStr ???
+        # # TODO Bytes ???
+        # # TODO Ellipsis ???
+        # # TODO Constant ???
+        # attr = x.attr
+        # subscript1 = x[y]
+        # subscript2 = x[y:z]
+        # subscript3 = x[x:y:z]
+        # subscript4 = x[y, z]
+        # subscript5 = x[y, y:z, x:y:z]
+
+        # # TODO pattern matching
+        # # TODO class definitions
+        # # TODO top-level stuff
+        # # TODO conversions from other types
+        # # TODO for, break, continue
+        # # TODO while, break, continue
+        # # TODO if
+        # # TODO assert
+        # # TODO global + assignment logic
+        # # TODO pass
+
