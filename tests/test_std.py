@@ -655,18 +655,18 @@ def test_py():
         # TODO lambdas
 
         # comprehensions
-        # dict_comprehension [: py] = {x: x 
-        #                              for x in list_intro if x == true_intro 
-        #                              for y in set_intro if y == false_intro}
-        # set_comprehension [: py] = {x 
-        #                             for x in list_intro if x == true_intro 
-        #                             for y in set_intro if y == false_intro}
-        # list_comprehension [: py] = [x
-        #                              for x in list_intro if x == true_intro
-        #                              for y in set_itnro if y == false_intro]
-        # generator_test [: py] = (x
-        #                          for x in list_intro if x == true_intro
-        #                          for y in set_itnro if y == false_intro)
+        dict_comprehension [: py] = {x: y 
+                                     for x in list_intro if x == true_intro 
+                                     for y in set_intro if y == false_intro}
+        set_comprehension [: py] = {x 
+                                    for x in list_intro if x == true_intro 
+                                    for y in set_intro if y == false_intro}
+        list_comprehension [: py] = [x
+                                     for x in list_intro if x == true_intro
+                                     for y in set_intro if y == false_intro]
+        generator_test [: py] = (x
+                                 for x in list_intro if x == true_intro
+                                 for y in set_intro if y == false_intro)
 
         # expression-level operations
         x [: py] = 0
@@ -697,7 +697,7 @@ def test_py():
         ifexp = (1 [: num]) if x else (2 [: num])
         ifexp [: num]
         ifexp2 [: py] = 123 if x else 456
-        call = x(y, z, a=x, b=y, *z, **x) if False [: boolean] else 0
+        call = x(y, z, *z, a=x, b=y, **x) if False [: boolean] else 0
         attr = x.bit_length()
         subscript1 = x[y] if False [: boolean] else x
         subscript3 = x[x:y:z] if False [: boolean] else 0
@@ -719,4 +719,5 @@ def test_py():
         # TODO JoinedStr and FormattedValue stuff
         # TODO make names and calls defer if ill-typed to standard mechanism
 
+    assert ast_eq(c._translation, "")
 

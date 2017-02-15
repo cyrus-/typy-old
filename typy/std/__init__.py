@@ -1912,27 +1912,160 @@ class py(Fragment):
 
     @classmethod
     def ana_DictComp(cls, ctx, e, idx):
-        raise NotImplementedError()
+        generators = e.generators
+        for generator in generators:
+            ctx.ana(generator.iter, py_type)
+            target = generator.target
+            bindings = ctx.ana_pat(generator.target, py_type)
+            var_bindings = ctx.push_var_bindings(bindings)
+            generator.var_bindings = var_bindings
+            for cond in generator.ifs:
+                ctx.ana(cond, py_type)
+        ctx.ana(e.key, py_type)
+        ctx.ana(e.value, py_type)
+        for generator in generators:
+            ctx.pop_var_bindings()
 
     @classmethod
     def trans_DictComp(cls, ctx, e, idx):
-        raise NotImplementedError()
+        return ast.copy_location(
+            ast.DictComp(
+                key=ctx.trans(e.key),
+                value=ctx.trans(e.value),
+                generators=[
+                    ast.comprehension(
+                        target=cls._trans_simple_pat(ctx, 
+                                                     generator.var_bindings, 
+                                                     generator.target),
+                        iter=ctx.trans(generator.iter),
+                        ifs=[ctx.trans(cond) 
+                             for cond in generator.ifs],
+                        is_async=generator.is_async)
+                    for generator in e.generators]),
+            e)
+
+    @classmethod
+    def _trans_simple_pat(cls, ctx, var_bindings, target):
+        if isinstance(target, ast.Tuple):
+            return ast.copy_location(
+                ast.Tuple(
+                    elts=[
+                        cls._trans_simple_pat(ctx, elt)
+                        for elt in target.elts],
+                    ctx=target.ctx),
+                target)
+        elif isinstance(target, ast.List):
+            return ast.copy_location(
+                ast.List(
+                    elts=[
+                        cls._trans_simple_pat(ctx, elt)
+                        for elt in target.elts],
+                    ctx=target.ctx),
+                target)
+        elif isinstance(target, ast.Name):
+            return ast.copy_location(
+                ast.Name(
+                    id=var_bindings[target.id][0],
+                    ctx=target.ctx),
+                target)
+        else:
+            raise TyError("Invalid pattern form in generator.", target)
 
     @classmethod
     def ana_SetComp(cls, ctx, e, idx):
-        raise NotImplementedError()
+        generators = e.generators
+        for generator in generators:
+            ctx.ana(generator.iter, py_type)
+            target = generator.target
+            bindings = ctx.ana_pat(generator.target, py_type)
+            var_bindings = ctx.push_var_bindings(bindings)
+            generator.var_bindings = var_bindings
+            for cond in generator.ifs:
+                ctx.ana(cond, py_type)
+        ctx.ana(e.elt, py_type)
+        for generator in generators:
+            ctx.pop_var_bindings()
 
     @classmethod
     def trans_SetComp(cls, ctx, e, idx):
-        raise NotImplementedError()
+        return ast.copy_location(
+            ast.SetComp(
+                elt=ctx.trans(e.elt),
+                generators=[
+                    ast.comprehension(
+                        target=cls._trans_simple_pat(ctx, 
+                                                     generator.var_bindings, 
+                                                     generator.target),
+                        iter=ctx.trans(generator.iter),
+                        ifs=[ctx.trans(cond) 
+                             for cond in generator.ifs],
+                        is_async=generator.is_async)
+                    for generator in e.generators]),
+            e)
 
     @classmethod
     def ana_ListComp(cls, ctx, e, idx):
-        raise NotImplementedError()
+        generators = e.generators
+        for generator in generators:
+            ctx.ana(generator.iter, py_type)
+            target = generator.target
+            bindings = ctx.ana_pat(generator.target, py_type)
+            var_bindings = ctx.push_var_bindings(bindings)
+            generator.var_bindings = var_bindings
+            for cond in generator.ifs:
+                ctx.ana(cond, py_type)
+        ctx.ana(e.elt, py_type)
+        for generator in generators:
+            ctx.pop_var_bindings()
 
     @classmethod
     def trans_ListComp(cls, ctx, e, idx):
-        raise NotImplementedError()
+        return ast.copy_location(
+            ast.ListComp(
+                elt=ctx.trans(e.elt),
+                generators=[
+                    ast.comprehension(
+                        target=cls._trans_simple_pat(ctx, 
+                                                     generator.var_bindings, 
+                                                     generator.target),
+                        iter=ctx.trans(generator.iter),
+                        ifs=[ctx.trans(cond) 
+                             for cond in generator.ifs],
+                        is_async=generator.is_async)
+                    for generator in e.generators]),
+            e)
+
+    @classmethod
+    def ana_GeneratorExp(cls, ctx, e, idx):
+        generators = e.generators
+        for generator in generators:
+            ctx.ana(generator.iter, py_type)
+            target = generator.target
+            bindings = ctx.ana_pat(generator.target, py_type)
+            var_bindings = ctx.push_var_bindings(bindings)
+            generator.var_bindings = var_bindings
+            for cond in generator.ifs:
+                ctx.ana(cond, py_type)
+        ctx.ana(e.elt, py_type)
+        for generator in generators:
+            ctx.pop_var_bindings()
+
+    @classmethod
+    def trans_GeneratorExp(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.GeneratorExp(
+                elt=ctx.trans(e.elt),
+                generators=[
+                    ast.comprehension(
+                        target=cls._trans_simple_pat(ctx, 
+                                                     generator.var_bindings, 
+                                                     generator.target),
+                        iter=ctx.trans(generator.iter),
+                        ifs=[ctx.trans(cond) 
+                             for cond in generator.ifs],
+                        is_async=generator.is_async)
+                    for generator in e.generators]),
+            e)
 
     @classmethod
     def syn_BoolOp(cls, ctx, e):
