@@ -220,52 +220,6 @@ unsupported_expr_forms = (
     ast.Yield,
     ast.YieldFrom)
 
-def parse_fn_body(body):
-    for stmt in body:
-        if isinstance(stmt, (
-                ast.FunctionDef, 
-                ast.Return, 
-                ast.AugAssign,
-                ast.For,
-                ast.While,
-                ast.If,
-                ast.Raise,
-                ast.Try,
-                ast.Assert,
-                ast.Pass,
-                ast.Break,
-                ast.Continue)):
-            yield stmt
-        elif isinstance(stmt, ast.Delete):
-            targets = stmt.targets
-            if len(targets) == 1:
-                yield stmt
-            else:
-                # break multi-target deletes into multiple
-                # single-target deletes so that each can 
-                # delegate separately
-                for target in targets:
-                    yield ast.copy_location(
-                        ast.Delete(targets=[target]),
-                        stmt)
-        elif isinstance(stmt, ast.Assign):
-            # TODO handle ascriptions
-            # TODO handle targeted assignment forms
-            # TODO handle multiple targets
-            raise NotImplementedError()
-        elif isinstance(stmt, ast.With):
-            # TODO pattern matching clauses
-            raise NotImplementedError()
-        elif isinstance(stmt, ast.Expr):
-            # TODO pattern matching scrutinee
-            raise NotImplementedError()
-        elif isinstance(stmt, _unsupported_stmt_forms):
-            raise TyError("Unsupported statement form: " +
-                          stmt.__class__.__name__, stmt)
-        else:
-            raise TyError("Unknown statement form: " + 
-                          stmt.__class__.__name__, stmt)
-
 class Block(object):
     def __init__(self, stmts):
         self.stmts = stmts
