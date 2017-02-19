@@ -2580,34 +2580,38 @@ class py(Fragment):
             e)
 
     @classmethod
+    def _is_Tuple_binder(cls, pat):
+        return (isinstance(pat, ast.Call) and 
+                isinstance(pat.func, ast.Tuple) and 
+                len(pat.args) == 1 and 
+                isinstance(pat.args[0], ast.Name))
+
+    @classmethod
     def ana_pat_Call(cls, ctx, pat, idx):
         func, args, keywords = pat.func, pat.args, pat.keywords
-        if len(keywords) != 0:
-            raise TyError("Invalid pattern.", pat)
+        pat._is_instance_pattern = False
         if isinstance(func, ast.Name):
             func_id = func.id
             if func_id == "str":
-                if len(args) == 1:
+                if len(args) == 1 and len(keywords) == 0:
                     return ctx.ana_pat(args[0], string_ty)
                 else:
                     raise TyError("Too many arguments in pattern.", pat)
             elif func_id == "int":
-                if len(args) == 1:
+                if len(args) == 1 and len(keywords) == 0:
                     return ctx.ana_pat(args[0], num_ty)
                 else:
                     raise TyError("Too many arguments in pattern.", pat)
             elif func_id == "float":
-                if len(args) == 1:
+                if len(args) == 1 and len(keywords) == 0:
                     return ctx.ana_pat(args[0], ieee_ty)
                 else:
                     raise TyError("Too many arguments in pattern.", pat)
-            elif func_id == "bool":
+            elif func_id == "bool" and len(keywords) == 0:
                 if len(args) == 1:
                     return ctx.ana_pat(args[0], boolean_ty)
                 else:
                     raise TyError("Too many arguments in pattern.", pat)
-            else:
-                raise TyError("Unknown pattern tag for py value: " + func_id, pat) 
         elif isinstance(func, ast.Tuple):
             if len(args) == 1 and isinstance(args[0], ast.Name):
                 func_bindings = ctx.ana_pat(func, py_type)
@@ -2620,43 +2624,76 @@ class py(Fragment):
                 return bindings
             else:
                 raise TyError("Invalid pattern format.", pat)
-        else:
-            raise TyError("Invalid tag format", func)
 
-    @classmethod
-    def _is_Tuple_binder(cls, pat):
-        return (isinstance(pat, ast.Call) and 
-                isinstance(pat.func, ast.Tuple) and 
-                len(pat.args) == 1 and 
-                isinstance(pat.args[0], ast.Name))
+        if len(args) == 0:
+            pat._is_instance_pattern = True
+            ctx.ana(func, py_type)
+            used_keywords = set()
+            bindings = {}
+            for keyword in keywords:
+                arg = keyword.arg
+                if arg in used_keywords:
+                    raise TyError("Duplicate keyword: " + arg, pat)
+                used_keywords.add(arg)
+                kw_bindings = ctx.ana_pat(keyword.value, py_type)
+                _update_name_bindings_disjoint(bindings, kw_bindings)
+            return bindings
+        else:
+            raise TyError("Invalid pattern.")
 
     @classmethod
     def trans_pat_Call(cls, ctx, pat, idx, scrutinee_trans):
-        func = pat.func
-        if isinstance(func, ast.Name):
-            func_id = func.id
-            if func_id == "str":
-                tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'str')
-            elif func_id == "int":
-                tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'int')
-            elif func_id == "float":
-                tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'float')
-            elif func_id == "bool":
-                tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'bool')
-            tag_condition = ast.fix_missing_locations(ast.copy_location(
-                tag_condition, pat))
-            rec_condition, binding_translations = \
-                ctx.trans_pat(pat.args[0], scrutinee_trans)
+        if pat._is_instance_pattern:
+            cls_translation = ctx.trans(pat.func)
+            cls_condition = ast.fix_missing_locations(ast.copy_location(
+                astx.builtin_call('isinstance', []), pat))
+            cls_condition.args.append(scrutinee_trans)
+            cls_condition.args.append(cls_translation)
+            conditions = [cls_condition]
+            binding_translations = { } 
+            for keyword in pat.keywords:
+                arg = keyword.arg
+                arg_scrutinee = ast.copy_location(
+                    ast.Attribute(
+                        value=scrutinee_trans,
+                        attr=arg,
+                        ctx=astx.load_ctx), 
+                    pat)
+                kw_condition, kw_binding_translations = \
+                    ctx.trans_pat(keyword.value, arg_scrutinee)
+                conditions.append(kw_condition)
+                binding_translations.update(kw_binding_translations)
             condition = ast.copy_location(
                 ast.BoolOp(
                     op=ast.And(),
-                    values=[tag_condition, rec_condition]),
+                    values=conditions),
                 pat)
-        else: # if isinstance(func, ast.Tuple):
-            return cls._trans_pat_Tuple(ctx, pat, pat.func,
-                                        None, None, 
-                                        pat.args[0], 
-                                        scrutinee_trans)
+        else:
+            func = pat.func
+            if isinstance(func, ast.Name):
+                func_id = func.id
+                if func_id == "str":
+                    tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'str')
+                elif func_id == "int":
+                    tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'int')
+                elif func_id == "float":
+                    tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'float')
+                elif func_id == "bool":
+                    tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'bool')
+                tag_condition = ast.fix_missing_locations(ast.copy_location(
+                    tag_condition, pat))
+                rec_condition, binding_translations = \
+                    ctx.trans_pat(pat.args[0], scrutinee_trans)
+                condition = ast.copy_location(
+                    ast.BoolOp(
+                        op=ast.And(),
+                        values=[tag_condition, rec_condition]),
+                    pat)
+            else: # if isinstance(func, ast.Tuple):
+                return cls._trans_pat_Tuple(ctx, pat, pat.func,
+                                            None, None, 
+                                            pat.args[0], 
+                                            scrutinee_trans)
         return condition, binding_translations
 
     @classmethod

@@ -801,9 +801,9 @@ def test_py():
             x [: py]
             y [: py]
             z [: py]
-        # with C(attr1=pat1, attr2=pat2):
-        #     pat1 [: py]
-        #     pat2 [: py]
+        with x(attr1=pat1, attr2=pat2):
+            pat1 [: py]
+            pat2 [: py]
 
         # TODO class definitions
         # TODO top-level stuff
