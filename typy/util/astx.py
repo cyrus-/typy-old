@@ -69,17 +69,6 @@ empty_tuple_ast = ast.Tuple(elts=[])
 load_ctx = ast.Load()
 store_ctx = ast.Store()
 
-def builtin_call(name, args):
-    return ast.Call(
-        func=ast.Attribute(
-            value=ast.Name(
-                id='__builtin__', ctx=load_ctx), 
-            attr=name, ctx=load_ctx),
-        args=args, 
-        keywords=[], 
-        starargs=None, 
-        kwargs=None)
-
 def import_expr(name):
     return builtin_call('__import__', [ast.Str(s=name)])
 
@@ -236,4 +225,12 @@ def builtin_call(id, args):
         ),
         args=args,
         keywords=[])
+
+def isinstance_builtin_id(scrutinee, cls_name):
+    return builtin_call('isinstance', [
+                scrutinee,
+                ast.Attribute(
+                    value=ast.Name(id="__builtins__", ctx=load_ctx),
+                    attr=cls_name,
+                    ctx=load_ctx)])
 

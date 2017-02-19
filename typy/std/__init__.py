@@ -216,12 +216,14 @@ class string(Fragment):
 
     @classmethod
     def trans_pat_Str(cls, ctx, pat, idx, scrutinee_trans):
-        condition = ast.fix_missing_locations(ast.copy_location(
+        condition = ast.copy_location(
             ast.Compare(
                 left=scrutinee_trans,
                 ops=[ast.Eq()],
-                comparators=[ast.Str(s=pat.s)]), 
-            pat))
+                comparators=[ast.copy_location(
+                    ast.Str(s=pat.s),
+                    pat)]),
+            pat)
         return condition, {}
 
     @classmethod
@@ -1779,6 +1781,22 @@ class py(Fragment):
             e)
 
     @classmethod
+    def ana_pat_Num(cls, ctx, pat, idx):
+        return {}
+
+    @classmethod
+    def trans_pat_Num(cls, ctx, pat, idx, scrutinee_tr):
+        condition = ast.copy_location(
+            ast.Compare(
+                left=scrutinee_tr,
+                ops=[ast.Eq()],
+                comparators=[ast.copy_location(
+                    ast.Num(n=pat.n),
+                    pat)]),
+            pat)
+        return condition, {}
+
+    @classmethod
     def ana_UnaryOp(cls, ctx, e, idx):
         ctx.ana(e.operand, py_type)
 
@@ -1789,6 +1807,44 @@ class py(Fragment):
                 op=e.op,
                 operand=ctx.trans(e.operand)),
             e)
+
+    @classmethod
+    def ana_pat_UnaryOp(cls, ctx, pat, idx):
+        op, operand = pat.op, pat.operand
+        if isinstance(op, (ast.USub, ast.UAdd)):
+            if isinstance(operand, ast.Num):
+                return {}
+            else:
+                raise TyError("Invalid operand pattern.", operand)
+        elif isinstance(op, ast.Not):
+            if isinstance(operand, ast.NameConstant) and operand.value is None:
+                return {}
+            else:
+                raise TyError("Invalid operand pattern.", operand)
+        else:
+            raise TyError("Invalid operand pattern.", operand)
+
+    @classmethod
+    def trans_pat_UnaryOp(cls, ctx, pat, idx, scrutinee_tr):
+        op, operand = pat.op, pat.operand
+        if isinstance(op, (ast.USub, ast.UAdd)):
+            condition = ast.copy_location(
+                ast.Compare(
+                    left=scrutinee_tr,
+                    ops=[ast.Eq()],
+                    comparators=[pat]),
+                pat)
+        else: # not None
+            condition = ast.copy_location(
+                ast.Compare(
+                    left=scrutinee_tr,
+                    ops=[ast.IsNot()],
+                    comparators=[
+                        ast.copy_location(
+                            ast.NameConstant(None),
+                            pat)]),
+                pat)
+        return condition, {}
    
     @classmethod
     def ana_Str(cls, ctx, e, idx):
@@ -1801,6 +1857,22 @@ class py(Fragment):
             e)
 
     @classmethod
+    def ana_pat_Str(cls, ctx, pat, idx):
+        return {}
+
+    @classmethod
+    def trans_pat_Str(cls, ctx, pat, idx, scrutinee_tr):
+        condition = ast.copy_location(
+            ast.Compare(
+                left=scrutinee_tr,
+                ops=[ast.Eq()],
+                comparators=[ast.copy_location(
+                    ast.Str(s=pat.s),
+                    pat)]),
+            pat)
+        return condition, {}
+
+    @classmethod
     def ana_NameConstant(cls, ctx, e, idx):
         return
 
@@ -1811,8 +1883,26 @@ class py(Fragment):
             e)
 
     @classmethod
+    def ana_pat_NameConstant(cls, ctx, pat, idx):
+        return {}
+
+    @classmethod
+    def trans_pat_NameConstant(cls, ctx, pat, idx, scrutinee_tr):
+        condition = ast.copy_location(
+            ast.Compare(
+                left=scrutinee_tr,
+                ops=[ast.Is()],
+                comparators=[
+                    ast.copy_location(
+                        ast.NameConstant(pat.value),
+                        pat)]),
+            pat)
+        return condition, {}
+
+    @classmethod
     def ana_Name(cls, ctx, e, idx):
-        if e.id == 'NotImplemented' or e.id == 'Ellipsis':
+        id = e.id
+        if id == 'NotImplemented' or id == 'Ellipsis':
             return
         else:
             raise TyError("Invalid constant of type py.", e) # TODO defer to lifting
@@ -1824,6 +1914,27 @@ class py(Fragment):
                 id=e.id,
                 ctx=e.ctx),
             e)
+
+    @classmethod
+    def ana_pat_Name(cls, ctx, pat, idx):
+        id = pat.id
+        if id == 'NotImplemented' or id == 'Ellipsis':
+            return {}
+        else:
+            raise TyError("Invalid constant pattern of type py.", pat)
+
+    @classmethod
+    def trans_pat_Name(cls, ctx, pat, idx, scrutinee_tr):
+        condition = ast.copy_location(
+            ast.Compare(
+                left=scrutinee_tr,
+                ops=[ast.Eq()],
+                comparators=[
+                    ast.copy_location(
+                        ast.Name(id=pat.id, ctx=pat.ctx),
+                        pat)]),
+            pat)
+        return condition, {}
 
     @classmethod
     def ana_Dict(cls, ctx, e, idx):
@@ -1840,6 +1951,72 @@ class py(Fragment):
                 values=[ctx.trans(val)
                         for val in e.values]),
             e)
+
+    @classmethod
+    def ana_pat_Dict(cls, ctx, pat, idx):
+        used_keys = set()
+        bindings = { }
+        for key, value in zip(pat.keys, pat.values):
+            if isinstance(key, ast.Str):
+                key.id = key_id = key.s
+            elif isinstance(key, ast.Name):
+                key_id = key.id
+            else:
+                raise TyError("Invalid key in dict pattern.", key)
+            if key_id in used_keys:
+                raise TyError(
+                    "Duplicate key.", key)
+            used_keys.add(key_id)
+            new_bindings = ctx.ana_pat(value, py_type)
+            _update_name_bindings_disjoint(bindings, new_bindings)
+        return bindings
+
+    @classmethod
+    def trans_pat_Dict(cls, ctx, pat, idx, scrutinee_trans):
+        # ('a', 'b', 'c') == tuple(scrutinee_trans.keys())
+        dict_condition = ast.fix_missing_locations(ast.copy_location(
+            astx.isinstance_builtin_id(scrutinee_trans, 'dict'),
+            pat))
+        keys_condition = ast.fix_missing_locations(ast.copy_location(
+            ast.Compare(
+                left=ast.Set(
+                    elts=[
+                        ast.Str(s=key.id)
+                        for key in pat.keys
+                    ]),
+                ops=[ast.Eq()],
+                comparators=[
+                    astx.builtin_call(
+                        'set',
+                        [
+                            ast.Call(
+                                func=ast.Attribute(
+                                    value=scrutinee_trans,
+                                    attr='keys',
+                                    ctx=astx.load_ctx),
+                                args=[],
+                                keywords=[])]),
+                ]),
+            pat))
+        conditions = [dict_condition, keys_condition]
+        binding_translations = { }
+        for key, value in zip(pat.keys, pat.values):
+            cur_scrutinee_tr = ast.fix_missing_locations(ast.copy_location(
+                ast.Subscript(
+                    value=scrutinee_trans,
+                    slice=ast.Index(value=ast.Str(s=key.id)),
+                    ctx=astx.load_ctx),
+                key))
+            cur_condition, cur_binding_translations = \
+                ctx.trans_pat(value, cur_scrutinee_tr)
+            conditions.append(cur_condition)
+            binding_translations.update(cur_binding_translations)
+        condition = ast.copy_location(
+            ast.BoolOp(
+                op=ast.And(),
+                values=conditions),
+            pat)
+        return condition, binding_translations
 
     @classmethod
     def ana_Set(cls, ctx, e, idx):
@@ -1871,6 +2048,46 @@ class py(Fragment):
             e)
 
     @classmethod
+    def ana_pat_List(cls, ctx, pat, idx):
+        bindings = { }
+        for elt in pat.elts:
+            new_bindings = ctx.ana_pat(elt, py_type)
+            _update_name_bindings_disjoint(bindings, new_bindings)
+        return bindings
+
+    @classmethod
+    def trans_pat_List(cls, ctx, pat, idx, scrutinee_trans):
+        list_condition = ast.fix_missing_locations(ast.copy_location(
+            astx.isinstance_builtin_id(scrutinee_trans, 'list'),
+            pat))
+        length_condition = ast.fix_missing_locations(ast.copy_location(
+            ast.Compare(
+                left=astx.builtin_call('len', [scrutinee_trans]),
+                ops=[ast.Eq()],
+                comparators=[ast.Num(n=len(pat.elts))]),
+            pat))
+        conditions = [list_condition, length_condition]
+        binding_translations = { }
+        for i, elt in enumerate(pat.elts):
+            elt_scrutinee_trans = ast.fix_missing_locations(ast.copy_location(
+                ast.Subscript(
+                    value=scrutinee_trans,
+                    slice=ast.Index(value=ast.Num(n=i)),
+                    ctx=astx.load_ctx),
+                elt))
+            elt_condition, elt_binding_translations = \
+                ctx.trans_pat(elt, elt_scrutinee_trans)
+            conditions.append(elt_condition)
+            binding_translations.update(elt_binding_translations)
+        
+        condition = ast.copy_location(
+            ast.BoolOp(
+                op=ast.And(),
+                values=conditions),
+            pat)
+        return condition, binding_translations
+
+    @classmethod
     def ana_Tuple(cls, ctx, e, idx):
         for elt in e.elts:
             ctx.ana(elt, py_type)
@@ -1884,6 +2101,104 @@ class py(Fragment):
                     for elt in e.elts],
                 ctx=e.ctx),
             e)
+
+    @classmethod
+    def ana_pat_Tuple(cls, ctx, pat, idx):
+        bindings = { }
+        for elt in pat.elts:
+            new_bindings = ctx.ana_pat(elt, py_type)
+            _update_name_bindings_disjoint(bindings, new_bindings)
+        return bindings
+    
+    @classmethod
+    def trans_pat_Tuple(cls, ctx, pat, idx, scrutinee_trans):
+        return cls._trans_pat_Tuple(ctx, pat, pat, 
+                                   None, None, 
+                                   None, scrutinee_trans)
+
+    @classmethod
+    def _trans_pat_Tuple(cls, ctx, pat, tpl_pat, 
+                         extender, extender_on_right, 
+                         binder, 
+                         scrutinee_trans):
+        tuple_condition = ast.fix_missing_locations(ast.copy_location(
+            astx.isinstance_builtin_id(scrutinee_trans, 'tuple'),
+            pat))
+        length_condition = ast.fix_missing_locations(ast.copy_location(
+            ast.Compare(
+                left=astx.builtin_call('len', [scrutinee_trans]),
+                ops=[ast.Eq() if extender is None else ast.GtE()],
+                comparators=[ast.Num(n=len(tpl_pat.elts))]),
+            pat))
+        conditions = [tuple_condition, length_condition]
+
+        binding_translations = { }
+        elts = tpl_pat.elts
+        n_elts = len(elts)
+        for i, elt in enumerate(elts):
+            elt_scrutinee_trans = ast.fix_missing_locations(ast.copy_location(
+                ast.Subscript(
+                    value=scrutinee_trans,
+                    slice=ast.Index(
+                        value=ast.Num(
+                            n=i if extender is None or extender_on_right else -n_elts + i)),
+                    ctx=astx.load_ctx),
+                elt))
+            elt_condition, elt_binding_translations = \
+                ctx.trans_pat(elt, elt_scrutinee_trans)
+            conditions.append(elt_condition)
+            binding_translations.update(elt_binding_translations)
+        
+        if extender is not None:
+            print("extender.id = ", extender.id)
+            if extender_on_right:
+                extender_slice = ast.Slice(
+                    lower=ast.Num(n_elts),
+                    upper=None,
+                    step=None)
+            else:
+                extender_slice = ast.Slice(
+                    lower=None,
+                    upper=ast.Num(n=-n_elts),
+                    step=None)
+            extender_translation = ast.fix_missing_locations(ast.copy_location(
+                ast.Subscript(
+                    value=scrutinee_trans,
+                    slice=extender_slice,
+                    ctx=astx.load_ctx),
+                pat))
+            binding_translations[extender.id] = extender_translation
+
+        if binder is not None:
+            if extender is None:
+                binder_translation = scrutinee_trans
+            else:
+                if extender_on_right:
+                    binder_slice = ast.Slice(
+                        lower=None,
+                        upper=ast.Num(n=n_elts),
+                        step=None)
+                else:
+                    binder_slice = ast.Slice(
+                        lower=ast.Num(n=-n_elts),
+                        upper=None,
+                        step=None)
+                binder_translation = ast.fix_missing_locations(ast.copy_location(
+                    ast.Subscript(
+                        value=scrutinee_trans,
+                        slice=binder_slice,
+                        ctx=astx.load_ctx),
+                    pat))
+            binding_translations[binder.id] = binder_translation
+
+        condition = ast.copy_location(
+            ast.BoolOp(
+                op=ast.And(),
+                values=conditions),
+            pat)
+
+        print("binding_translations = ", binding_translations)
+        return condition, binding_translations
 
     @classmethod
     def ana_Ellipsis(cls, ctx, e, idx):
@@ -1904,6 +2219,22 @@ class py(Fragment):
         return ast.copy_location(
             ast.Bytes(s=e.s),
             e)
+
+    @classmethod
+    def ana_pat_Bytes(cls, ctx, pat, idx):
+        return {}
+
+    @classmethod
+    def trans_pat_Bytes(cls, ctx, pat, idx, scrutinee_tr):
+        condition = ast.copy_location(
+            ast.Compare(
+                left=scrutinee_tr,
+                ops=[ast.Eq()],
+                comparators=[ast.copy_location(
+                    ast.Bytes(s=pat.s),
+                    pat)]),
+            pat)
+        return condition, {}
 
     # TODO function definitions
     # TODO lambdas
@@ -2103,6 +2434,72 @@ class py(Fragment):
             e)
 
     @classmethod
+    def ana_pat_BinOp(cls, ctx, pat, idx):
+        left, op, right = pat.left, pat.op, pat.right
+        if isinstance(op, ast.Add):
+            if isinstance(left, ast.Str) or isinstance(right, ast.Str):
+                pretend_pat = ast.fix_missing_locations(ast.copy_location(
+                    ast.Call(
+                        func=ast.Name(id="str", ctx=astx.load_ctx),
+                        args=[],
+                        keywords=[]),
+                    pat))
+                pretend_pat.args.append(astx.deep_copy_node(pat))
+                pat._pretend_pat = pretend_pat
+                return ctx.ana_pat(pretend_pat, py_type)
+            else:
+                if isinstance(left, ast.Tuple) and isinstance(right, ast.Name):
+                    extender = right
+                    extender_on_right = True
+                    binder_pat = None
+                    tuple_pat = left
+                elif isinstance(right, ast.Tuple) and isinstance(left, ast.Name):
+                    extender = left
+                    extender_on_right = False
+                    binder_pat = None
+                    tuple_pat = right
+                elif cls._is_Tuple_binder(left) and isinstance(right, ast.Name):
+                    extender = right
+                    extender_on_right = True
+                    binder_pat = left
+                    tuple_pat = left.func
+                elif cls._is_Tuple_binder(right) and isinstance(left, ast.Name):
+                    extender = left
+                    extender_on_right = False
+                    binder_pat = right
+                    tuple_pat = right.func
+                else:
+                    raise TyError("Invalid pattern.", pat)
+                pat._extender = extender
+                pat._extender_on_right = extender_on_right
+                pat._binder_pat = binder_pat
+                pat._tuple_pat = tuple_pat
+                if binder_pat is None:
+                    tuple_bindings = ctx.ana_pat(tuple_pat, py_type)
+                    pat._binder = None
+                else:
+                    tuple_bindings = ctx.ana_pat(binder_pat, py_type)
+                    pat._binder = binder_pat.args[0]
+                bindings = dict(tuple_bindings)
+                _update_name_bindings_disjoint(bindings, { extender : py_type })
+                print("bindings = ", bindings)
+                return bindings
+        else:
+            raise TyError("Invalid pattern.", pat)
+
+    @classmethod
+    def trans_pat_BinOp(cls, ctx, pat, idx, scrutinee_trans):
+        try: pretend_pat = pat._pretend_pat
+        except AttributeError:
+            return cls._trans_pat_Tuple(
+                ctx, pat, pat._tuple_pat, 
+                pat._extender, pat._extender_on_right, 
+                pat._binder, 
+                scrutinee_trans)
+        else:
+            return ctx.trans_pat(pretend_pat, scrutinee_trans)
+
+    @classmethod
     def syn_UnaryOp(cls, ctx, e, idx):
         ctx.ana(e.operand, py_type)
         return py_type
@@ -2181,6 +2578,86 @@ class py(Fragment):
                         value=ctx.trans(kw.value))
                     for kw in e.keywords]),
             e)
+
+    @classmethod
+    def ana_pat_Call(cls, ctx, pat, idx):
+        func, args, keywords = pat.func, pat.args, pat.keywords
+        if len(keywords) != 0:
+            raise TyError("Invalid pattern.", pat)
+        if isinstance(func, ast.Name):
+            func_id = func.id
+            if func_id == "str":
+                if len(args) == 1:
+                    return ctx.ana_pat(args[0], string_ty)
+                else:
+                    raise TyError("Too many arguments in pattern.", pat)
+            elif func_id == "int":
+                if len(args) == 1:
+                    return ctx.ana_pat(args[0], num_ty)
+                else:
+                    raise TyError("Too many arguments in pattern.", pat)
+            elif func_id == "float":
+                if len(args) == 1:
+                    return ctx.ana_pat(args[0], ieee_ty)
+                else:
+                    raise TyError("Too many arguments in pattern.", pat)
+            elif func_id == "bool":
+                if len(args) == 1:
+                    return ctx.ana_pat(args[0], boolean_ty)
+                else:
+                    raise TyError("Too many arguments in pattern.", pat)
+            else:
+                raise TyError("Unknown pattern tag for py value: " + func_id, pat) 
+        elif isinstance(func, ast.Tuple):
+            if len(args) == 1 and isinstance(args[0], ast.Name):
+                func_bindings = ctx.ana_pat(func, py_type)
+                bindings = dict(func_bindings)
+                new_binding = { args[0] : CanonicalTy(tpl, OrderedDict(
+                    (i, py_type)
+                    for i in range(len(func.elts))
+                )) }
+                _update_name_bindings_disjoint(bindings, new_binding)
+                return bindings
+            else:
+                raise TyError("Invalid pattern format.", pat)
+        else:
+            raise TyError("Invalid tag format", func)
+
+    @classmethod
+    def _is_Tuple_binder(cls, pat):
+        return (isinstance(pat, ast.Call) and 
+                isinstance(pat.func, ast.Tuple) and 
+                len(pat.args) == 1 and 
+                isinstance(pat.args[0], ast.Name))
+
+    @classmethod
+    def trans_pat_Call(cls, ctx, pat, idx, scrutinee_trans):
+        func = pat.func
+        if isinstance(func, ast.Name):
+            func_id = func.id
+            if func_id == "str":
+                tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'str')
+            elif func_id == "int":
+                tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'int')
+            elif func_id == "float":
+                tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'float')
+            elif func_id == "bool":
+                tag_condition = astx.isinstance_builtin_id(scrutinee_trans, 'bool')
+            tag_condition = ast.fix_missing_locations(ast.copy_location(
+                tag_condition, pat))
+            rec_condition, binding_translations = \
+                ctx.trans_pat(pat.args[0], scrutinee_trans)
+            condition = ast.copy_location(
+                ast.BoolOp(
+                    op=ast.And(),
+                    values=[tag_condition, rec_condition]),
+                pat)
+        else: # if isinstance(func, ast.Tuple):
+            return cls._trans_pat_Tuple(ctx, pat, pat.func,
+                                        None, None, 
+                                        pat.args[0], 
+                                        scrutinee_trans)
+        return condition, binding_translations
 
     @classmethod
     def syn_Attribute(cls, ctx, e, idx):
@@ -2264,13 +2741,16 @@ def _check_trivial_idx_ast(idx_ast):
         raise TypeValidationError(
             "unit type can only have trivial index.", idx_ast)
 
-# TODO map
-# TODO vec
+# TODO bytes
+# TODO ilist
+# TODO dict
+# TODO mlist
+# TODO complex?
+# TODO decimal?
 
 # Maybe not in the standard library?
 # TODO proto
 # TODO string_in
-# TODO array
 # TODO numpy stuff
 # TODO cl stuff
 

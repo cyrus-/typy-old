@@ -578,8 +578,13 @@ class Context(object):
     # 
 
     def ana_pat(self, pat, ty):
-        if _terms.is_intro_form(pat) \
-                or isinstance(pat, (ast.UnaryOp, ast.BinOp)):
+        if isinstance(pat, ast.Name) and not _terms.is_intro_form(pat):
+            id = pat.id
+            if id == "_":
+                return { }
+            else:
+                return { pat: ty }
+        else:
             canonical_ty = self.canonicalize(ty)
             delegate = pat.delegate = canonical_ty.fragment
             delegate_idx = pat.delegate_idx = canonical_ty.idx
@@ -588,31 +593,23 @@ class Context(object):
             bindings = method(self, pat, delegate_idx)
             pat.bindings = bindings
             return bindings
-        elif isinstance(pat, ast.Name):
-            id = pat.id
-            if id == "_":
-                return { }
-            else:
-                return { pat: ty }
-        else:
-            raise TyError(
-                "Invalid pattern form: " + pat.__class__.__name__, 
-                pat)
 
     def trans_pat(self, pat, scrutinee_trans):
-        if _terms.is_intro_form(pat) \
-                or isinstance(pat, (ast.UnaryOp, ast.BinOp)):
+        if isinstance(pat, ast.Name) and not _terms.is_intro_form(pat):
+            id = pat.id
+            if id == "_":
+                binding_translations = { }
+            else:
+                binding_translations = { id : scrutinee_trans }
+            condition = ast.copy_location(
+                ast.NameConstant(value=True), pat) 
+            return condition, binding_translations
+        else:
             delegate = pat.delegate
             delegate_idx = pat.delegate_idx
             method_name = "trans_pat_" + pat.__class__.__name__ # TODO add stubs
             method = getattr(delegate, method_name)
             return method(self, pat, delegate_idx, scrutinee_trans)
-        elif isinstance(pat, ast.Name):
-            return (ast.copy_location(
-                ast.NameConstant(value=True), pat), 
-                    { pat.id: scrutinee_trans })
-        else:
-            raise NotImplementedError()
 
     # 
     # Kinds and type expressions

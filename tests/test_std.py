@@ -493,6 +493,7 @@ def test_tpl():
         with {a, b}: a
         with {b, a}: a
         with (x, y): x
+        # TODO + patterns
         xa [: string] = x1.a
         xb [: num] = x1.b
         t5 [type] = tpl[string, num]
@@ -594,7 +595,6 @@ def test_fn():
         def rf3(x : num) -> num:
             rf3(3)
         rf3 [: fn[num > num]]
-        # TODO nested function definitions
         @fn
         def f8(x : num):
             @fn
@@ -645,7 +645,8 @@ def test_py():
         not_implemented_intro [: py] = NotImplemented
         ellipsis_intro [: py] = Ellipsis
         dict_intro [: py] = { None : "abc", 3.14 : None }
-        set_intro [: py] = { "abc", 3.14, None } # TODO empty set when testing lifting
+        set_intro [: py] = { "abc", 3.14, None } 
+        # TODO empty set when testing lifting
         list_intro [: py] = [ "abc", { }, 1.23 ]
         unit_intro [: py] = ()
         tuple_intro [: py] = ( "abc", 3.14 )
@@ -672,10 +673,12 @@ def test_py():
         x [: py] = 0
         y [: py] = 1
         z [: py] = "abc"
+        # bool ops
         bool_op1 = x and y and z
         bool_op2 = x or y or z
         bool_op3 [: py] = True and False and True
         bool_op4 [: py] = True or False or True
+        # bin ops
         add = x + y
         sub = x - y
         mult = x * y
@@ -689,16 +692,22 @@ def test_py():
         bitand = x & y
         floordiv = x // y
         matmult = x @ y if False [: boolean] else 0 # to avoid run-time exception
+        # unary ops
         invert = ~x
         op_not = not x
         uadd = +x
         usub = -x
+        # comparison ops
         compares = x == y != z < x <= y > z >= x is y is not z in x not in y
+        # if expressions
         ifexp = (1 [: num]) if x else (2 [: num])
         ifexp [: num]
         ifexp2 [: py] = 123 if x else 456
+        # call
         call = x(y, z, *z, a=x, b=y, **x) if False [: boolean] else 0
+        # attribute access
         attr = x.bit_length()
+        # subscripting
         subscript1 = x[y] if False [: boolean] else x
         subscript3 = x[x:y:z] if False [: boolean] else 0
         subscript4 = x[y, z] if False [: boolean] else 0
@@ -706,6 +715,96 @@ def test_py():
         subscript6 = x[...] if False [: boolean] else 0
 
         # TODO pattern matching
+        [x].match 
+        with str(s): 
+            s [: string]
+            x
+        with str("ABC"):
+            x
+        with str(y + "ABC"):
+            y [: string]
+            x
+        with "ABC": # same as str("ABC")
+            x
+        with y + "ABC": # same as str(y + "ABC")
+            y [: string]
+            x
+        with "ABC" + y: # same as str("ABC" + y)
+            y [: string]
+            x
+        with b'test':
+            x
+        with int(n): 
+            n [: num]
+            x
+        with 0: # same as int(0)
+            x
+        with -4: # same as int(-4)
+            x
+        with float(n):
+            n [: ieee]
+            x
+        with bool(b): 
+            b [: boolean]
+            x
+        with True: # same as bool(True)
+            x
+        with False: # same as bool(False)
+            x
+        with None:
+            x
+        with not None:
+            x
+        with NotImplemented:
+            x
+        with Ellipsis:
+            x
+        with (x, y, z):  
+            x [: py]
+            y [: py]
+            z [: py]
+        with (x, y, z) + e:
+            x [: py]
+            y [: py]
+            z [: py]
+            e [: py]
+        with e + (x, y, z):
+            x [: py]
+            y [: py]
+            z [: py]
+            e [: py]
+        with (x, y, z)(a):
+            x [: py]
+            y [: py]
+            z [: py]
+            a [: tpl[py, py, py]]
+            a[0]
+        with (x, y, z)(a) + e:
+            x [: py]
+            y [: py]
+            z [: py]
+            a [: tpl[py, py, py]]
+            e [: py]
+            a[0]
+        with e + (x, y, z)(a):
+            x [: py]
+            y [: py]
+            z [: py]
+            a [: tpl[py, py, py]]
+            e [: py]
+            a[0]
+        with [x, y, z]:
+            x [: py]
+            y [: py]
+            z [: py]
+        with {'x': x, 'y': y, 'z': z}:
+            x [: py]
+            y [: py]
+            z [: py]
+        # with C(attr1=pat1, attr2=pat2):
+        #     pat1 [: py]
+        #     pat2 [: py]
+
         # TODO class definitions
         # TODO top-level stuff
         # TODO conversions from other types
@@ -718,6 +817,7 @@ def test_py():
         # TODO lifting
         # TODO JoinedStr and FormattedValue stuff
         # TODO make names and calls defer if ill-typed to standard mechanism
+        # TODO exceptions
 
     assert ast_eq(c._translation, "")
 

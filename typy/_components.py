@@ -4,6 +4,8 @@ import ast
 import inspect
 import textwrap
 
+import astunparse
+
 from .util import astx as _astx
 from ._errors import ComponentFormationError, InternalError
 from ._fragments import Fragment
@@ -130,7 +132,11 @@ class Component(object):
         if self._evaluated: return
         self._translate()
         _translation = self._translation
-        self._module = self.static_env.eval_module_ast(_translation)
+        try:
+            self._module = self.static_env.eval_module_ast(_translation)
+        except Exception as e:
+            print("Broken code: ", astunparse.unparse(_translation))
+            raise e
         self._evaluated = True
 
     def kind_of(self, lbl):
