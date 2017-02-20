@@ -669,6 +669,14 @@ def test_py():
                                  for x in list_intro if x == true_intro
                                  for y in set_intro if y == false_intro)
 
+        # if statements
+        if true_intro:
+            int_intro
+        elif false_intro:
+            int_intro
+        else:
+            int_intro
+
         # expression-level operations
         x [: py] = 0
         y [: py] = 1
@@ -707,14 +715,28 @@ def test_py():
         call = x(y, z, *z, a=x, b=y, **x) if False [: boolean] else 0
         # attribute access
         attr = x.bit_length()
+        # attribute assignment
+        if false_intro:
+            x.attr = 55
+            x.attr += 55
+        elif false_intro:
+            x.attr *= 55
+            x.attr = 44
         # subscripting
         subscript1 = x[y] if False [: boolean] else x
         subscript3 = x[x:y:z] if False [: boolean] else 0
         subscript4 = x[y, z] if False [: boolean] else 0
         subscript5 = x[y, y:z, x:y:z] if False [: boolean] else 0
         subscript6 = x[...] if False [: boolean] else 0
+        # subscript assignment
+        if false_intro:
+            x[432] = 423
+            x[432] += 542
+        elif false_intro:
+            x[532] *= 312
+            x["a"] = "bcd"
 
-        # TODO pattern matching
+        # pattern matching
         [x].match 
         with str(s): 
             s [: string]

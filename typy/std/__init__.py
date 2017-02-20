@@ -1771,6 +1771,117 @@ class py(Fragment):
         return _check_trivial_idx_ast(idx_ast)
 
     @classmethod
+    def check_Assign(cls, ctx, stmt, idx):
+        target = stmt.targets[0]
+        if isinstance(target, ast.Subscript):
+            cls._ana_slice(ctx, target.slice)
+        ctx.ana(stmt.value, py_type)
+
+    @classmethod
+    def check_AugAssign(cls, ctx, stmt, idx):
+        target = stmt.target
+        if isinstance(target, ast.Subscript):
+            cls._ana_slice(ctx, target.slice)
+        ctx.ana(stmt.value, py_type)
+
+    @classmethod
+    def syn_Assign(cls, ctx, stmt, idx):
+        cls.check_Assign(ctx, stmt, idx)
+        return py_type
+
+    @classmethod
+    def syn_AugAssign(cls, ctx, stmt, idx):
+        cls.check_AugAssign(ctx, stmt, idx)
+        return py_type
+
+    @classmethod
+    def trans_Assign(cls, ctx, stmt, idx, 
+                     mechanism=BlockTransMechanism.Statement):
+        return cls._trans_Assign_AugAssign(ctx, stmt, idx, mechanism)
+
+    @classmethod
+    def trans_AugAssign(cls, ctx, stmt, idx,
+                        mechanism=BlockTransMechanism.Statement):
+        return cls._trans_Assign_AugAssign(ctx, stmt, idx, mechanism)
+
+    @classmethod
+    def _trans_Assign_AugAssign(cls, ctx, stmt, idx, mechanism): 
+        if isinstance(stmt, ast.Assign):
+            target = stmt.targets[0]
+        else:
+            target = stmt.target
+        if isinstance(target, ast.Attribute):
+            # target_translation = ast.copy_location(
+            #     ast.Name(id="ABCABDBDASD", ctx=astx.store_ctx), target)
+            target_translation = ast.copy_location(
+                ast.Attribute(
+                    value=ctx.trans(target.value),
+                    attr=target.attr,
+                    ctx=target.ctx),
+                stmt)
+        else:
+            target_translation = ast.copy_location(
+                ast.Subscript(
+                    value=ctx.trans(target.value),
+                    slice=cls._trans_slice(ctx, target.slice),
+                    ctx=target.ctx),
+                target)
+        if isinstance(stmt, ast.Assign):
+            assign_translation = ast.copy_location(
+                ast.Assign(
+                    targets=[target_translation],
+                    value=ctx.trans(stmt.value)),
+                stmt)
+        else:
+            assign_translation = ast.copy_location(
+                ast.AugAssign(
+                    target=target_translation,
+                    op=stmt.op,
+                    value=ctx.trans(stmt.value)), 
+                stmt)
+        if mechanism == BlockTransMechanism.Statement:
+            statement = [assign_translation]
+        elif mechanism == BlockTransMechanism.Returns:
+            return_translation = ast.copy_location(
+                ast.Return(value=None), stmt)
+            statement = [assign_translation, return_translation] 
+        else: raise Exception("Unexpected mechanism.")
+        return statement
+
+    @classmethod
+    def syn_If(cls, ctx, stmt, idx):
+        body_block = stmt.body_block = _terms.Block(stmt.body)
+        body_ty = ctx.syn_block(body_block)
+        orelse = stmt.orelse
+        if len(orelse) > 0:
+            orelse_block = stmt.orelse_block = _terms.Block(orelse)
+            ctx.ana_block(orelse_block, body_ty)
+        return body_ty
+
+    @classmethod
+    def ana_If(cls, ctx, stmt, idx, ty):
+        body_block = stmt.body_block = _terms.Block(stmt.body)
+        ctx.ana_block(body_block, ty)
+        orelse = stmt.orelse
+        if len(orelse) > 0:
+            orelse_block = stmt.orelse_block = _terms.Block(stmt.orelse)
+            ctx.ana_block(orelse_block, ty)
+
+    @classmethod
+    def trans_If(cls, ctx, stmt, id, mechanism):
+        orelse = stmt.orelse
+        if len(orelse) > 0:
+            orelse_translation = ctx.trans_block(stmt.orelse_block, mechanism)
+        else:
+            orelse_translation=[]
+        return [ast.fix_missing_locations(ast.copy_location(
+            ast.If(
+                test=ctx.trans(stmt.test),
+                body=ctx.trans_block(stmt.body_block, mechanism),
+                orelse=orelse_translation),
+            stmt))]
+
+    @classmethod
     def ana_Num(cls, ctx, e, idx):
         return
 
@@ -2150,7 +2261,6 @@ class py(Fragment):
             binding_translations.update(elt_binding_translations)
         
         if extender is not None:
-            print("extender.id = ", extender.id)
             if extender_on_right:
                 extender_slice = ast.Slice(
                     lower=ast.Num(n_elts),
@@ -2197,7 +2307,6 @@ class py(Fragment):
                 values=conditions),
             pat)
 
-        print("binding_translations = ", binding_translations)
         return condition, binding_translations
 
     @classmethod
@@ -2482,7 +2591,6 @@ class py(Fragment):
                     pat._binder = binder_pat.args[0]
                 bindings = dict(tuple_bindings)
                 _update_name_bindings_disjoint(bindings, { extender : py_type })
-                print("bindings = ", bindings)
                 return bindings
         else:
             raise TyError("Invalid pattern.", pat)

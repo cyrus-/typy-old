@@ -416,7 +416,7 @@ class Context(object):
         for stmt in segmented_stmts[:-1]: # all but last
             self.check(stmt)
 
-        last_stmt = segmented_stmts[-1]
+        last_stmt = segmented_stmts[-1] # TODO insert error check for if its not a stmt expression
         return self.syn(last_stmt)
 
     def trans_block(self, block, mechanism):
