@@ -2828,11 +2828,11 @@ class py(Fragment):
             ctx.ana(slice.value, py_type)
         elif isinstance(slice, ast.Slice):
             lower, upper, step = slice.lower, slice.upper, slice.step
-            if lower is not None:
+            if lower is not None and not astx.is_underscore(lower):
                 ctx.ana(lower, py_type)
-            if upper is not None:
+            if upper is not None and not astx.is_underscore(upper):
                 ctx.ana(upper, py_type)
-            if step is not None:
+            if step is not None and not astx.is_underscore(step):
                 ctx.ana(step, py_type)
         else: # ExtSlice
             for dim in slice.dims:
@@ -2856,11 +2856,17 @@ class py(Fragment):
                 slice)
         elif isinstance(slice, ast.Slice):
             lower, upper, step = slice.lower, slice.upper, slice.step
+            lower_trans = (None if lower is None or astx.is_underscore(lower) 
+                           else ctx.trans(lower))
+            upper_trans = (None if upper is None or astx.is_underscore(upper)
+                           else ctx.trans(upper))
+            step_trans = (None if step is None or astx.is_underscore(step)
+                          else ctx.trans(step))
             return ast.copy_location(
                 ast.Slice(
-                    lower=None if lower is None else ctx.trans(lower),
-                    upper=None if upper is None else ctx.trans(upper),
-                    step=None if step is None else ctx.trans(step)),
+                    lower=lower_trans,
+                    upper=upper_trans,
+                    step=step_trans),
                 slice)
         else: # ExtSlice
             return ast.copy_location(

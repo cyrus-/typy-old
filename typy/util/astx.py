@@ -234,3 +234,7 @@ def isinstance_builtin_id(scrutinee, cls_name):
                     attr=cls_name,
                     ctx=load_ctx)])
 
+def is_underscore(e):
+    return isinstance(e, ast.Name) and e.id == "_"
+
+

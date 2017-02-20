@@ -728,9 +728,50 @@ def test_py():
         subscript4 = x[y, z] if False [: boolean] else 0
         subscript5 = x[y, y:z, x:y:z] if False [: boolean] else 0
         subscript6 = x[...] if False [: boolean] else 0
+        subscript7 = list_intro[:]
+        ss_00 = list_intro[:]
+        ss_01 = list_intro[:_]
+        # ss_02 = list_intro[:1] # NOPE, this one is a type asc.
+        ss_10 = list_intro[_:]
+        ss_11 = list_intro[_:_]
+        ss_12 = list_intro[_:1]
+        ss_20 = list_intro[1:]
+        ss_21 = list_intro[1:_]
+        ss_22 = list_intro[1:1]
+        ss_000 = list_intro[::]
+        ss_001 = list_intro[::_]
+        ss_002 = list_intro[::1]
+        ss_010 = list_intro[:_:]
+        ss_011 = list_intro[:_:_]
+        ss_012 = list_intro[:_:1]
+        # ss_020 = list_intro[:1:] # NOPE, parsed identically to list_intro[:1] unfortunately
+        ss_021 = list_intro[:1:_]
+        ss_022 = list_intro[:1:1]
+        ss_100 = list_intro[_::]
+        ss_101 = list_intro[_::_]
+        ss_102 = list_intro[_::1]
+        ss_110 = list_intro[_:_:]
+        ss_111 = list_intro[_:_:_]
+        ss_112 = list_intro[_:_:1]
+        ss_120 = list_intro[_:1:]
+        ss_121 = list_intro[_:1:_]
+        ss_122 = list_intro[_:1:1]
+        ss_200 = list_intro[1::]
+        ss_201 = list_intro[1::_]
+        ss_202 = list_intro[1::1]
+        ss_210 = list_intro[1:_:]
+        ss_211 = list_intro[1:_:_]
+        ss_212 = list_intro[1:_:1]
+        ss_220 = list_intro[1:1:]
+        ss_221 = list_intro[1:1:_]
+        ss_222 = list_intro[1:1:1]
+
         # subscript assignment
         if false_intro:
             x[432] = 423
+            x[1:2] = 432
+            x[_:2] = 432
+            x[_:2] /= 432
             x[432] += 542
         elif false_intro:
             x[532] *= 312

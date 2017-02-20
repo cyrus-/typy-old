@@ -211,8 +211,9 @@ def is_ascription(e):
         if isinstance(slice, ast.Slice):
             lower, upper, step = slice.lower, slice.upper, slice.step
             if lower is None and upper is not None and step is None:
-                e.ascription = upper
-                return True
+                if not (isinstance(upper, ast.Name) and upper.id == "_"):
+                    e.ascription = upper
+                    return True
     return False
 
 unsupported_expr_forms = (
