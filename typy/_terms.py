@@ -154,6 +154,8 @@ _intro_expr_forms = (
     ast.GeneratorExp,
     ast.Num, 
     ast.Str, 
+    ast.JoinedStr,
+    ast.FormattedValue,
     ast.Bytes,
     ast.NameConstant, 
     ast.List, 

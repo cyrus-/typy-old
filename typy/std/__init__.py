@@ -1984,6 +1984,126 @@ class py(Fragment):
         return condition, {}
 
     @classmethod
+    def ana_JoinedStr(cls, ctx, e, idx):
+        values = e.values
+        for value in values:
+            if isinstance(value, ast.Str): continue
+            else: # FormattedValue
+                fvalue = value.value
+                ctx.ana(fvalue, py_type)
+                format_spec = value.format_spec
+                if format_spec is not None:
+                    ctx.ana(format_spec, py_type)
+
+    @classmethod
+    def trans_JoinedStr(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.JoinedStr(
+                values=[
+                    ast.copy_location(ast.Str(s=value.s), value)
+                    if isinstance(value, ast.Str) else 
+                    ast.copy_location(
+                        ast.FormattedValue(
+                            value=ctx.trans(value.value),
+                            conversion=value.conversion,
+                            format_spec=(
+                                None 
+                                if value.format_spec is None else
+                                ctx.trans(value.format_spec))),
+                        value)
+                    for value in e.values]),
+            e)
+
+    @classmethod
+    def ana_FormattedValue(cls, ctx, e, idx):
+        pretend_e = e.pretend_e = ast.copy_location(
+            ast.JoinedStr(
+                values=[e]), e)
+        return cls.ana_JoinedStr(ctx, pretend_e, idx)
+
+    @classmethod
+    def trans_FormattedValue(cls, ctx, e, idx):
+        return cls.trans_JoinedStr(ctx, e.pretend_e, idx)
+
+    @classmethod
+    def ana_pat_JoinedStr(cls, ctx, pat, idx):
+        values = pat.values
+        bindings = { }
+        before_str = None
+        after_str = None
+        formatted_pat = None
+        for value in values:
+            if isinstance(value, ast.Str):
+                if formatted_pat is None:
+                    before_str = value.s
+                else:
+                    after_str = value.s
+            else: # FormattedValue
+                if formatted_pat is None:
+                    formatted_pat = value.value
+                else:
+                    raise TyError(
+                        "Can only have one formatted value in format string "
+                        "pattern.", value)
+                if value.format_spec is not None:
+                    raise TyError(
+                        "Cannot use format specification in format string "
+                        "pattern.", value)
+                if value.conversion != -1:
+                    raise TyError(
+                        "Cannot use conversions in format string pattern.", 
+                        value)
+        pretend_pat = ast.fix_missing_locations(ast.copy_location(
+            ast.Call(
+                func=ast.Name(id='str'),
+                args=[],
+                keywords=[]),
+            pat))
+        if before_str is None and after_str is None:
+            arg_pat = formatted_pat
+        elif before_str is None:
+            arg_pat = ast.fix_missing_locations(ast.copy_location(ast.BinOp(
+                left=None,
+                op=ast.Add(),
+                right=ast.Str(s=after_str)), pat))
+            arg_pat.left = formatted_pat
+        elif after_str is None:
+            arg_pat = ast.fix_missing_locations(ast.copy_location(ast.BinOp(
+                left=ast.Str(s=before_str),
+                op=ast.Add(),
+                right=None), pat))
+            arg_pat.right = formatted_pat
+        else:
+            arg_pat = ast.fix_missing_locations(ast.copy_location(
+                ast.BinOp(
+                    left=ast.BinOp(
+                        left=ast.Str(s=before_str),
+                        op=ast.Add(),
+                        right=None),
+                    op=ast.Add(),
+                    right=ast.Str(s=after_str)), pat))
+            arg_pat.left.right = formatted_pat
+        pretend_pat.args.append(arg_pat)
+        bindings = ctx.ana_pat(pretend_pat, py_type)
+        pat.pretend_pat = pretend_pat
+        return bindings
+
+    @classmethod
+    def trans_pat_JoinedStr(cls, ctx, pat, idx, scrutinee_trans):
+        return ctx.trans_pat(pat.pretend_pat, scrutinee_trans)
+
+    @classmethod
+    def ana_pat_FormattedValue(cls, ctx, pat, idx):
+        pat.pretend_pat = pretend_pat = ast.copy_location(
+            ast.JoinedStr(values=[pat]), pat)
+        return cls.ana_pat_JoinedStr(ctx, pretend_pat, idx)
+            
+    @classmethod
+    def trans_pat_FormattedValue(cls, ctx, pat, idx, scrutinee_trans):
+        return cls.trans_pat_JoinedStr(ctx, pat.pretend_pat, idx, 
+                                       scrutinee_trans)
+
+    @classmethod
     def ana_NameConstant(cls, ctx, e, idx):
         return
 
@@ -2875,11 +2995,6 @@ class py(Fragment):
                         cls._trans_slice(ctx, dim)
                         for dim in slice.dims]),
                 slice)
-
-    # TODO pattern matching
-    # TODO class definitions
-    # TODO top-level stuff
-    # TODO conversions from other types
 
 py_type = CanonicalTy(py, ())
 

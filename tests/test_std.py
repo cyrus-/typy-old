@@ -639,6 +639,10 @@ def test_py():
         float_intro [: py] = 3.14
         float_intro2 [: py] = -3.14
         string_intro [: py] = "abc"
+        string_intro2 [: py] = f'abc {string_intro} def'
+        string_intro3 [: py] = f'abc {string_intro!s} def'
+        string_intro4 [: py] = f'abc {string_intro!s:{int_intro}.{int_intro}} def'
+        string_intro5 [: py] = f'{string_intro}'
         true_intro [: py] = True
         false_intro [: py] = False
         none_intro [: py] = None
@@ -793,6 +797,18 @@ def test_py():
             y [: string]
             x
         with "ABC" + y: # same as str("ABC" + y)
+            y [: string]
+            x
+        with f"{y}":
+            y [: string]
+            x
+        with f"{y} abc":
+            y [: string]
+            x
+        with f"abc {y}":
+            y [: string]
+            x
+        with f"abc {y} def":
             y [: string]
             x
         with b'test':
