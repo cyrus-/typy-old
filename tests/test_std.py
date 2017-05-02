@@ -400,11 +400,19 @@ def test_string():
     @component
     def c():
         x1 [: string] = "test"
+        jx1 [: string] = f"abc {x1} ghi"
+        jx2 [: string] = f"{x1}"
         [x1].match
         with "": x1
         with "a" + y: y
         with y + "a": y
         with "t" + y + "t": y
+        # with "t" + y + "t" + z: z  # TODO figure out appropriate conds for this
+        with f"{x}": x
+        with f"abc {x}": x
+        with f"{x} def": x
+        with f"abc {x} def": x
+        # with f"abc {x} def {y} ghi": y # TODO figure out appropriate conds for this
         x2 = x1 + "a"
         x3 = "a" + x1
         x4 = x1[0]
@@ -438,6 +446,8 @@ def test_string():
     assert v['x10'].ty == boolean_ty
     assert v['x11'].ty == boolean_ty
     assert v['x12'].ty == boolean_ty
+
+    # assert ast_eq(c._translation, "")
 
 # 
 # record
@@ -641,8 +651,9 @@ def test_py():
         string_intro [: py] = "abc"
         string_intro2 [: py] = f'abc {string_intro} def'
         string_intro3 [: py] = f'abc {string_intro!s} def'
-        string_intro4 [: py] = f'abc {string_intro!s:{int_intro}.{int_intro}} def'
-        string_intro5 [: py] = f'{string_intro}'
+        string_intro4 [: py] = f'abc {string_intro!s:3} def'
+        string_intro5 [: py] = f'abc {string_intro!s:{int_intro}.{int_intro}} def' # TODO this is a bug in the pretty-printer
+        string_intro6 [: py] = f'{string_intro}'
         true_intro [: py] = True
         false_intro [: py] = False
         none_intro [: py] = None
@@ -894,7 +905,7 @@ def test_py():
         # TODO global + assignment logic
         # TODO pass
         # TODO lifting
-        # TODO JoinedStr and FormattedValue stuff
+        # TODO with???
         # TODO make names and calls defer if ill-typed to standard mechanism
         # TODO exceptions
 

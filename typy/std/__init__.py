@@ -227,6 +227,162 @@ class string(Fragment):
         return condition, {}
 
     @classmethod
+    def ana_JoinedStr(cls, ctx, e, idx):
+        values = e.values
+        for value in values:
+            if isinstance(value, ast.Str): continue
+            else: # FormattedValue
+                if value.conversion != -1:
+                    raise TyError(
+                        "string types do not support conversions.", value)
+                if value.format_spec is not None:
+                    raise TyError(
+                        "string types do not support format specifications.",
+                        value)
+                ctx.ana(value.value, string_ty)
+
+    @classmethod
+    def trans_JoinedStr(cls, ctx, e, idx):
+        return ast.copy_location(
+            ast.JoinedStr(
+                values=[
+                    ast.copy_location(ast.Str(s=value.s), value)
+                    if isinstance(value, ast.Str) else 
+                    ast.copy_location(
+                        ast.FormattedValue(
+                            value=ctx.trans(value.value),
+                            conversion=value.conversion,
+                            format_spec=value.format_spec),
+                        value)
+                    for value in e.values]),
+            e)
+
+    @classmethod
+    def ana_pat_JoinedStr(cls, ctx, pat, idx):
+        values = pat.values
+        before_str = None
+        after_str = None
+        formatted_pat = None
+        for value in values:
+            if isinstance(value, ast.Str):
+                if formatted_pat is None:
+                    before_str = value.s
+                else:
+                    after_str = value.s
+            else: # FormattedValue
+                if formatted_pat is None:
+                    formatted_pat = value.value
+                else:
+                    raise TyError(
+                        "Can only have one formatted value in format string "
+                        "pattern.", value)
+                if value.format_spec is not None:
+                    raise TyError(
+                        "Cannot use format specification in format string "
+                        "pattern.", value)
+                if value.conversion != -1:
+                    raise TyError(
+                        "Cannot use conversions in format string pattern.", 
+                        value)
+        pat.before_str = before_str
+        pat.after_str = after_str
+        pat.formatted_pat = formatted_pat
+        if formatted_pat is not None:
+            return ctx.ana_pat(formatted_pat, string_ty)
+
+    @classmethod 
+    def trans_pat_JoinedStr(cls, ctx, pat, idx, scrutinee_trans):
+        before_str, formatted_pat, after_str = \
+            pat.before_str, pat.formatted_pat, pat.after_str
+        conditions = []
+        min_length = 0
+        if before_str is not None:
+            min_length += len(before_str)
+            before_str_condition = ast.fix_missing_locations(ast.copy_location(
+                astx.method_call(
+                    scrutinee_trans,
+                    "startswith",
+                    [ast.Str(s=before_str)]),
+                pat))
+        else: before_str_condition = None
+
+        if after_str is not None:
+            min_length += len(after_str)
+            after_str_condition = ast.fix_missing_locations(ast.copy_location(
+                astx.method_call(
+                    scrutinee_trans,
+                    "endswith",
+                    [ast.Str(s=after_str)]),
+                pat))
+        else: after_str_condition = None
+        
+        if before_str is not None and after_str is not None and min_length > 0:
+            length_condition = ast.fix_missing_locations(ast.copy_location(
+                ast.Compare(
+                    left=astx.builtin_call('len', [scrutinee_trans]),
+                    ops=[ast.GtE()], 
+                    comparators=[ast.Num(n=min_length)]),
+                pat)) # TODO do the other things do length checks properly?
+            conditions.append(length_condition)
+
+        if before_str_condition is not None:
+            conditions.append(before_str_condition)
+            f_lower = ast.Num(n=len(before_str))
+        else: f_lower = None
+        if after_str_condition is not None:
+            conditions.append(after_str_condition)
+            f_upper = ast.Num(n=-len(after_str))
+        else: f_upper = None
+
+        if f_lower is not None or f_upper is not None:
+            formatted_pat_scrutinee = \
+                ast.fix_missing_locations(ast.copy_location(
+                    ast.Subscript(
+                        value=scrutinee_trans,
+                        slice=ast.Slice(
+                            lower=f_lower,
+                            upper=f_upper,
+                            step=None),
+                        ctx=astx.load_ctx), pat))
+        else:
+            formatted_pat_scrutinee = scrutinee_trans
+        formatted_pat_condition, binding_translations = \
+            ctx.trans_pat(formatted_pat, formatted_pat_scrutinee)
+        conditions.append(formatted_pat_condition)
+        
+        if len(conditions) >= 2:
+            condition = ast.copy_location(
+                ast.BoolOp(
+                    op=ast.And(),
+                    values=conditions), pat)
+        else:
+            condition = conditions[0]
+        return condition, binding_translations
+
+    @classmethod
+    def ana_FormattedValue(cls, ctx, e, idx):
+        e.pretend_e = pretend_e = ast.copy_location(
+            ast.JoinedStr(
+                values=[e]), e)
+        cls.ana_JoinedStr(ctx, pretend_e, idx)
+
+    @classmethod
+    def trans_FormattedValue(cls, ctx, e, idx):
+        return cls.trans_JoinedStr(ctx, e.pretend_e, idx)
+
+    @classmethod
+    def ana_pat_FormattedValue(cls, ctx, pat, idx):
+        pat.pretend_pat = pretend_pat = ast.copy_location(
+            ast.JoinedStr(
+                values=[pat]), pat)
+        return cls.ana_pat_JoinedStr(ctx, pretend_pat, idx)
+
+    @classmethod
+    def trans_pat_FormattedValue(cls, ctx, pat, idx, scrutinee_trans):
+        return cls.trans_pat_JoinedStr(ctx, pat.pretend_pat, idx, 
+                                       scrutinee_trans)
+
+    @classmethod
     def ana_pat_BinOp(cls, ctx, pat, idx):
         op = pat.op
         if isinstance(op, ast.Add):
@@ -2027,70 +2183,27 @@ class py(Fragment):
 
     @classmethod
     def ana_pat_JoinedStr(cls, ctx, pat, idx):
-        values = pat.values
-        bindings = { }
-        before_str = None
-        after_str = None
-        formatted_pat = None
-        for value in values:
-            if isinstance(value, ast.Str):
-                if formatted_pat is None:
-                    before_str = value.s
-                else:
-                    after_str = value.s
-            else: # FormattedValue
-                if formatted_pat is None:
-                    formatted_pat = value.value
-                else:
-                    raise TyError(
-                        "Can only have one formatted value in format string "
-                        "pattern.", value)
-                if value.format_spec is not None:
-                    raise TyError(
-                        "Cannot use format specification in format string "
-                        "pattern.", value)
-                if value.conversion != -1:
-                    raise TyError(
-                        "Cannot use conversions in format string pattern.", 
-                        value)
-        pretend_pat = ast.fix_missing_locations(ast.copy_location(
-            ast.Call(
-                func=ast.Name(id='str'),
-                args=[],
-                keywords=[]),
-            pat))
-        if before_str is None and after_str is None:
-            arg_pat = formatted_pat
-        elif before_str is None:
-            arg_pat = ast.fix_missing_locations(ast.copy_location(ast.BinOp(
-                left=None,
-                op=ast.Add(),
-                right=ast.Str(s=after_str)), pat))
-            arg_pat.left = formatted_pat
-        elif after_str is None:
-            arg_pat = ast.fix_missing_locations(ast.copy_location(ast.BinOp(
-                left=ast.Str(s=before_str),
-                op=ast.Add(),
-                right=None), pat))
-            arg_pat.right = formatted_pat
-        else:
-            arg_pat = ast.fix_missing_locations(ast.copy_location(
-                ast.BinOp(
-                    left=ast.BinOp(
-                        left=ast.Str(s=before_str),
-                        op=ast.Add(),
-                        right=None),
-                    op=ast.Add(),
-                    right=ast.Str(s=after_str)), pat))
-            arg_pat.left.right = formatted_pat
-        pretend_pat.args.append(arg_pat)
-        bindings = ctx.ana_pat(pretend_pat, py_type)
-        pat.pretend_pat = pretend_pat
-        return bindings
+        return string.ana_pat_JoinedStr(ctx, pat, idx)
 
     @classmethod
-    def trans_pat_JoinedStr(cls, ctx, pat, idx, scrutinee_trans):
-        return ctx.trans_pat(pat.pretend_pat, scrutinee_trans)
+    def trans_pat_JoinedStr(cls, ctx, pat, idx, scrutinee_tr):
+        str_condition, binding_translations = \
+            string.trans_pat_JoinedStr(ctx, pat, idx, scrutinee_tr)
+        cls_condition = ast.fix_missing_locations(ast.copy_location(
+            astx.builtin_call('isinstance', []), pat))
+        cls_condition.args.append(scrutinee_tr)
+        cls_condition.args.append(
+            ast.fix_missing_locations(ast.copy_location(ast.Attribute(
+                value=ast.Name(id="__builtins__", ctx=astx.load_ctx),
+                attr="str",
+                ctx=astx.load_ctx), pat))
+        )
+        condition = ast.copy_location(
+            ast.BoolOp(
+                op=ast.And(),
+                values=[cls_condition, str_condition]),
+            pat)
+        return condition, binding_translations
 
     @classmethod
     def ana_pat_FormattedValue(cls, ctx, pat, idx):
