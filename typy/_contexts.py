@@ -22,6 +22,7 @@ class BlockTransMechanism:
         def __init__(self, target):
             self.target = target
 
+from . import std
 class Context(object):
     def __init__(self, static_env):
         self.static_env = static_env
@@ -41,6 +42,9 @@ class Context(object):
         # map from id to uniq_id
         self.imports = { 'builtins': '__builtins__' }
         self.last_import_var = 0
+
+        # py type for python values
+        self.py_type = CanonicalTy(std.py, ())
 
     #
     # Bindings
@@ -235,7 +239,10 @@ class Context(object):
                     delegate_idx = static_val
                     translation_method_name = "trans_Name"
                 else:
-                    raise TyError("Invalid name.", tree)
+                    ty = self.py_type
+                    delegate = None
+                    delegate_idx = None
+                    translation_method_name = None
         elif isinstance(tree, ast.Expr):
             ty = self.syn(tree.value)
             delegate = delegate_idx = translation_method_name = None
@@ -487,13 +494,16 @@ class Context(object):
                     ast.Name(id=uniq_id, ctx=tree.ctx),
                     tree)
             else:
-                # component reference
-                return ast.fix_missing_locations(ast.copy_location(
-                    ast.Attribute(
-                        value=tree,
-                        attr="_module",
-                        ctx=ast.Load()),
-                    tree))
+                translation = ast.copy_location(
+                    ast.Name(id=tree.id, ctx=tree.ctx), 
+                    tree)
+                # # component reference
+                # return ast.fix_missing_locations(ast.copy_location(
+                #     ast.Attribute(
+                #         value=tree,
+                #         attr="_module",
+                #         ctx=ast.Load()),
+                #     tree))
         elif _terms.is_ascription(tree):
             translation = self.trans(tree.value)
         elif isinstance(tree, ast.Expr):

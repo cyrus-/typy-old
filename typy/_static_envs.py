@@ -2,9 +2,11 @@
 
 import ast
 import types
+import builtins
 
 __all__ = ("StaticEnv",)
 
+_builtins_dict = builtins.__dict__
 class StaticEnv(object):
     def __init__(self, closure, globals):
         self.closure = closure
@@ -14,7 +16,10 @@ class StaticEnv(object):
         try:
             return self.closure[item]
         except KeyError:
-            return self.globals[item]
+            try:
+                return self.globals[item]
+            except KeyError:
+                return _builtins_dict[item]
 
     def __contains__(self, item):
         return item in self.closure or item in self.globals

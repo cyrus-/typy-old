@@ -4,7 +4,6 @@ from collections import OrderedDict
 
 from .. import util as _util 
 from ..util import astx
-from .._components import component
 from .._contexts import BlockTransMechanism
 from .._fragments import Fragment
 from .._ty_exprs import CanonicalTy, TypeKind

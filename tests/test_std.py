@@ -10,7 +10,8 @@ from typy.util.testing import ast_eq, trans_str, trans_truth
 
 import typy
 from typy._ty_exprs import CanonicalTy
-from typy.std import component, boolean, unit, num, ieee, record, string, py, fn, variant, tpl
+from typy.std import boolean, unit, num, ieee, record, string, py, fn, variant, tpl
+from typy._components import component # TODO
 
 # 
 # unit
@@ -641,6 +642,7 @@ def test_fn():
 # 
 
 def test_py():
+    set2 = set
     @component
     def c():
         # literals
@@ -660,8 +662,9 @@ def test_py():
         not_implemented_intro [: py] = NotImplemented
         ellipsis_intro [: py] = Ellipsis
         dict_intro [: py] = { None : "abc", 3.14 : None }
-        set_intro [: py] = { "abc", 3.14, None } 
-        # TODO empty set when testing lifting
+        set_intro [: py] = { "abc", 3.14, None }
+        empty_set_intro = set()
+        empty_set_intro2 = set2()
         list_intro [: py] = [ "abc", { }, 1.23 ]
         unit_intro [: py] = ()
         tuple_intro [: py] = ( "abc", 3.14 )
