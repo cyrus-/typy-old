@@ -237,7 +237,7 @@ class Context(object):
                     delegate = _components.component_singleton
                     ty = CanonicalTy(delegate, static_val)
                     delegate_idx = static_val
-                    translation_method_name = "trans_Name"
+                    translation_method_name = "trans_component_ref"
                 else:
                     ty = self.py_type
                     delegate = None
@@ -475,7 +475,7 @@ class Context(object):
             idx = tree.delegate_idx
             translation_method_name = tree.translation_method_name
             if translation_method_name is None:
-                raise TyError("BAD BAD BAD", tree)
+                raise TyError("missing translation method", tree)
             translation_method = getattr(delegate, translation_method_name)
             if idx is not None:
                 if _terms.is_stmt_expression(tree):
@@ -497,13 +497,6 @@ class Context(object):
                 translation = ast.copy_location(
                     ast.Name(id=tree.id, ctx=tree.ctx), 
                     tree)
-                # # component reference
-                # return ast.fix_missing_locations(ast.copy_location(
-                #     ast.Attribute(
-                #         value=tree,
-                #         attr="_module",
-                #         ctx=ast.Load()),
-                #     tree))
         elif _terms.is_ascription(tree):
             translation = self.trans(tree.value)
         elif isinstance(tree, ast.Expr):

@@ -912,5 +912,18 @@ def test_py():
         # TODO make names and calls defer if ill-typed to standard mechanism
         # TODO exceptions
 
-    assert ast_eq(c._translation, "")
+    # assert ast_eq(c._translation, "")
+
+# 
+# module system
+# 
+
+def test_module_value_access():
+    @component
+    def m1():
+        x [: py] = 34
+
+    @component
+    def m2():
+        y = m1.x
 

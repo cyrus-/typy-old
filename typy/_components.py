@@ -304,24 +304,33 @@ class component_singleton(Fragment):
     def integrate_trans_FunctionDef(cls, ctx, stmt, translation, mechanism):
         pass
 
-    # @classmethod
-    # def check_Pass(cls, ctx, stmt):
-    #     return
+    @classmethod
+    def trans_component_ref(cls, ctx, e, idx):
+        return ast.fix_missing_locations(ast.copy_location(
+            ast.Attribute(
+                value=e,
+                attr="_module",
+                ctx=_astx.load_ctx),
+            e))
+        
+    @classmethod
+    def check_Pass(cls, ctx, stmt):
+        return
 
-    # @classmethod
-    # def trans_checked_Pass(cls, ctx, stmt):
-    #     return [_astx.copy_node(stmt)]
+    @classmethod
+    def trans_checked_Pass(cls, ctx, stmt):
+        return [_astx.copy_node(stmt)]
 
-    # @classmethod
-    # def check_Expr(cls, ctx, stmt):
-    #     ctx.syn(stmt.value)
+    @classmethod
+    def check_Expr(cls, ctx, stmt):
+        ctx.syn(stmt.value)
 
-    # @classmethod
-    # def trans_checked_Expr(cls, ctx, stmt, mechanism):
-    #     if mechanism == BlockTransMechanism.Statement:
-    #         return [ast.copy_location(
-    #             ast.Expr(value=ctx.trans(stmt.value)),
-    #             stmt)]
-    #     else:
-    #         raise TyError("Invalid mechanism.", stmt)
+    @classmethod
+    def trans_checked_Expr(cls, ctx, stmt, mechanism):
+        if mechanism == BlockTransMechanism.Statement:
+            return [ast.copy_location(
+                ast.Expr(value=ctx.trans(stmt.value)),
+                stmt)]
+        else:
+            raise TyError("Invalid mechanism.", stmt)
 
