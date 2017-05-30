@@ -158,66 +158,70 @@ class Context(object):
                     tree.delegate_idx = delegate_idx
                     tree.translation_method_name = "trans_" + class_name
 
-        subsumed = False
+        is_intro_form = False
         if _terms.is_intro_form(tree):
             ty = self.canonicalize(ty)
-            tree.is_intro_form = True
             classname = tree.__class__.__name__
             ana_method_name = "ana_" + classname
             delegate = ty.fragment
             delegate_idx = ty.idx
-            ana_method = getattr(delegate, ana_method_name)
-            ana_method(self, tree, delegate_idx)
-            translation_method_name = "trans_" + classname
-        elif isinstance(tree, ast.Expr):
-            self.ana(tree.value, ty)
-            delegate = delegate_idx = translation_method_name = None
-        elif isinstance(tree, _terms.MatchStatementExpression):
-            scrutinee = tree.scrutinee
-            scrutinee_ty = self.syn(scrutinee)
-            scrutinee_ty_c = self.canonicalize(scrutinee_ty)
-            delegate = None
-            delegate_idx = None
-            translation_method_name = None
-            for rule in tree.rules:
-                pat = rule.pat
-                bindings = self.ana_pat(rule.pat, scrutinee_ty_c)
-                var_bindings = self.push_var_bindings(bindings)
-                pat.var_bindings = var_bindings
-                block = rule.block = _terms.Block(rule.branch)
-                self.ana_block(block, ty)
-                self.pop_var_bindings()
-        elif isinstance(tree, (ast.If, ast.IfExp)):
-            test = tree.test
-            test_ty = self.syn(test)
-            test_ty_c = self.canonicalize(test_ty)
-            delegate = test_ty_c.fragment
-            delegate_idx = test_ty_c.idx
-            class_name = tree.__class__.__name__
-            translation_method_name = "trans_" + class_name
-            ana_method = getattr(delegate, "ana_" + class_name)
-            ana_method(self, tree, delegate_idx, ty)
-        else:
-            subsumed = True
-            syn_ty = self.syn(tree)
-            if self.ty_expr_eq(ty, syn_ty, TypeKind):
-                return
+            try:
+                ana_method = getattr(delegate, ana_method_name)
+                ana_method(self, tree, delegate_idx)
+            except:
+                delegate = None
+                delegate_idx = None
             else:
-                raise TyError(
-                    "Type inconsistency. Expected: " + str(self.canonicalize(ty)) + 
-                    ". Got: " + str(self.canonicalize(syn_ty)) + ".", tree)
+                tree.is_intro_form = is_intro_form = True
+                translation_method_name = "trans_" + classname
+        if not is_intro_form:
+            if isinstance(tree, ast.Expr):
+                self.ana(tree.value, ty)
+                delegate = delegate_idx = translation_method_name = None
+            elif isinstance(tree, _terms.MatchStatementExpression):
+                scrutinee = tree.scrutinee
+                scrutinee_ty = self.syn(scrutinee)
+                scrutinee_ty_c = self.canonicalize(scrutinee_ty)
+                delegate = None
+                delegate_idx = None
+                translation_method_name = None
+                for rule in tree.rules:
+                    pat = rule.pat
+                    bindings = self.ana_pat(rule.pat, scrutinee_ty_c)
+                    var_bindings = self.push_var_bindings(bindings)
+                    pat.var_bindings = var_bindings
+                    block = rule.block = _terms.Block(rule.branch)
+                    self.ana_block(block, ty)
+                    self.pop_var_bindings()
+            elif isinstance(tree, (ast.If, ast.IfExp)):
+                test = tree.test
+                test_ty = self.syn(test)
+                test_ty_c = self.canonicalize(test_ty)
+                delegate = test_ty_c.fragment
+                delegate_idx = test_ty_c.idx
+                class_name = tree.__class__.__name__
+                translation_method_name = "trans_" + class_name
+                ana_method = getattr(delegate, "ana_" + class_name)
+                ana_method(self, tree, delegate_idx, ty)
+            else:
+                syn_ty = self.syn(tree)
+                if self.ty_expr_eq(ty, syn_ty, TypeKind):
+                    return
+                else:
+                    raise TyError(
+                        "Type inconsistency. Expected: " + str(self.canonicalize(ty)) + 
+                        ". Got: " + str(self.canonicalize(syn_ty)) + ".", tree)
 
-        if not subsumed:
-            tree.ty = ty
-            tree.delegate = delegate
-            tree.delegate_idx = delegate_idx
-            tree.translation_method_name = translation_method_name
-            if isinstance(tree, ast.FunctionDef):
-                try:
-                    default_fragment = self.default_fragments[-1]
-                except IndexError: raise TyError("No default fragment.", stmt)
-                tree._default_fragment = default_fragment
-                default_fragment.integrate_static_FunctionDef(self, tree)
+        tree.ty = ty
+        tree.delegate = delegate
+        tree.delegate_idx = delegate_idx
+        tree.translation_method_name = translation_method_name
+        if isinstance(tree, ast.FunctionDef):
+            try:
+                default_fragment = self.default_fragments[-1]
+            except IndexError: raise TyError("No default fragment.", stmt)
+            tree._default_fragment = default_fragment
+            default_fragment.integrate_static_FunctionDef(self, tree)
 
     def syn(self, tree):
         if hasattr(tree, "ty"): return tree.ty

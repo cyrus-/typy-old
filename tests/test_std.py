@@ -643,6 +643,8 @@ def test_fn():
 
 def test_py():
     set2 = set
+    class C(object): pass
+    D = 5
     @component
     def c():
         # literals
@@ -669,6 +671,11 @@ def test_py():
         unit_intro [: py] = ()
         tuple_intro [: py] = ( "abc", 3.14 )
         bytes_intro [: py] = b'test'
+        cls_intro [: py] = C()
+        name_ok_ana [: py] = D
+        name_ok_syn = D
+        E = D
+        f = E
 
         # TODO function definitions
         # TODO lambdas
