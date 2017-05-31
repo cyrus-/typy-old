@@ -160,21 +160,28 @@ class Context(object):
 
         is_intro_form = False
         if _terms.is_intro_form(tree):
+            is_intro_form = True
             ty = self.canonicalize(ty)
             classname = tree.__class__.__name__
             ana_method_name = "ana_" + classname
             delegate = ty.fragment
             delegate_idx = ty.idx
-            try:
+            if isinstance(tree, (ast.Name, ast.Call)):
+                try:
+                    ana_method = getattr(delegate, ana_method_name)
+                    ana_method(self, tree, delegate_idx)
+                except:
+                    delegate = None
+                    delegate_idx = None
+                else:
+                    tree.is_intro_form = True
+                    translation_method_name = "trans_" + classname
+            else:
                 ana_method = getattr(delegate, ana_method_name)
                 ana_method(self, tree, delegate_idx)
-            except:
-                delegate = None
-                delegate_idx = None
-            else:
-                tree.is_intro_form = is_intro_form = True
+                tree.is_intro_form = True
                 translation_method_name = "trans_" + classname
-        if not is_intro_form:
+        if not is_intro_form or (isinstance(tree, (ast.Name, ast.Call)) and delegate is None):
             if isinstance(tree, ast.Expr):
                 self.ana(tree.value, ty)
                 delegate = delegate_idx = translation_method_name = None

@@ -676,8 +676,56 @@ def test_py():
         name_ok_syn = D
         E = D
         f = E
+        
+        # function definitions
+        @py
+        def f1():
+            3
+        f1()
 
-        # TODO function definitions
+        @py
+        def f2(x, y):
+            x + y
+        f2(3, 4)
+        f2(3, y=4)
+        f2(x=3, y=4)
+
+        @py
+        def f3(x, *y):
+            y
+        f3(True, False, None)
+        f3(True)
+        f3(True, *(False, None))
+        
+        @py
+        def f4(x, *y, **z):
+            z
+        f4(True)
+        f4(3, 4, 5, 6)
+        f4(3, 4, 5, 6, y=4)
+        f4(3, 4, 5, 6, **{'y': 4, 'z': 6})
+
+        @py
+        def f5(x, y=None):
+            x
+        f5(None)
+        f5(None, 4)
+        f5(None, y=5)
+
+        @py
+        def f6(x : None, y : None = 3):
+            y
+        f6(None)
+        f6(None, 4)
+        f6(None, y=6)
+        # TODO how to access the ascriptions?
+        # TODO warn about this usage?
+
+        @py
+        def f7(x : None, y : None = 3, *z : None, **q : None):
+            q
+        f7(3)
+
         # TODO lambdas
 
         # comprehensions
@@ -914,12 +962,10 @@ def test_py():
         # TODO assert
         # TODO global + assignment logic
         # TODO pass
-        # TODO lifting
         # TODO with???
-        # TODO make names and calls defer if ill-typed to standard mechanism
         # TODO exceptions
 
-    # assert ast_eq(c._translation, "")
+    assert ast_eq(c._translation, "")
 
 # 
 # module system

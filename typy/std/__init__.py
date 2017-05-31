@@ -2577,8 +2577,223 @@ class py(Fragment):
             pat)
         return condition, {}
 
-    # TODO function definitions
-    # TODO lambdas
+    @classmethod
+    def ana_FunctionDef(cls, ctx, stmt, idx):
+        # process decorators
+        decorator_list = stmt.decorator_list
+        if len(decorator_list) > 1:
+            decorator_list_tl = decorator_list[1:]
+            for decorator in decorator_list:
+                ctx.ana(decorator, py_type)
+
+        # process arguments
+        def _process_arg(arg):
+            annotation = arg.annotation
+            if annotation is not None:
+                ctx.ana(annotation, py_type)
+            name = ast.Name(id=arg.arg,
+                            lineno=arg.lineno,
+                            col_offset=arg.col_offset)
+            return (name, py_type)
+        def _process_args():
+            arguments = stmt.args
+            for arg in arguments.args:
+                yield _process_arg(arg)
+            vararg = arguments.vararg
+            if vararg is not None:
+                yield _process_arg(vararg)
+            kwonlyargs = arguments.kwonlyargs
+            if kwonlyargs is not None:
+                for kwonlyarg in kwonlyargs:
+                    yield _process_arg(kwonlyarg)
+            kw_defaults = arguments.kw_defaults
+            if kw_defaults is not None:
+                for kw_default in kw_defaults:
+                    ctx.ana(kw_default, py_type)
+            kwarg = arguments.kwarg
+            if kwarg is not None:
+                yield _process_arg(kwarg)
+            defaults = arguments.defaults
+            if defaults is not None:
+                for default in defaults:
+                    ctx.ana(default, py_type)
+        arg_sig = stmt.arg_sig = OrderedDict(_process_args())
+
+        # return annotation
+        returns = stmt.returns
+        if returns is not None:
+            ctx.ana(returns, py_type)
+
+        # push bindings
+        self_name = ast.copy_location(
+            ast.Name(id=stmt.name),
+            stmt)
+        ctx.push_var_bindings({self_name : py_type})
+        uniq_arg_sig = { }
+        for name, ty in arg_sig.items():
+            id = name.id
+            ctx.add_id_var_binding(id, id, ty)
+            uniq_arg_sig[id] = (id, ty)
+        stmt.uniq_arg_sig = uniq_arg_sig
+        print("uniq_arg_sig = ", uniq_arg_sig)
+
+        # process docstring
+        body = stmt.body
+        if (len(body) > 1 
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Str)):
+            proper_body = stmt.proper_body = body[1:]
+            docstring = stmt.docstring = body[0].value.s
+        else:
+            proper_body = stmt.proper_body = body
+            docstring = stmt.docstring = None
+
+        # check statements in proper_body
+        proper_body_block = stmt.proper_body_block = _terms.Block(proper_body)
+        ctx.ana_block(proper_body_block, py_type)
+
+        # bindings
+        ctx.pop_var_bindings()
+
+    @classmethod
+    def trans_FunctionDef(cls, ctx, stmt, idx, mechanism):
+        uniq_id = stmt.uniq_id
+
+        # translate arguments
+        args = stmt.args
+        arguments_tr = ast.arguments(
+            args= [
+                ast.arg(
+                    arg=stmt.uniq_arg_sig[arg.arg][0],
+                    annotation=None if arg.annotation is None else ctx.trans(arg.annotation),
+                    lineno=arg.lineno,
+                    col_offset=arg.col_offset)
+                for arg in args.args
+            ],
+            vararg=None if args.vararg is None else ast.copy_location(
+                ast.arg(
+                    arg=args.vararg.arg,
+                    annotation=None if args.vararg.annotation is None 
+                      else ctx.trans(args.vararg.annotation)), args.vararg),
+            kwonlyargs=[
+                ast.copy_location(
+                    ast.arg(
+                        arg=arg.arg,
+                        annotation=None if arg.annotation is None 
+                          else ctx.trans(arg.annotation)), arg)
+                for arg in args.kwonlyargs
+            ],
+            kw_defaults=[
+                ctx.trans(kw_default) 
+                for kw_default in args.kw_defaults
+            ],
+            kwarg=None if args.kwarg is None else ast.copy_location(
+                ast.arg(
+                    arg=args.kwarg.arg,
+                    annotation=None if args.kwarg.annotation is None
+                      else ctx.trans(args.kwarg.annotation)), args.kwarg),
+            defaults=[
+                ctx.trans(default)
+                for default in args.defaults
+            ])
+
+        # translate body
+        body_tr = ctx.trans_block(stmt.proper_body_block, 
+                                  BlockTransMechanism.Return)
+
+        return [ast.copy_location(
+            ast.FunctionDef(
+                name=uniq_id,
+                args=arguments_tr,
+                body=body_tr,
+                decorator_list=[],
+                returns=None), 
+            stmt)]
+
+    @classmethod
+    def integrate_static_FunctionDef(cls, ctx, stmt):
+        name_ast = ast.copy_location(
+            ast.Name(id=stmt.name, ctx=astx.load_ctx),
+            stmt)
+        stmt.uniq_bindings = uniq_bindings = ctx.add_bindings({ name_ast: stmt.ty })
+        stmt.uniq_id = uniq_bindings[stmt.name][0]
+
+    @classmethod
+    def integrate_trans_FunctionDef(cls, ctx, stmt, translation, mechanism):
+        uniq_id = stmt.uniq_id
+        if mechanism == BlockTransMechanism.Return:
+            translation.append(ast.copy_location(
+                ast.Return(
+                    value=ast.copy_location(
+                        ast.Name(
+                            id=uniq_id,
+                            ctx=astx.load_ctx),
+                        stmt)),
+                stmt))
+
+    @classmethod
+    def ana_Lambda(cls, ctx, e, idx):
+        # process args
+        arguments = e.args
+        if arguments.vararg is not None:
+            raise TyError(
+                "fn does not support varargs", arguments)
+        if len(arguments.kwonlyargs) > 0:
+            raise TyError(
+                "fn does not support kw only args", arguments)
+        if arguments.kwarg is not None:
+            raise TyError(
+                "fn does not support kw arg", arguments)
+        if len(arguments.defaults) > 0:
+            raise TyError(
+                "fn does not support defaults", arguments)
+        args = arguments.args
+        arg_types = idx[0]
+        n_args = len(args)
+        n_arg_types = len(arg_types)
+        if n_args < n_arg_types:
+            raise TyError(
+                "Too few arguments", e)
+        elif n_args > n_arg_types:
+            raise TyError(
+                "Too many arguments", e)
+        def _process_args():
+            for arg, arg_ty in zip(args, arg_types):
+                arg_id = arg.arg
+                name = ast.Name(id=arg_id,
+                                lineno=arg.lineno,
+                                col_offset=arg.col_offset)
+                yield (name, arg_ty)
+        arg_sig = e.arg_sig = OrderedDict(_process_args())
+        e.uniq_arg_sig = ctx.push_var_bindings(dict(arg_sig))
+
+        rty = idx[1]
+        ctx.ana(e.body, rty)
+        
+        ctx.pop_var_bindings()
+
+    @classmethod
+    def trans_Lambda(cls, ctx, e, idx):
+        args=e.args
+        aa = args.args
+        return ast.copy_location(
+            ast.Lambda(
+                args=ast.arguments(
+                    args=[
+                        ast.arg(
+                            arg=a.arg,
+                            annotation=None,
+                            lineno=a.lineno,
+                            col_offset=a.col_offset)
+                        for a in aa
+                    ],
+                    vararg=args.vararg,
+                    kwonlyargs=args.kwonlyargs,
+                    kw_defaults=args.kw_defaults,
+                    kwarg=args.kwarg,
+                    defaults=args.defaults),
+                body=ctx.trans(e.body)),
+            e)
 
     # TODO comprehensions
 
