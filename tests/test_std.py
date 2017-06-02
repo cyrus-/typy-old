@@ -739,6 +739,16 @@ def test_py():
         def f7(x : None, y : None = 3, *z : None, **q : None):
             q
         f7(3)
+        
+        @py
+        def f8():
+            @py
+            def f(x):
+                x
+            @f
+            def g(x):
+                x
+        f8()
 
         # TODO lambdas
 

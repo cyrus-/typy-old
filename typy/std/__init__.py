@@ -2595,11 +2595,17 @@ class py(Fragment):
         return condition, {}
 
     @classmethod
+    def syn_FunctionDef(cls, ctx, stmt):
+        cls.ana_FunctionDef(ctx, stmt, ())
+        return py_type
+
+    @classmethod
     def ana_FunctionDef(cls, ctx, stmt, idx):
         # process decorators
         decorator_list = stmt.decorator_list
-        if len(decorator_list) > 1:
-            decorator_list_tl = decorator_list[1:]
+        if hasattr(stmt, "fragment_ascription"):
+            decorator_list = decorator_list[1:]
+        if len(decorator_list) > 0:
             for decorator in decorator_list:
                 ctx.ana(decorator, py_type)
 
