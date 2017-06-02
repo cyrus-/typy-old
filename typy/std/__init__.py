@@ -2658,7 +2658,6 @@ class py(Fragment):
             ctx.add_id_var_binding(id, id, ty)
             uniq_arg_sig[id] = (id, ty)
         stmt.uniq_arg_sig = uniq_arg_sig
-        print("uniq_arg_sig = ", uniq_arg_sig)
 
         # process docstring
         body = stmt.body
@@ -2758,67 +2757,71 @@ class py(Fragment):
     def ana_Lambda(cls, ctx, e, idx):
         # process args
         arguments = e.args
-        if arguments.vararg is not None:
-            raise TyError(
-                "fn does not support varargs", arguments)
-        if len(arguments.kwonlyargs) > 0:
-            raise TyError(
-                "fn does not support kw only args", arguments)
-        if arguments.kwarg is not None:
-            raise TyError(
-                "fn does not support kw arg", arguments)
-        if len(arguments.defaults) > 0:
-            raise TyError(
-                "fn does not support defaults", arguments)
-        args = arguments.args
-        arg_types = idx[0]
-        n_args = len(args)
-        n_arg_types = len(arg_types)
-        if n_args < n_arg_types:
-            raise TyError(
-                "Too few arguments", e)
-        elif n_args > n_arg_types:
-            raise TyError(
-                "Too many arguments", e)
-        def _process_args():
-            for arg, arg_ty in zip(args, arg_types):
-                arg_id = arg.arg
-                name = ast.Name(id=arg_id,
-                                lineno=arg.lineno,
-                                col_offset=arg.col_offset)
-                yield (name, arg_ty)
-        arg_sig = e.arg_sig = OrderedDict(_process_args())
-        e.uniq_arg_sig = ctx.push_var_bindings(dict(arg_sig))
+        for default in arguments.defaults:
+            ctx.ana(default, py_type)
+        for default in arguments.kw_defaults:
+            ctx.ana(default, py_type)
 
-        rty = idx[1]
-        ctx.ana(e.body, rty)
+        def _process_arg(arg):
+            name = ast.Name(id=arg.arg,
+                            lineno=arg.lineno,
+                            col_offset=arg.col_offset)
+            return (name, py_type)
+        def _process_args():
+            for arg in arguments.args:
+                yield _process_arg(arg)
+            vararg = arguments.vararg
+            if vararg is not None:
+                yield _process_arg(vararg)
+            kwonlyargs = arguments.kwonlyargs
+            if kwonlyargs is not None:
+                for kwonlyarg in kwonlyargs:
+                    yield _process_arg(kwonlyarg)
+            kwarg = arguments.kwarg
+            if kwarg is not None:
+                yield _process_arg(kwarg)
+        arg_sig = e.arg_sig = OrderedDict(_process_args())
+
+        # push bindings
+        ctx.push_var_bindings({})
+        uniq_arg_sig = { }
+        for name, ty in arg_sig.items():
+            id = name.id
+            ctx.add_id_var_binding(id, id, ty)
+            uniq_arg_sig[id] = (id, ty)
+        e.uniq_arg_sig = uniq_arg_sig
+
+        # body
+        ctx.ana(e.body, py_type)
         
         ctx.pop_var_bindings()
 
     @classmethod
     def trans_Lambda(cls, ctx, e, idx):
-        args=e.args
-        aa = args.args
+
+        # translate arguments
+        args = e.args
+        arguments_tr = ast.arguments(
+            args=args.args,
+            vararg=args.vararg,
+            kwonlyargs=args.kwonlyargs,
+            kw_defaults=[
+                ctx.trans(kw_default) 
+                for kw_default in args.kw_defaults
+            ],
+            kwarg=args.kwarg,
+            defaults=[
+                ctx.trans(default)
+                for default in args.defaults
+            ])
+        
+        # translate body
+        body_tr = ctx.trans(e.body)
+
         return ast.copy_location(
             ast.Lambda(
-                args=ast.arguments(
-                    args=[
-                        ast.arg(
-                            arg=a.arg,
-                            annotation=None,
-                            lineno=a.lineno,
-                            col_offset=a.col_offset)
-                        for a in aa
-                    ],
-                    vararg=args.vararg,
-                    kwonlyargs=args.kwonlyargs,
-                    kw_defaults=args.kw_defaults,
-                    kwarg=args.kwarg,
-                    defaults=args.defaults),
-                body=ctx.trans(e.body)),
-            e)
-
-    # TODO comprehensions
+                args=arguments_tr,
+                body=body_tr), e)
 
     @classmethod
     def ana_DictComp(cls, ctx, e, idx):

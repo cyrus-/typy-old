@@ -732,8 +732,6 @@ def test_py():
         f6(None)
         f6(None, 4)
         f6(None, y=6)
-        # TODO how to access the ascriptions?
-        # TODO warn about this usage?
 
         @py
         def f7(x : None, y : None = 3, *z : None, **q : None):
@@ -750,7 +748,11 @@ def test_py():
                 x
         f8()
 
-        # TODO lambdas
+        # lambdas
+        lam1 [: py] = lambda: 3
+        lam2 [: py] = lambda x: 3
+        lam3 [: py] = lambda x, y: x + y
+        lam4 [: py] = lambda x, y=None, *z, **q: x + y
 
         # comprehensions
         dict_comprehension [: py] = {x: y 
