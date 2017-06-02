@@ -635,6 +635,20 @@ def test_fn():
                 def g(z):
                     x + y + z
 
+        ty22 [type] = fn[num > num]
+        @fn
+        def f22(x : num) -> fn[num > num]:
+            @ty22
+            def f(y):
+                x
+
+        ty23 [type] = fn[num > num]
+        @fn
+        def f23(x : num) -> fn[num > num]:
+            @fn
+            def f(y):
+                x
+
     # assert ast_eq(c._translation, "")
     
 # 

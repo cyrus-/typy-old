@@ -300,6 +300,7 @@ class Context(object):
                     if not issubclass(fragment, Fragment):
                         raise TyError("First decorator is not a fragment.", asc)
                     self.default_fragments.append(fragment)
+                    tree.fragment_ascription = True
                     ty = fragment.syn_FunctionDef(self, tree)
                     self.default_fragments.pop()
                     self.ana_ty_expr(ty, TypeKind)

@@ -1650,9 +1650,26 @@ class fn(Fragment):
     def ana_FunctionDef(cls, ctx, stmt, idx):
         # process decorators
         decorator_list = stmt.decorator_list
+        if len(decorator_list) == 1:
+            asc = decorator_list[0]
+            try: ty = ctx.as_type(asc)
+            except:
+                try: fragment = ctx.static_env.eval_expr_ast(asc)
+                except: 
+                    raise TyError(
+                        "Decorator is neither a type nor a fragment.", stmt)
+                else:
+                    if fragment != cls:
+                        raise TyError("Decorator is not fn.", stmt)
+            else:
+                canonical_ty = ctx.canonicalize(ty)
+                asc_idx = canonical_ty.idx
+                if idx != asc_idx:
+                    raise TyError("Decorator is inconsistent with expected type.", stmt)
+                
         if len(decorator_list) > 1:
             raise TyError(
-                "fn does not support additional decorators.",
+                "fn does not support decorators in analytic position.",
                 decorator_list[1])
 
         # process args
